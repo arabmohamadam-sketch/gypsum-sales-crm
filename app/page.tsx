@@ -1,5 +1,5 @@
-import Dashboard from "@/src/lib/components/Dashboard";
+﻿import CustomerPage from "@/src/lib/components/customers/CustomerPage";
 
-export default function Home() {
-  return <Dashboard />;
+export default function Page() {
+  return <CustomerPage />;
 }
