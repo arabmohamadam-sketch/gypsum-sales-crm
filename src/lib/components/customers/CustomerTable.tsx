@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import type { Customer } from "@/src/lib/types/customer";
 
 type Props = {
-  customers: any[];
+  customers: Customer[];
   loading: boolean;
 };
 
@@ -11,48 +12,74 @@ const customerTypeNames: Record<string, string> = {
   building_material_store: "مصالح‌فروشی",
   contractor: "پیمانکار",
   employer: "کارفرما",
+  plasterer: "گچ‌کار",
   plaster_worker: "گچ‌کار",
 };
 
-function getCustomerType(type: string | null | undefined) {
-  return customerTypeNames[type ?? ""] ?? "سایر";
+const cityNames: Record<string, string> = {
+  Garmsar: "گرمسار",
+  garmsar: "گرمسار",
+  Semnan: "سمنان",
+  semnan: "سمنان",
+  Varamin: "ورامین",
+  varamin: "ورامین",
+};
+
+function getCustomerType(type?: string | null): string {
+  if (!type) return "سایر";
+
+  return customerTypeNames[type] ?? type;
 }
 
-function formatTonnage(value: unknown) {
+function getCityName(customer: Customer): string {
+  const customerWithCity = customer as Customer & {
+    city?: {
+      id?: string;
+      name?: string;
+      code?: string | null;
+    } | null;
+  };
+
+  const city = customerWithCity.city;
+
+  if (city?.name) {
+    return cityNames[city.name] ?? city.name;
+  }
+
+  const sourceCity = customer.metadata?.source_city;
+
+  if (
+    typeof sourceCity === "string" &&
+    sourceCity.trim()
+  ) {
+    return (
+      cityNames[sourceCity.trim()] ??
+      sourceCity.trim()
+    );
+  }
+
+  return "—";
+}
+
+function formatTonnage(value: unknown): string {
   const number = Number(value ?? 0);
+
+  if (!Number.isFinite(number)) {
+    return "۰";
+  }
 
   return number.toLocaleString("fa-IR", {
     maximumFractionDigits: 2,
   });
 }
 
-function getCityName(customer: any) {
-  if (typeof customer.city === "string" && customer.city.trim()) {
-    return customer.city;
-  }
-
-  if (customer.city?.name) {
-    return customer.city.name;
-  }
-
-  if (customer.city_name) {
-    return customer.city_name;
-  }
-
-  if (customer.metadata?.source_city) {
-    return customer.metadata.source_city;
-  }
-
-  return "—";
-}
-
-function getInitial(name: unknown) {
+function getInitial(name: unknown): string {
   const value = String(name ?? "").trim();
 
   return value ? value.charAt(0) : "?";
 }
 
-function getWhatsAppUrl(phone: unknown) {
+function getWhatsAppUrl(phone: unknown): string | null {
   if (!phone) return null;
 
   let value = String(phone).replace(/\D/g, "");
@@ -60,11 +87,11 @@ function getWhatsAppUrl(phone: unknown) {
   if (!value) return null;
 
   if (value.startsWith("0098")) {
-    value = value.slice(2);
+    value = value.substring(2);
   }
 
   if (value.startsWith("0")) {
-    value = `98${value.slice(1)}`;
+    value = `98${value.substring(1)}`;
   } else if (!value.startsWith("98")) {
     value = `98${value}`;
   }
@@ -106,6 +133,13 @@ export default function CustomerTable({
         <p className="mt-2 text-sm text-slate-500">
           مشتری موردنظر با فیلترهای انتخاب‌شده پیدا نشد.
         </p>
+
+        <Link
+          href="/customers/new"
+          className="mt-5 inline-flex rounded-xl bg-blue-600 px-5 py-3 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          + افزودن مشتری
+        </Link>
       </div>
     );
   }
@@ -123,12 +157,19 @@ export default function CustomerTable({
 
           <p className="mt-1 text-xs text-slate-500">
             نمایش{" "}
-            {customers.length.toLocaleString("fa-IR")} مشتری
+            {customers.length.toLocaleString("fa-IR")}{" "}
+            مشتری
           </p>
         </div>
+
+        <Link
+          href="/customers/new"
+          className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          + افزودن مشتری
+        </Link>
       </div>
 
-      {/* Desktop */}
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[1050px] text-right">
           <thead className="border-b bg-slate-50">
@@ -166,12 +207,14 @@ export default function CustomerTable({
           <tbody>
             {customers.map((customer) => {
               const city = getCityName(customer);
+
               const type = getCustomerType(
                 customer.customer_type
               );
 
               const whatsappUrl = getWhatsAppUrl(
-                customer.phone
+                customer.whatsapp_number ??
+                  customer.phone
               );
 
               return (
@@ -270,7 +313,6 @@ export default function CustomerTable({
         </table>
       </div>
 
-      {/* Mobile */}
       <div className="divide-y md:hidden">
         {customers.map((customer) => {
           const city = getCityName(customer);
@@ -280,7 +322,8 @@ export default function CustomerTable({
           );
 
           const whatsappUrl = getWhatsAppUrl(
-            customer.phone
+            customer.whatsapp_number ??
+              customer.phone
           );
 
           return (
