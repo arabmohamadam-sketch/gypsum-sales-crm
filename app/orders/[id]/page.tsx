@@ -1,30 +1,40 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import { toGregorian, toJalaali } from "jalaali-js";
+import { useState } from "react";
+import {
+  useParams,
+  useRouter,
+} from "next/navigation";
+
+import {
+  gregorianToJalali,
+  jalaliToGregorianDate,
+  formatJalaliDate,
+  isValidJalaliDate,
+} from "@/src/lib/utils/jalali";
 
 import { useOrders } from "@/src/lib/hooks/useOrders";
-import type { Order } from "@/src/lib/types/order";
 
-interface JalaliDate {
-  year: number;
-  month: number;
-  day: number;
+type OrderStatus =
+  | "draft"
+  | "confirmed"
+  | "cancelled";
+
+function toPersianDigits(
+  value: string | number
+): string {
+  const digits = "۰۱۲۳۴۵۶۷۸۹";
+
+  return String(value).replace(
+    /\d/g,
+    (digit) => digits[Number(digit)]
+  );
 }
 
-function pad(value: number) {
-  return String(value).padStart(2, "0");
-}
-
-function toPersianDigits(value: string | number) {
-  return String(value).replace(/\d/g, (digit) => {
-    return "۰۱۲۳۴۵۶۷۸۹"[Number(digit)];
-  });
-}
-
-function formatNumber(value: number) {
+function formatNumber(
+  value: number
+): string {
   if (!Number.isFinite(value)) {
     return "۰";
   }
@@ -34,123 +44,14 @@ function formatNumber(value: number) {
   }).format(value);
 }
 
-/**
- * تبدیل تاریخ میلادی YYYY-MM-DD به تاریخ جلالی
- */
-function gregorianToJalali(
-  value: string | null | undefined
-): JalaliDate | null {
-  if (!value) {
-    return null;
-  }
-
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-
-  if (!match) {
-    return null;
-  }
-
-  const gy = Number(match[1]);
-  const gm = Number(match[2]);
-  const gd = Number(match[3]);
-
-  try {
-    const result = toJalaali(gy, gm, gd);
-
-    return {
-      year: result.jy,
-      month: result.jm,
-      day: result.jd,
-    };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * تبدیل تاریخ جلالی به YYYY-MM-DD میلادی
- */
-function jalaliToGregorianDate(
-  date: JalaliDate
+function getStatusLabel(
+  status: string
 ): string {
-  const result = toGregorian(
-    date.year,
-    date.month,
-    date.day
-  );
-
-  return `${result.gy}-${pad(result.gm)}-${pad(result.gd)}`;
-}
-
-/**
- * نمایش تاریخ جلالی بدون وابستگی به Locale مرورگر
- */
-function formatJalaliDate(
-  value: string | null | undefined
-) {
-  const date = gregorianToJalali(value);
-
-  if (!date) {
-    return "-";
-  }
-
-  return `${toPersianDigits(date.year)}/${toPersianDigits(
-    pad(date.month)
-  )}/${toPersianDigits(pad(date.day))}`;
-}
-
-/**
- * اعتبارسنجی تاریخ جلالی
- */
-function isValidJalaliDate(
-  date: JalaliDate
-) {
-  if (
-    !Number.isInteger(date.year) ||
-    !Number.isInteger(date.month) ||
-    !Number.isInteger(date.day)
-  ) {
-    return false;
-  }
-
-  if (
-    date.year < 1300 ||
-    date.year > 1500 ||
-    date.month < 1 ||
-    date.month > 12 ||
-    date.day < 1 ||
-    date.day > 31
-  ) {
-    return false;
-  }
-
-  try {
-    const gregorian = toGregorian(
-      date.year,
-      date.month,
-      date.day
-    );
-
-    const back = toJalaali(
-      gregorian.gy,
-      gregorian.gm,
-      gregorian.gd
-    );
-
-    return (
-      back.jy === date.year &&
-      back.jm === date.month &&
-      back.jd === date.day
-    );
-  } catch {
-    return false;
-  }
-}
-
-function getStatusLabel(status: string) {
-  const labels: Record<string, string> = {
+  const labels: Record<
+    string,
+    string
+  > = {
     draft: "پیش‌نویس",
-    pending: "در انتظار تأیید",
     confirmed: "تأیید شده",
     cancelled: "لغو شده",
   };
@@ -158,24 +59,48 @@ function getStatusLabel(status: string) {
   return labels[status] ?? status;
 }
 
-function getStatusClass(status: string) {
+function getStatusClass(
+  status: string
+): string {
   switch (status) {
     case "confirmed":
-      return "bg-green-50 text-green-700";
+      return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100";
 
     case "cancelled":
-      return "bg-red-50 text-red-700";
+      return "bg-red-50 text-red-700 ring-1 ring-red-100";
 
-    case "pending":
-      return "bg-yellow-50 text-yellow-700";
-
+    case "draft":
     default:
-      return "bg-gray-100 text-gray-700";
+      return "bg-amber-50 text-amber-700 ring-1 ring-amber-100";
   }
 }
 
-function getSourceLabel(source: string | null | undefined) {
-  const labels: Record<string, string> = {
+function getStatusIcon(
+  status: string
+): string {
+  switch (status) {
+    case "confirmed":
+      return "✓";
+
+    case "cancelled":
+      return "×";
+
+    case "draft":
+    default:
+      return "•";
+  }
+}
+
+function getSourceLabel(
+  source:
+    | string
+    | null
+    | undefined
+): string {
+  const labels: Record<
+    string,
+    string
+  > = {
     manual: "ثبت دستی",
     mobile_app: "اپلیکیشن موبایل",
     whatsapp: "واتساپ",
@@ -185,10 +110,40 @@ function getSourceLabel(source: string | null | undefined) {
   };
 
   if (!source) {
-    return "-";
+    return "—";
   }
 
   return labels[source] ?? source;
+}
+
+function InfoCard({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-5">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg shadow-sm">
+          {icon}
+        </div>
+
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-slate-400">
+            {label}
+          </p>
+
+          <p className="mt-1 truncate text-sm font-black text-slate-900">
+            {value}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function OrderDetailsPage() {
@@ -208,8 +163,18 @@ export default function OrderDetailsPage() {
     deleteOrder,
   } = useOrders();
 
-  const [order, setOrder] =
-    useState<Order | null>(null);
+  const order =
+    orders.find(
+      (item) =>
+        item.id === orderId
+    ) ?? null;
+
+  const currentJalaliDate =
+    order
+      ? gregorianToJalali(
+          order.order_date
+        )
+      : null;
 
   const [saving, setSaving] =
     useState(false);
@@ -232,64 +197,66 @@ export default function OrderDetailsPage() {
   const [jalaliDay, setJalaliDay] =
     useState("");
 
-  const [status, setStatus] =
-    useState("draft");
+  const [
+    status,
+    setStatus,
+  ] = useState<
+    "" |
+    "draft" |
+    "confirmed" |
+    "cancelled"
+  >("");
 
-  const [totalTonnage, setTotalTonnage] =
-    useState("");
+  const [
+    totalTonnage,
+    setTotalTonnage,
+  ] = useState("");
 
   const [notes, setNotes] =
     useState("");
 
-  /**
-   * دریافت سفارش
-   */
-  useEffect(() => {
-    if (!orderId || orders.length === 0) {
-      return;
-    }
+  const displayJalaliYear =
+    jalaliYear ||
+    (currentJalaliDate
+      ? String(
+          currentJalaliDate.year
+        )
+      : "");
 
-    const foundOrder = orders.find(
-      (item) => item.id === orderId
-    );
+  const displayJalaliMonth =
+    jalaliMonth ||
+    (currentJalaliDate
+      ? String(
+          currentJalaliDate.month
+        )
+      : "1");
 
-    if (!foundOrder) {
-      return;
-    }
+  const displayJalaliDay =
+    jalaliDay ||
+    (currentJalaliDate
+      ? String(
+          currentJalaliDate.day
+        )
+      : "1");
 
-    setOrder(foundOrder);
+  const displayStatus =
+    status ||
+    (order?.status as OrderStatus | undefined) ||
+    "draft";
 
-    const jalaliDate =
-      gregorianToJalali(
-        foundOrder.order_date
-      );
+  const displayTotalTonnage =
+    totalTonnage ||
+    (order
+      ? String(
+          order.total_tonnage ?? ""
+        )
+      : "");
 
-    if (jalaliDate) {
-      setJalaliYear(
-        String(jalaliDate.year)
-      );
+  const displayNotes =
+    notes !== ""
+      ? notes
+      : order?.notes ?? "";
 
-      setJalaliMonth(
-        String(jalaliDate.month)
-      );
-
-      setJalaliDay(
-        String(jalaliDate.day)
-      );
-    }
-
-    setStatus(foundOrder.status);
-
-    setTotalTonnage(
-      String(foundOrder.total_tonnage ?? "")
-    );
-
-    setNotes(foundOrder.notes ?? "");
-  }, [orders, orderId]);
-
-  /**
-   * ذخیره تغییرات
-   */
   async function handleSave() {
     if (!order) {
       return;
@@ -300,30 +267,52 @@ export default function OrderDetailsPage() {
     setFormError("");
 
     try {
-      const year = Number(jalaliYear);
-      const month = Number(jalaliMonth);
-      const day = Number(jalaliDay);
+      const year =
+        Number(
+          displayJalaliYear
+        );
 
-      const jalaliDate: JalaliDate = {
+      const month =
+        Number(
+          displayJalaliMonth
+        );
+
+      const day =
+        Number(
+          displayJalaliDay
+        );
+
+      const jalaliDate = {
         year,
         month,
         day,
       };
 
       if (
-        !isValidJalaliDate(jalaliDate)
+        !isValidJalaliDate(
+          jalaliDate
+        )
       ) {
         throw new Error(
           "تاریخ جلالی واردشده معتبر نیست."
         );
       }
 
-      const tonnage = Number(
-        totalTonnage.replace(",", ".")
-      );
+      const normalizedTonnage =
+        displayTotalTonnage.replace(
+          ",",
+          "."
+        );
+
+      const tonnage =
+        Number(
+          normalizedTonnage
+        );
 
       if (
-        !Number.isFinite(tonnage) ||
+        !Number.isFinite(
+          tonnage
+        ) ||
         tonnage <= 0
       ) {
         throw new Error(
@@ -336,28 +325,27 @@ export default function OrderDetailsPage() {
           jalaliDate
         );
 
-      const updated =
-        await updateOrder(
-          order.id,
-          {
-            order_date: gregorianDate,
-            status,
-            total_tonnage: tonnage,
-            notes: notes.trim() || null,
-          }
-        );
+      await updateOrder(
+        order.id,
+        {
+          order_date:
+            gregorianDate,
+          status:
+            displayStatus,
+          total_tonnage:
+            tonnage,
+          notes:
+            displayNotes.trim() ||
+            null,
+        }
+      );
 
-      setOrder({
-        ...updated,
-        customer:
-          updated.customer ??
-          order.customer ??
-          null,
-        sales_user:
-          updated.sales_user ??
-          order.sales_user ??
-          null,
-      });
+      setJalaliYear("");
+      setJalaliMonth("");
+      setJalaliDay("");
+      setStatus("");
+      setTotalTonnage("");
+      setNotes("");
 
       setMessage(
         "اطلاعات سفارش با موفقیت ذخیره شد."
@@ -377,17 +365,15 @@ export default function OrderDetailsPage() {
     }
   }
 
-  /**
-   * حذف سفارش
-   */
   async function handleDelete() {
     if (!order) {
       return;
     }
 
-    const confirmed = window.confirm(
-      "آیا از حذف این سفارش مطمئن هستید؟"
-    );
+    const confirmed =
+      window.confirm(
+        "آیا از حذف این سفارش مطمئن هستید؟"
+      );
 
     if (!confirmed) {
       return;
@@ -397,7 +383,9 @@ export default function OrderDetailsPage() {
     setFormError("");
 
     try {
-      await deleteOrder(order.id);
+      await deleteOrder(
+        order.id
+      );
 
       router.push("/orders");
     } catch (err) {
@@ -411,72 +399,85 @@ export default function OrderDetailsPage() {
     }
   }
 
-  /**
-   * Loading
-   */
   if (loading) {
     return (
       <div
         dir="rtl"
-        className="mx-auto max-w-5xl"
+        className="mx-auto max-w-6xl p-4 md:p-6"
       >
-        <div className="rounded-2xl border bg-white p-10 text-center text-gray-500 shadow-sm">
-          در حال دریافت اطلاعات سفارش...
+        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="h-1.5 bg-gradient-to-r from-slate-900 via-violet-600 to-blue-600" />
+
+          <div className="p-12 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl">
+              📦
+            </div>
+
+            <p className="mt-4 text-sm font-medium text-slate-500">
+              در حال دریافت اطلاعات سفارش...
+            </p>
+          </div>
         </div>
       </div>
     );
   }
 
-  /**
-   * Error
-   */
   if (error) {
     return (
       <div
         dir="rtl"
-        className="mx-auto max-w-5xl"
+        className="mx-auto max-w-6xl p-4 md:p-6"
       >
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-6">
-          <h1 className="text-lg font-bold text-red-700">
-            خطا در دریافت سفارش
-          </h1>
+        <div className="overflow-hidden rounded-3xl border border-red-200 bg-white shadow-sm">
+          <div className="h-1.5 bg-red-500" />
 
-          <p className="mt-2 text-sm text-red-600">
-            {error}
-          </p>
+          <div className="p-6 md:p-8">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-2xl text-red-600">
+              !
+            </div>
 
-          <Link
-            href="/orders"
-            className="mt-5 inline-flex rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800"
-          >
-            بازگشت به سفارش‌ها
-          </Link>
+            <h1 className="mt-5 text-xl font-black text-slate-900">
+              خطا در دریافت سفارش
+            </h1>
+
+            <p className="mt-2 text-sm leading-7 text-red-600">
+              {error}
+            </p>
+
+            <Link
+              href="/orders"
+              className="mt-6 inline-flex rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
+            >
+              بازگشت به سفارش‌ها
+            </Link>
+          </div>
         </div>
       </div>
     );
   }
 
-  /**
-   * Order not found
-   */
   if (!order) {
     return (
       <div
         dir="rtl"
-        className="mx-auto max-w-5xl"
+        className="mx-auto max-w-6xl p-4 md:p-6"
       >
-        <div className="rounded-2xl border bg-white p-10 text-center shadow-sm">
-          <h1 className="text-xl font-bold text-gray-800">
+        <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-3xl">
+            📭
+          </div>
+
+          <h1 className="mt-5 text-xl font-black text-slate-900">
             سفارش پیدا نشد
           </h1>
 
-          <p className="mt-2 text-sm text-gray-500">
-            سفارش موردنظر وجود ندارد یا حذف شده است.
+          <p className="mt-2 text-sm leading-7 text-slate-500">
+            سفارش موردنظر وجود ندارد یا قبلاً حذف شده است.
           </p>
 
           <Link
             href="/orders"
-            className="mt-5 inline-flex rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-gray-800"
+            className="mt-6 inline-flex rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
           >
             بازگشت به سفارش‌ها
           </Link>
@@ -488,158 +489,333 @@ export default function OrderDetailsPage() {
   return (
     <div
       dir="rtl"
-      className="mx-auto max-w-5xl pb-12"
+      className="mx-auto max-w-6xl space-y-6 p-4 pb-12 md:p-6"
     >
-      {/* Header */}
+      {/* =====================================================
+          HEADER
+          ===================================================== */}
 
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="mb-3">
-            <Link
-              href="/orders"
-              className="text-sm text-gray-500 transition hover:text-gray-900"
-            >
-              ← بازگشت به سفارش‌ها
-            </Link>
+      <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-slate-900 via-violet-600 to-blue-600" />
+
+        <div className="absolute -left-20 -top-24 h-64 w-64 rounded-full bg-violet-100/40 blur-3xl" />
+        <div className="absolute -bottom-24 right-0 h-64 w-64 rounded-full bg-blue-100/40 blur-3xl" />
+
+        <div className="relative p-6 md:p-8">
+          <Link
+            href="/orders"
+            className="text-sm font-medium text-slate-500 transition hover:text-slate-900"
+          >
+            ← بازگشت به سفارش‌ها
+          </Link>
+
+          <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-900 to-violet-600 text-2xl text-white shadow-lg shadow-violet-100">
+                📦
+              </div>
+
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="text-2xl font-black tracking-tight text-slate-900 md:text-3xl">
+                    جزئیات سفارش
+                  </h1>
+
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${getStatusClass(
+                      order.status
+                    )}`}
+                  >
+                    <span>
+                      {getStatusIcon(
+                        order.status
+                      )}
+                    </span>
+
+                    {getStatusLabel(
+                      order.status
+                    )}
+                  </span>
+                </div>
+
+                <p className="mt-2 break-all text-xs text-slate-400">
+                  شناسه سفارش: {order.id}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href={`/customers/${order.customer_id}`}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+              >
+                مشاهده مشتری
+              </Link>
+
+              <Link
+                href="/orders"
+                className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800"
+              >
+                فهرست سفارش‌ها
+              </Link>
+            </div>
           </div>
-
-          <h1 className="text-3xl font-bold text-gray-900">
-            جزئیات سفارش
-          </h1>
-
-          <p className="mt-2 break-all text-sm text-gray-500">
-            شناسه سفارش: {order.id}
-          </p>
         </div>
+      </section>
 
-        <span
-          className={`w-fit rounded-full px-4 py-2 text-sm font-medium ${getStatusClass(
-            order.status
-          )}`}
-        >
-          {getStatusLabel(order.status)}
-        </span>
-      </div>
-
-      {/* Messages */}
+      {/* =====================================================
+          MESSAGES
+          ===================================================== */}
 
       {message && (
-        <div className="mb-6 rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-700">
-          {message}
+        <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
+          <div className="h-1 bg-emerald-500" />
+
+          <div className="flex items-start gap-3 p-5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+              ✓
+            </div>
+
+            <div>
+              <p className="font-bold text-emerald-800">
+                عملیات موفق
+              </p>
+
+              <p className="mt-1 text-sm text-emerald-600">
+                {message}
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
       {formError && (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
-          {formError}
+        <div className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
+          <div className="h-1 bg-red-500" />
+
+          <div className="flex items-start gap-3 p-5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+              !
+            </div>
+
+            <div>
+              <p className="font-bold text-red-800">
+                خطا
+              </p>
+
+              <p className="mt-1 text-sm leading-6 text-red-600">
+                {formError}
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Customer / Sales User */}
+      {/* =====================================================
+          CUSTOMER + SALES USER
+          ===================================================== */}
 
-      <div className="mb-6 grid gap-6 md:grid-cols-2">
+      <section className="grid gap-6 lg:grid-cols-2">
         {/* Customer */}
-
-        <section className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">
-              مشتری
-            </h2>
-
-            <Link
-              href={`/customers/${order.customer_id}`}
-              className="text-xs font-medium text-gray-500 hover:text-gray-900"
-            >
-              مشاهده مشتری
-            </Link>
-          </div>
-
-          <div className="rounded-xl bg-gray-50 p-4">
-            <p className="text-xs text-gray-500">
-              نام مشتری
-            </p>
-
-            <p className="mt-2 text-base font-semibold text-gray-900">
-              {order.customer?.name ??
-                "اطلاعات مشتری موجود نیست"}
-            </p>
-
-            {order.customer?.phone && (
-              <p className="mt-2 text-sm text-gray-500">
-                {order.customer.phone}
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-blue-600">
+                مشتری
               </p>
-            )}
 
-            <p className="mt-3 break-all text-xs text-gray-400">
-              شناسه: {order.customer_id}
-            </p>
+              <h2 className="mt-1 text-xl font-black text-slate-900">
+                اطلاعات مشتری
+              </h2>
+            </div>
+
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-xl">
+              👤
+            </span>
           </div>
-        </section>
+
+          <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/70 to-white p-5">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-lg font-black text-white shadow-sm">
+                {order.customer?.name?.charAt(
+                  0
+                ) || "م"}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={`/customers/${order.customer_id}`}
+                    className="truncate text-lg font-black text-slate-900 transition hover:text-blue-600"
+                  >
+                    {order.customer?.name ??
+                      "مشتری نامشخص"}
+                  </Link>
+
+                  {order.customer?.customer_type && (
+                    <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
+                      {order.customer.customer_type ===
+                      "plasterer"
+                        ? "گچ‌کار"
+                        : order.customer.customer_type ===
+                          "plaster_worker"
+                        ? "گچ‌کار"
+                        : order.customer.customer_type ===
+                          "building_material_store"
+                        ? "مصالح‌فروشی"
+                        : order.customer.customer_type}
+                    </span>
+                  )}
+                </div>
+
+                {order.customer?.phone && (
+                  <p
+                    dir="ltr"
+                    className="mt-2 text-sm text-slate-500"
+                  >
+                    {order.customer.phone}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Sales User */}
-
-        <section className="rounded-2xl border bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-900">
-            بازاریاب
-          </h2>
-
-          <div className="rounded-xl bg-gray-50 p-4">
-            <p className="text-xs text-gray-500">
-              نام بازاریاب
-            </p>
-
-            <p className="mt-2 text-base font-semibold text-gray-900">
-              {order.sales_user?.full_name ??
-                "اطلاعات بازاریاب موجود نیست"}
-            </p>
-
-            {order.sales_user?.job_title && (
-              <p className="mt-2 text-sm text-gray-500">
-                {order.sales_user.job_title}
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-violet-600">
+                مسئول فروش
               </p>
-            )}
 
-            {order.sales_user?.phone && (
-              <p className="mt-1 text-sm text-gray-500">
-                {order.sales_user.phone}
-              </p>
-            )}
+              <h2 className="mt-1 text-xl font-black text-slate-900">
+                اطلاعات بازاریاب
+              </h2>
+            </div>
 
-            <p className="mt-3 break-all text-xs text-gray-400">
-              شناسه: {order.sales_user_id}
-            </p>
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-50 text-xl">
+              👨‍💼
+            </span>
           </div>
-        </section>
-      </div>
 
-      {/* Edit */}
+          <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50/70 to-white p-5">
+            <div className="flex items-start gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-600 text-lg font-black text-white shadow-sm">
+                {order.sales_user?.full_name?.charAt(
+                  0
+                ) || "ب"}
+              </div>
 
-      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+              <div className="min-w-0">
+                <p className="text-lg font-black text-slate-900">
+                  {order.sales_user?.full_name ??
+                    "بازاریاب نامشخص"}
+                </p>
+
+                {order.sales_user?.job_title && (
+                  <p className="mt-1 text-sm text-slate-500">
+                    {order.sales_user.job_title}
+                  </p>
+                )}
+
+                {order.sales_user?.phone && (
+                  <p
+                    dir="ltr"
+                    className="mt-2 text-sm text-slate-500"
+                  >
+                    {order.sales_user.phone}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* =====================================================
+          ORDER SUMMARY
+          ===================================================== */}
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
         <div className="mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">
-            اطلاعات سفارش
+          <p className="text-xs font-bold text-slate-400">
+            خلاصه
+          </p>
+
+          <h2 className="mt-1 text-xl font-black text-slate-900">
+            اطلاعات اصلی سفارش
+          </h2>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <InfoCard
+            label="تاریخ سفارش"
+            value={formatJalaliDate(
+              order.order_date
+            )}
+            icon="📅"
+          />
+
+          <InfoCard
+            label="تناژ سفارش"
+            value={`${formatNumber(
+              Number(
+                order.total_tonnage ?? 0
+              )
+            )} تن`}
+            icon="⚖️"
+          />
+
+          <InfoCard
+            label="وضعیت"
+            value={getStatusLabel(
+              order.status
+            )}
+            icon="◉"
+          />
+
+          <InfoCard
+            label="منبع سفارش"
+            value={getSourceLabel(
+              order.source
+            )}
+            icon="↗"
+          />
+        </div>
+      </section>
+
+      {/* =====================================================
+          EDIT ORDER
+          ===================================================== */}
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
+        <div className="mb-6">
+          <p className="text-xs font-bold text-blue-600">
+            ویرایش
+          </p>
+
+          <h2 className="mt-1 text-xl font-black text-slate-900">
+            ویرایش اطلاعات سفارش
           </h2>
 
-          <p className="mt-1 text-sm text-gray-500">
-            اطلاعات ثبت‌شده سفارش را ویرایش کنید.
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            در صورت نیاز تاریخ، وضعیت، تناژ و توضیحات سفارش را اصلاح کنید.
           </p>
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          {/* Jalali Date */}
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+          {/* Date */}
+          <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-5">
+            <label className="mb-4 block text-sm font-bold text-slate-700">
               تاریخ سفارش
             </label>
 
             <div className="grid grid-cols-3 gap-3">
-              {/* Year */}
-
               <div>
                 <label
                   htmlFor="jalali-year"
-                  className="mb-1 block text-xs text-gray-400"
+                  className="mb-2 block text-xs font-bold text-slate-400"
                 >
                   سال
                 </label>
@@ -648,42 +824,56 @@ export default function OrderDetailsPage() {
                   id="jalali-year"
                   type="text"
                   inputMode="numeric"
-                  value={jalaliYear}
-                  onChange={(event) =>
-                    setJalaliYear(
+                  value={toPersianDigits(
+                    displayJalaliYear
+                  )}
+                  onChange={(event) => {
+                    const value =
                       event.target.value.replace(
-                        /\D/g,
+                        /[۰-۹]/g,
+                        (digit) =>
+                          String(
+                            "۰۱۲۳۴۵۶۷۸۹".indexOf(
+                              digit
+                            )
+                          )
+                      );
+
+                    setJalaliYear(
+                      value.replace(
+                        /[^\d]/g,
                         ""
                       )
-                    )
-                  }
-                  placeholder="۱۴۰۵"
-                  className="w-full rounded-xl border px-3 py-3 text-center text-sm outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
+                    );
+                  }}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                 />
               </div>
-
-              {/* Month */}
 
               <div>
                 <label
                   htmlFor="jalali-month"
-                  className="mb-1 block text-xs text-gray-400"
+                  className="mb-2 block text-xs font-bold text-slate-400"
                 >
                   ماه
                 </label>
 
                 <select
                   id="jalali-month"
-                  value={jalaliMonth}
+                  value={
+                    displayJalaliMonth
+                  }
                   onChange={(event) =>
                     setJalaliMonth(
                       event.target.value
                     )
                   }
-                  className="w-full rounded-xl border px-3 py-3 text-sm outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                 >
                   {Array.from(
-                    { length: 12 },
+                    {
+                      length: 12,
+                    },
                     (_, index) => {
                       const value =
                         index + 1;
@@ -693,7 +883,9 @@ export default function OrderDetailsPage() {
                           key={value}
                           value={value}
                         >
-                          {formatNumber(value)}
+                          {formatNumber(
+                            value
+                          )}
                         </option>
                       );
                     }
@@ -701,28 +893,30 @@ export default function OrderDetailsPage() {
                 </select>
               </div>
 
-              {/* Day */}
-
               <div>
                 <label
                   htmlFor="jalali-day"
-                  className="mb-1 block text-xs text-gray-400"
+                  className="mb-2 block text-xs font-bold text-slate-400"
                 >
                   روز
                 </label>
 
                 <select
                   id="jalali-day"
-                  value={jalaliDay}
+                  value={
+                    displayJalaliDay
+                  }
                   onChange={(event) =>
                     setJalaliDay(
                       event.target.value
                     )
                   }
-                  className="w-full rounded-xl border px-3 py-3 text-sm outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                 >
                   {Array.from(
-                    { length: 31 },
+                    {
+                      length: 31,
+                    },
                     (_, index) => {
                       const value =
                         index + 1;
@@ -732,7 +926,9 @@ export default function OrderDetailsPage() {
                           key={value}
                           value={value}
                         >
-                          {formatNumber(value)}
+                          {formatNumber(
+                            value
+                          )}
                         </option>
                       );
                     }
@@ -740,39 +936,32 @@ export default function OrderDetailsPage() {
                 </select>
               </div>
             </div>
-
-            <p className="mt-2 text-xs text-gray-400">
-              تاریخ فعلی:{" "}
-              {formatJalaliDate(
-                order.order_date
-              )}
-            </p>
           </div>
 
           {/* Status */}
-
           <div>
             <label
               htmlFor="order-status"
-              className="mb-2 block text-sm font-medium text-gray-700"
+              className="mb-2 block text-sm font-bold text-slate-700"
             >
               وضعیت سفارش
             </label>
 
             <select
               id="order-status"
-              value={status}
+              value={displayStatus}
               onChange={(event) =>
-                setStatus(event.target.value)
+                setStatus(
+                  event.target.value as
+                    | "draft"
+                    | "confirmed"
+                    | "cancelled"
+                )
               }
-              className="w-full rounded-xl border px-4 py-3 text-sm outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
             >
               <option value="draft">
                 پیش‌نویس
-              </option>
-
-              <option value="pending">
-                در انتظار تأیید
               </option>
 
               <option value="confirmed">
@@ -786,11 +975,10 @@ export default function OrderDetailsPage() {
           </div>
 
           {/* Tonnage */}
-
           <div>
             <label
               htmlFor="total-tonnage"
-              className="mb-2 block text-sm font-medium text-gray-700"
+              className="mb-2 block text-sm font-bold text-slate-700"
             >
               تناژ سفارش
             </label>
@@ -801,91 +989,96 @@ export default function OrderDetailsPage() {
                 type="number"
                 min="0.01"
                 step="0.01"
-                value={totalTonnage}
+                value={
+                  displayTotalTonnage
+                }
                 onChange={(event) =>
                   setTotalTonnage(
                     event.target.value
                   )
                 }
-                className="w-full rounded-xl border px-4 py-3 pl-14 text-sm outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 pl-16 text-lg font-bold text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
               />
 
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm text-gray-400">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 rounded-lg bg-slate-200 px-2 py-1 text-sm font-bold text-slate-500">
                 تن
               </span>
             </div>
-
-            <p className="mt-2 text-xs text-gray-400">
-              مقدار فعلی:{" "}
-              {formatNumber(
-                Number(order.total_tonnage)
-              )}{" "}
-              تن
-            </p>
           </div>
 
           {/* Source */}
-
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-bold text-slate-700">
               منبع سفارش
             </label>
 
-            <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-700">
-              {getSourceLabel(order.source)}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-700">
+              {getSourceLabel(
+                order.source
+              )}
             </div>
           </div>
         </div>
 
         {/* Notes */}
-
         <div className="mt-6">
           <label
             htmlFor="order-notes"
-            className="mb-2 block text-sm font-medium text-gray-700"
+            className="mb-2 block text-sm font-bold text-slate-700"
           >
             توضیحات
           </label>
 
           <textarea
             id="order-notes"
-            value={notes}
+            value={displayNotes}
             onChange={(event) =>
-              setNotes(event.target.value)
+              setNotes(
+                event.target.value
+              )
             }
             rows={5}
             placeholder="توضیحات سفارش..."
-            className="w-full resize-y rounded-xl border px-4 py-3 text-sm outline-none transition focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
+            className="w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
           />
         </div>
 
         {/* Actions */}
-
-        <div className="mt-8 flex flex-col-reverse gap-3 border-t pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-8 flex flex-col-reverse gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <button
             type="button"
-            onClick={handleDelete}
-            disabled={deleting || saving}
-            className="rounded-xl border border-red-200 px-5 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={
+              handleDelete
+            }
+            disabled={
+              deleting ||
+              saving
+            }
+            className="inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {deleting
               ? "در حال حذف..."
               : "حذف سفارش"}
           </button>
 
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <Link
               href="/orders"
-              className="rounded-xl border bg-white px-5 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+              className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
             >
               انصراف
             </Link>
 
             <button
               type="button"
-              onClick={handleSave}
-              disabled={saving || deleting}
-              className="rounded-xl bg-gray-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={
+                handleSave
+              }
+              disabled={
+                saving ||
+                deleting
+              }
+              className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-7 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving
                 ? "در حال ذخیره..."
@@ -895,49 +1088,47 @@ export default function OrderDetailsPage() {
         </div>
       </section>
 
-      {/* System Information */}
+      {/* =====================================================
+          SYSTEM INFO
+          ===================================================== */}
 
-      <section className="mt-6 rounded-2xl border bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900">
-          اطلاعات سیستم
-        </h2>
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-5">
+          <p className="text-xs font-bold text-slate-400">
+            سیستم
+          </p>
 
-        <div className="grid gap-4 text-sm md:grid-cols-3">
-          <div className="rounded-xl bg-gray-50 p-4">
-            <p className="text-xs text-gray-500">
-              ایجاد شده در
-            </p>
+          <h2 className="mt-1 text-lg font-black text-slate-900">
+            اطلاعات سیستمی
+          </h2>
+        </div>
 
-            <p className="mt-2 font-medium text-gray-700">
-              {formatJalaliDate(
-                order.created_at
-              )}
-            </p>
-          </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <InfoCard
+            label="ایجاد شده در"
+            value={formatJalaliDate(
+              order.created_at
+            )}
+            icon="＋"
+          />
 
-          <div className="rounded-xl bg-gray-50 p-4">
-            <p className="text-xs text-gray-500">
-              آخرین بروزرسانی
-            </p>
+          <InfoCard
+            label="آخرین بروزرسانی"
+            value={formatJalaliDate(
+              order.updated_at
+            )}
+            icon="↻"
+          />
 
-            <p className="mt-2 font-medium text-gray-700">
-              {formatJalaliDate(
-                order.updated_at
-              )}
-            </p>
-          </div>
-
-          <div className="rounded-xl bg-gray-50 p-4">
-            <p className="text-xs text-gray-500">
-              نسخه همگام‌سازی
-            </p>
-
-            <p className="mt-2 font-medium text-gray-700">
-              {formatNumber(
-                Number(order.sync_version)
-              )}
-            </p>
-          </div>
+          <InfoCard
+            label="نسخه همگام‌سازی"
+            value={formatNumber(
+              Number(
+                order.sync_version ?? 0
+              )
+            )}
+            icon="⇄"
+          />
         </div>
       </section>
     </div>

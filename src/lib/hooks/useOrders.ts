@@ -37,7 +37,13 @@ export function useOrders() {
   }, []);
 
   useEffect(() => {
-    void fetchOrders();
+    const timer = window.setTimeout(() => {
+      void fetchOrders();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [fetchOrders]);
 
   const createOrder = useCallback(
@@ -80,12 +86,9 @@ export function useOrders() {
   return {
     data,
     orders: data,
-
     loading,
     error,
-
     refresh: fetchOrders,
-
     createOrder,
     updateOrder,
     deleteOrder,

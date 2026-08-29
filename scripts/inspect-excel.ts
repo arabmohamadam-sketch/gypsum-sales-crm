@@ -1,4 +1,4 @@
-import XLSX from "xlsx";
+﻿import * as XLSX from "xlsx";
 
 const file = "./data/customers_import.xlsx";
 
@@ -13,21 +13,33 @@ for (const sheetName of workbook.SheetNames) {
   console.log("SHEET:", sheetName);
   console.log("RANGE:", sheet["!ref"]);
 
-  const rows = XLSX.utils.sheet_to_json(sheet, {
-    defval: null,
-  });
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
+    sheet,
+    {
+      defval: null,
+    }
+  );
 
   console.log("TOTAL ROWS:", rows.length);
 
-  const nonEmptyRows = rows.filter((row: any) =>
-    Object.values(row).some(
-      (value) => value !== null && value !== ""
-    )
+  const nonEmptyRows = rows.filter(
+    (row) =>
+      Object.values(row).some(
+        (value) =>
+          value !== null &&
+          value !== undefined &&
+          value !== ""
+      )
   );
 
-  console.log("NON-EMPTY ROWS:", nonEmptyRows.length);
+  console.log(
+    "NON-EMPTY ROWS:",
+    nonEmptyRows.length
+  );
 
-  console.log("\nFIRST 10 NON-EMPTY ROWS:");
+  console.log(
+    "\nFIRST 10 NON-EMPTY ROWS:"
+  );
 
   console.log(
     nonEmptyRows.slice(0, 10)

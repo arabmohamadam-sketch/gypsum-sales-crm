@@ -1,28 +1,27 @@
 import * as XLSX from "xlsx";
 
 import { readSheet } from "./excel";
+
 import {
   mapExcelRow,
   type CustomerImportRow,
 } from "./mapper";
+
 import {
   normalizePhone,
   normalizeText,
 } from "./normalize";
+
 import { removeDuplicates } from "./deduplicate";
 
-/**
- * فقط شهرهای تحت پوشش محمد عرب
- *
- * خمین عمداً حذف شده است.
- */
 const SHEETS = [
   "گرمسار",
   "ورامین",
   "CRM(سمنان)",
 ] as const;
 
-type SourceSheet = (typeof SHEETS)[number];
+type SourceSheet =
+  (typeof SHEETS)[number];
 
 function normalizeCityName(
   sheetName: SourceSheet
@@ -50,20 +49,25 @@ export async function analyzeWorkbook(
   let customers: CustomerImportRow[] = [];
 
   for (const sheetName of SHEETS) {
-    const worksheet = workbook.Sheets[sheetName];
+    const worksheet =
+      workbook.Sheets[sheetName];
 
     if (!worksheet) {
       console.warn(
         `شیت پیدا نشد: ${sheetName}`
       );
+
       continue;
     }
 
-    const rows: Record<string, unknown>[] =
+    const rows =
       readSheet(
         workbook,
         sheetName
-      ) as Record<string, unknown>[];
+      ) as Record<
+        string,
+        unknown
+      >[];
 
     const cityName =
       normalizeCityName(sheetName);
@@ -74,27 +78,33 @@ export async function analyzeWorkbook(
 
     const mapped: CustomerImportRow[] =
       rows
-        .map((row) => {
-          const customer =
-            mapExcelRow(
-              row,
-              cityName
-            );
+        .map(
+          (
+            row
+          ): CustomerImportRow => {
+            const customer =
+              mapExcelRow(
+                row,
+                cityName
+              );
 
-          return {
-            ...customer,
+            return {
+              ...customer,
 
-            name: normalizeText(
-              customer.name
-            ),
+              name: normalizeText(
+                customer.name
+              ),
 
-            phone: normalizePhone(
-              customer.phone
-            ),
-          };
-        })
+              phone: normalizePhone(
+                customer.phone
+              ),
+            };
+          }
+        )
         .filter(
-          (customer) =>
+          (
+            customer
+          ): customer is CustomerImportRow =>
             customer.name.trim() !== ""
         );
 
@@ -105,13 +115,6 @@ export async function analyzeWorkbook(
     customers.push(...mapped);
   }
 
-  /**
-   * حذف رکوردهای تکراری
-   *
-   * اولویت تشخیص Duplicate:
-   * phone
-   * سپس name + city
-   */
   customers =
     removeDuplicates(customers);
 
@@ -122,10 +125,6 @@ export async function analyzeWorkbook(
   return customers;
 }
 
-/**
- * تحلیل آماری برای Dry Run
- * هیچ تغییری در دیتابیس ایجاد نمی‌کند.
- */
 export function analyzeImportResult(
   customers: CustomerImportRow[]
 ) {
@@ -149,28 +148,27 @@ export function analyzeImportResult(
     withoutPhone: 0,
 
     withLastContact: 0,
-    withNextContact: 0,
-
-    withLeadStatus: 0,
-    withLeadSource: 0,
-    withNotes: 0,
+    withoutLastContact: 0,
   };
 
   for (const customer of customers) {
     if (
-      customer.cityName === "گرمسار"
+      customer.cityName ===
+      "Garmsar"
     ) {
       result.cities.گرمسار++;
     }
 
     if (
-      customer.cityName === "ورامین"
+      customer.cityName ===
+      "Varamin"
     ) {
       result.cities.ورامین++;
     }
 
     if (
-      customer.cityName === "سمنان"
+      customer.cityName ===
+      "Semnan"
     ) {
       result.cities.سمنان++;
     }
@@ -192,22 +190,8 @@ export function analyzeImportResult(
 
     if (customer.lastContact) {
       result.withLastContact++;
-    }
-
-    if (customer.nextContact) {
-      result.withNextContact++;
-    }
-
-    if (customer.leadStatus) {
-      result.withLeadStatus++;
-    }
-
-    if (customer.leadSource) {
-      result.withLeadSource++;
-    }
-
-    if (customer.notes) {
-      result.withNotes++;
+    } else {
+      result.withoutLastContact++;
     }
   }
 

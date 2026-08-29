@@ -157,7 +157,7 @@ for (const sheetName of SOURCE_SHEETS) {
   console.log(`در حال پردازش: ${sheetName}`);
   console.log(`Range: ${worksheet["!ref"] ?? "نامشخص"}`);
 
-  const rows = XLSX.utils.sheet_to_json<any[]>(worksheet, {
+  const rows = XLSX.utils.sheet_to_json<(string | number | null)[]>(worksheet, {
     header: 1,
     defval: null,
     raw: true,

@@ -8,21 +8,24 @@ export default function MainLayout({
 }) {
   return (
     <div
-      className="flex bg-slate-100"
       dir="rtl"
+      className="min-h-screen bg-slate-50 text-slate-900"
     >
-      <Sidebar />
+      <div className="flex min-h-screen">
+        <Sidebar />
 
-      <main className="flex-1 p-8">
+        <div className="min-w-0 flex-1">
+          <main className="min-h-screen px-3 pb-24 pt-3 sm:px-5 sm:pb-24 sm:pt-5 lg:px-8 lg:pb-8 lg:pt-6">
+            <div className="mx-auto w-full max-w-[1600px]">
+              <Header />
 
-        <Header />
-
-        <div className="mt-8">
-          {children}
+              <div className="mt-5 sm:mt-6">
+                {children}
+              </div>
+            </div>
+          </main>
         </div>
-
-      </main>
-
+      </div>
     </div>
   );
 }

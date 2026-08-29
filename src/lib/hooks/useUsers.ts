@@ -32,17 +32,21 @@ export function useUsers() {
   }, []);
 
   useEffect(() => {
-    void fetchUsers();
+    const timer = window.setTimeout(() => {
+      void fetchUsers();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [fetchUsers]);
 
   return {
     data,
     users: data,
     salesUsers: data,
-
     loading,
     error,
-
     refresh: fetchUsers,
   };
 }

@@ -8,7 +8,7 @@ import type {
 const COMPANY_ID = "11111111-1111-1111-1111-111111111111";
 
 export interface CreateOrderInput {
-  company_id: string;
+  company_id?: string;
   customer_id: string;
   sales_user_id: string;
   order_date: string;
@@ -50,16 +50,10 @@ const ORDER_SELECT = `
   )
 `;
 
-function validateTonnage(value: number) {
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new Error("تناژ سفارش باید بیشتر از صفر باشد.");
-  }
-}
-
 function validateId(
   value: string | undefined,
   message: string
-) {
+): string {
   if (!value?.trim()) {
     throw new Error(message);
   }
@@ -67,21 +61,97 @@ function validateId(
   return value.trim();
 }
 
+function validateDate(
+  value: string | undefined,
+  message: string
+): string {
+  if (!value?.trim()) {
+    throw new Error(message);
+  }
+
+  return value.trim();
+}
+
+function validateTonnage(value: number): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(
+      "تناژ سفارش باید بیشتر از صفر باشد."
+    );
+  }
+}
+
+function validateStatus(value: string | undefined): string {
+  if (!value?.trim()) {
+    throw new Error(
+      "وضعیت سفارش الزامی است."
+    );
+  }
+
+  return value.trim();
+}
+
+function validateSource(value: string | undefined): string {
+  if (!value?.trim()) {
+    throw new Error(
+      "منبع سفارش الزامی است."
+    );
+  }
+
+  return value.trim();
+}
+
+interface SupabaseErrorLike {
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+}
+
+function isSupabaseError(
+  error: unknown
+): error is SupabaseErrorLike {
+  return (
+    typeof error === "object" &&
+    error !== null
+  );
+}
+
+function getErrorMessage(
+  error: unknown,
+  fallback: string
+): string {
+  if (isSupabaseError(error)) {
+    return (
+      error.message ??
+      error.details ??
+      fallback
+    );
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return fallback;
+}
+
 function logSupabaseError(
   operation: string,
-  error: any
-) {
+  error: unknown
+): void {
   console.error(
     `========== ORDER ${operation} ERROR ==========`
   );
-  console.error("message :", error?.message);
-  console.error("code    :", error?.code);
-  console.error("details :", error?.details);
-  console.error("hint    :", error?.hint);
-  console.error(
-    "full    :",
-    JSON.stringify(error, null, 2)
-  );
+
+  if (isSupabaseError(error)) {
+    console.error("message :", error.message);
+    console.error("code    :", error.code);
+    console.error("details :", error.details);
+    console.error("hint    :", error.hint);
+  } else {
+    console.error("error   :", error);
+  }
+
   console.error(
     "================================================"
   );
@@ -101,18 +171,26 @@ export const ordersService = {
       .is("deleted_at", null)
       .order("order_date", {
         ascending: false,
+      })
+      .order("created_at", {
+        ascending: false,
       });
 
     if (error) {
       logSupabaseError("GET ALL", error);
-      throw error;
+      throw new Error(
+        getErrorMessage(
+          error,
+          "خطا در دریافت سفارش‌ها."
+        )
+      );
     }
 
     return (data ?? []) as OrderWithRelations[];
   },
 
   /**
-   * دریافت سفارش بر اساس شناسه
+   * دریافت یک سفارش بر اساس شناسه
    */
   async getById(
     id: string
@@ -134,7 +212,13 @@ export const ordersService = {
 
     if (error) {
       logSupabaseError("GET BY ID", error);
-      throw error;
+
+      throw new Error(
+        getErrorMessage(
+          error,
+          "خطا در دریافت سفارش."
+        )
+      );
     }
 
     return data as OrderWithRelations;
@@ -161,6 +245,9 @@ export const ordersService = {
       .is("deleted_at", null)
       .order("order_date", {
         ascending: false,
+      })
+      .order("created_at", {
+        ascending: false,
       });
 
     if (error) {
@@ -169,14 +256,19 @@ export const ordersService = {
         error
       );
 
-      throw error;
+      throw new Error(
+        getErrorMessage(
+          error,
+          "خطا در دریافت سفارش‌های مشتری."
+        )
+      );
     }
 
     return (data ?? []) as OrderWithRelations[];
   },
 
   /**
-   * دریافت سفارش‌ها در بازه زمانی
+   * دریافت سفارش‌ها در یک بازه زمانی
    */
   async getByDateRange(
     startDate: string,
@@ -184,13 +276,17 @@ export const ordersService = {
   ): Promise<OrderWithRelations[]> {
     const supabase = createSupabaseClient();
 
-    if (!startDate || !endDate) {
-      throw new Error(
-        "بازه زمانی سفارش الزامی است."
-      );
-    }
+    const start = validateDate(
+      startDate,
+      "تاریخ شروع بازه الزامی است."
+    );
 
-    if (startDate > endDate) {
+    const end = validateDate(
+      endDate,
+      "تاریخ پایان بازه الزامی است."
+    );
+
+    if (start > end) {
       throw new Error(
         "تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد."
       );
@@ -200,10 +296,13 @@ export const ordersService = {
       .from("orders")
       .select(ORDER_SELECT)
       .eq("company_id", COMPANY_ID)
-      .gte("order_date", startDate)
-      .lte("order_date", endDate)
+      .gte("order_date", start)
+      .lte("order_date", end)
       .is("deleted_at", null)
       .order("order_date", {
+        ascending: false,
+      })
+      .order("created_at", {
         ascending: false,
       });
 
@@ -213,7 +312,12 @@ export const ordersService = {
         error
       );
 
-      throw error;
+      throw new Error(
+        getErrorMessage(
+          error,
+          "خطا در دریافت سفارش‌های بازه زمانی."
+        )
+      );
     }
 
     return (data ?? []) as OrderWithRelations[];
@@ -237,40 +341,37 @@ export const ordersService = {
       "انتخاب بازاریاب الزامی است."
     );
 
-    if (!input.order_date) {
-      throw new Error(
-        "تاریخ سفارش الزامی است."
-      );
-    }
+    const orderDate = validateDate(
+      input.order_date,
+      "تاریخ سفارش الزامی است."
+    );
 
-    if (!input.status) {
-      throw new Error(
-        "وضعیت سفارش الزامی است."
-      );
-    }
+    const status = validateStatus(
+      input.status
+    );
 
-    if (!input.source) {
-      throw new Error(
-        "منبع سفارش الزامی است."
-      );
-    }
+    const source = validateSource(
+      input.source
+    );
 
     validateTonnage(
       input.total_tonnage
     );
 
+    const insertData = {
+      company_id: COMPANY_ID,
+      customer_id: customerId,
+      sales_user_id: salesUserId,
+      order_date: orderDate,
+      status,
+      total_tonnage: input.total_tonnage,
+      notes: input.notes ?? null,
+      source,
+    };
+
     const { data, error } = await supabase
       .from("orders")
-      .insert({
-        company_id: COMPANY_ID,
-        customer_id: customerId,
-        sales_user_id: salesUserId,
-        order_date: input.order_date,
-        status: input.status,
-        total_tonnage: input.total_tonnage,
-        notes: input.notes ?? null,
-        source: input.source,
-      })
+      .insert(insertData)
       .select(ORDER_SELECT)
       .single();
 
@@ -278,9 +379,10 @@ export const ordersService = {
       logSupabaseError("CREATE", error);
 
       throw new Error(
-        error.message ??
-          error.details ??
-          "خطا در ثبت سفارش"
+        getErrorMessage(
+          error,
+          "خطا در ثبت سفارش."
+        )
       );
     }
 
@@ -301,46 +403,66 @@ export const ordersService = {
       "شناسه سفارش الزامی است."
     );
 
+    const updateData: Record<
+      string,
+      unknown
+    > = {};
+
+    if (input.customer_id !== undefined) {
+      updateData.customer_id = validateId(
+        input.customer_id,
+        "شناسه مشتری معتبر نیست."
+      );
+    }
+
+    if (input.sales_user_id !== undefined) {
+      updateData.sales_user_id = validateId(
+        input.sales_user_id,
+        "شناسه بازاریاب معتبر نیست."
+      );
+    }
+
+    if (input.order_date !== undefined) {
+      updateData.order_date = validateDate(
+        input.order_date,
+        "تاریخ سفارش معتبر نیست."
+      );
+    }
+
+    if (input.status !== undefined) {
+      updateData.status = validateStatus(
+        input.status
+      );
+    }
+
     if (
       input.total_tonnage !== undefined
     ) {
       validateTonnage(
         input.total_tonnage
       );
+
+      updateData.total_tonnage =
+        input.total_tonnage;
     }
 
-    if (
-      input.customer_id !== undefined
-    ) {
-      input.customer_id = validateId(
-        input.customer_id,
-        "شناسه مشتری معتبر نیست."
+    if (input.notes !== undefined) {
+      updateData.notes = input.notes;
+    }
+
+    if (input.source !== undefined) {
+      updateData.source = validateSource(
+        input.source
       );
     }
 
     if (
-      input.sales_user_id !== undefined
-    ) {
-      input.sales_user_id = validateId(
-        input.sales_user_id,
-        "شناسه بازاریاب معتبر نیست."
-      );
-    }
-
-    if (
-      input.order_date !== undefined &&
-      !input.order_date
+      Object.keys(updateData).length === 0
     ) {
       throw new Error(
-        "تاریخ سفارش معتبر نیست."
+        "هیچ اطلاعاتی برای ویرایش سفارش ارسال نشده است."
       );
     }
-
-    const updateData = {
-      ...input,
-      updated_at:
-        new Date().toISOString(),
-    };
 
     const { data, error } = await supabase
       .from("orders")
@@ -355,9 +477,10 @@ export const ordersService = {
       logSupabaseError("UPDATE", error);
 
       throw new Error(
-        error.message ??
-          error.details ??
-          "خطا در ویرایش سفارش"
+        getErrorMessage(
+          error,
+          "خطا در ویرایش سفارش."
+        )
       );
     }
 
@@ -380,7 +503,7 @@ export const ordersService = {
     const now =
       new Date().toISOString();
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("orders")
       .update({
         deleted_at: now,
@@ -388,7 +511,9 @@ export const ordersService = {
       })
       .eq("id", orderId)
       .eq("company_id", COMPANY_ID)
-      .is("deleted_at", null);
+      .is("deleted_at", null)
+      .select("id")
+      .maybeSingle();
 
     if (error) {
       logSupabaseError(
@@ -397,9 +522,16 @@ export const ordersService = {
       );
 
       throw new Error(
-        error.message ??
-          error.details ??
-          "خطا در حذف سفارش"
+        getErrorMessage(
+          error,
+          "خطا در حذف سفارش."
+        )
+      );
+    }
+
+    if (!data) {
+      throw new Error(
+        "سفارش موردنظر پیدا نشد یا قبلاً حذف شده است."
       );
     }
   },
@@ -437,9 +569,10 @@ export const ordersService = {
       );
 
       throw new Error(
-        error.message ??
-          error.details ??
-          "خطا در بازیابی سفارش"
+        getErrorMessage(
+          error,
+          "خطا در بازیابی سفارش."
+        )
       );
     }
 

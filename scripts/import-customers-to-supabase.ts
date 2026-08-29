@@ -19,10 +19,6 @@ const inputPath = path.resolve(
 // =========================================================
 // شناسه واقعی شهرها در Supabase
 // =========================================================
-//
-// این IDها مستقیماً از جدول public.cities گرفته شده‌اند.
-// دیگر برای پیدا کردن شهرها Query جداگانه نمی‌زنیم.
-// =========================================================
 
 const CITY_IDS: Record<string, string> = {
   "گرمسار":
@@ -151,6 +147,37 @@ type ImportRow = {
   source_city: string | null;
 };
 
+type PayloadMetadata = {
+  source: string;
+  source_city: string;
+  company: string | null;
+  customer_type_fa: string | null;
+  estimated_sales: string | null;
+  last_contact: string | null;
+  next_action: string | null;
+  next_contact: string | null;
+  lead_status: string | null;
+  lead_source: string | null;
+  notes: string | null;
+};
+
+type CustomerPayload = {
+  company_id: string;
+  city_id: string;
+  name: string;
+  phone: string | null;
+  whatsapp_number: string | null;
+  customer_type: string;
+  preferred_contact_method: string;
+  is_active: boolean;
+  is_vip: boolean;
+  lifetime_tonnage: number;
+  average_monthly_tonnage: number;
+  total_order_count: number;
+  inactivity_days: number;
+  metadata: PayloadMetadata;
+};
+
 // =========================================================
 // Normalize Text
 // =========================================================
@@ -184,6 +211,26 @@ function clean(
 }
 
 // =========================================================
+// Normalize Persian / Arabic digits
+// =========================================================
+
+function normalizeDigits(
+  value: string
+): string {
+  return value
+    .replace(/[۰-۹]/g, (digit) =>
+      String(
+        "۰۱۲۳۴۵۶۷۸۹".indexOf(digit)
+      )
+    )
+    .replace(/[٠-٩]/g, (digit) =>
+      String(
+        "٠١٢٣٤٥٦٧٨٩".indexOf(digit)
+      )
+    );
+}
+
+// =========================================================
 // Phone
 // =========================================================
 
@@ -197,8 +244,9 @@ function cleanPhone(
     return null;
   }
 
-  let digits = String(value)
-    .replace(/[^\d]/g, "");
+  let digits = normalizeDigits(
+    String(value)
+  ).replace(/\D/g, "");
 
   if (!digits) {
     return null;
@@ -210,6 +258,14 @@ function cleanPhone(
     digits.startsWith("98")
   ) {
     digits = `0${digits.slice(2)}`;
+  }
+
+  // 00989xxxxxxxxx -> 09xxxxxxxxx
+  if (
+    digits.length === 14 &&
+    digits.startsWith("0098")
+  ) {
+    digits = `0${digits.slice(4)}`;
   }
 
   // 9xxxxxxxxx -> 09xxxxxxxxx
@@ -244,23 +300,26 @@ function normalizeCity(
     return null;
   }
 
+  const normalized =
+    city.toLowerCase();
+
   if (
     city === "گرمسار" ||
-    city.toLowerCase() === "garmsar"
+    normalized === "garmsar"
   ) {
     return "گرمسار";
   }
 
   if (
     city === "ورامین" ||
-    city.toLowerCase() === "varamin"
+    normalized === "varamin"
   ) {
     return "ورامین";
   }
 
   if (
     city === "سمنان" ||
-    city.toLowerCase() === "semnan"
+    normalized === "semnan"
   ) {
     return "سمنان";
   }
@@ -268,7 +327,7 @@ function normalizeCity(
   // خمین عمداً پشتیبانی نمی‌شود
   if (
     city === "خمین" ||
-    city.toLowerCase() === "khomein"
+    normalized === "khomein"
   ) {
     return null;
   }
@@ -319,7 +378,7 @@ function mapCustomerType(
     return "plaster_worker";
   }
 
-  // در صورت وجود نوع‌های دیگر
+  // اتحادیه
   if (
     type.includes("رئیس اتحادیه") ||
     type.includes("اتحادیه")
@@ -340,15 +399,19 @@ function mapCustomerType(
 
 async function main() {
   console.log("");
+
   console.log(
     "=============================================="
   );
+
   console.log(
     "وارد کردن مشتریان به Supabase"
   );
+
   console.log(
     "=============================================="
   );
+
   console.log("");
 
   // -------------------------------------------------------
@@ -369,12 +432,13 @@ async function main() {
   // Read Excel
   // -------------------------------------------------------
 
-  const workbook = XLSX.readFile(
-    inputPath,
-    {
-      cellDates: false,
-    }
-  );
+  const workbook =
+    XLSX.readFile(
+      inputPath,
+      {
+        cellDates: false,
+      }
+    );
 
   const sheet =
     workbook.Sheets["Customers"];
@@ -425,9 +489,11 @@ async function main() {
 
   for (const row of rows) {
     const name = clean(row.name);
-    const city = normalizeCity(
-      row.source_city
-    );
+
+    const city =
+      normalizeCity(
+        row.source_city
+      );
 
     // بدون نام
     if (!name) {
@@ -453,9 +519,11 @@ async function main() {
   console.log(
     "=============================================="
   );
+
   console.log(
     "بررسی شهرها"
   );
+
   console.log(
     "=============================================="
   );
@@ -562,7 +630,7 @@ async function main() {
   // Build payload
   // -------------------------------------------------------
 
-  const payload: any[] = [];
+  const payload: CustomerPayload[] = [];
 
   let skippedExisting = 0;
   let skippedInvalid = 0;
@@ -620,7 +688,7 @@ async function main() {
       continue;
     }
 
-    payload.push({
+    const customerPayload: CustomerPayload = {
       company_id:
         COMPANY_ID,
 
@@ -706,7 +774,11 @@ async function main() {
         notes:
           clean(row.notes),
       },
-    });
+    };
+
+    payload.push(
+      customerPayload
+    );
 
     // جلوگیری از تکرار در همین فایل
     existingKeys.add(key);
@@ -719,9 +791,11 @@ async function main() {
   console.log(
     "=============================================="
   );
+
   console.log(
     "آماده‌سازی ورود"
   );
+
   console.log(
     "=============================================="
   );
@@ -770,11 +844,9 @@ async function main() {
     of payload
   ) {
     const city =
-      customer.metadata
-        ?.source_city;
+      customer.metadata.source_city;
 
     if (
-      city &&
       payloadStats[city] !== undefined
     ) {
       payloadStats[city]++;
@@ -840,13 +912,12 @@ async function main() {
 
     if (error) {
       console.error("");
+
       console.error(
         "خطا هنگام Insert:"
       );
 
-      console.error(
-        error
-      );
+      console.error(error);
 
       throw error;
     }

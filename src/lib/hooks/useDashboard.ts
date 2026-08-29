@@ -16,8 +16,7 @@ export function useDashboard() {
       setLoading(true);
       setError(null);
 
-      const result =
-        await dashboardService.getDashboardData();
+      const result = await dashboardService.getDashboardData();
 
       setData(result);
     } catch (err) {
@@ -35,7 +34,13 @@ export function useDashboard() {
   }, []);
 
   useEffect(() => {
-    loadDashboard();
+    const timer = window.setTimeout(() => {
+      void loadDashboard();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [loadDashboard]);
 
   return {

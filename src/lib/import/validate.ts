@@ -1,3 +1,9 @@
-export function isValidCustomer(customer: any) {
-    return customer.name?.length > 2;
-  }
+export interface ImportCustomer {
+  name?: string;
+}
+
+export function isValidCustomer(
+  customer: ImportCustomer
+) {
+  return (customer.name?.trim().length ?? 0) > 2;
+}

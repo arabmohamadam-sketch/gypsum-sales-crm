@@ -53,7 +53,9 @@ export const customersService = {
     const supabase = createSupabaseClient();
 
     if (!id || !id.trim()) {
-      throw new Error("شناسه مشتری مشخص نیست.");
+      throw new Error(
+        "شناسه مشتری مشخص نیست."
+      );
     }
 
     const customerId = id.trim();
@@ -81,6 +83,38 @@ export const customersService = {
     }
 
     return data as Customer;
+  },
+
+  async getCities(): Promise<CustomerCity[]> {
+    const supabase = createSupabaseClient();
+
+    const { data, error } = await supabase
+      .from("cities")
+      .select("id, company_id, name, code")
+      .eq("company_id", COMPANY_ID)
+      .is("deleted_at", null)
+      .order("name", { ascending: true });
+
+    if (error) {
+      logSupabaseError(
+        "خطا در دریافت فهرست شهرها:",
+        error
+      );
+      throw error;
+    }
+
+    return (data ?? []).map((item) => ({
+      id: String(item.id),
+      company_id:
+        item.company_id !== undefined
+          ? item.company_id
+          : null,
+      name: String(item.name ?? ""),
+      code:
+        item.code !== undefined
+          ? item.code
+          : null,
+    }));
   },
 
   async getCityById(
@@ -147,7 +181,9 @@ export const customersService = {
     const supabase = createSupabaseClient();
 
     if (!id || !id.trim()) {
-      throw new Error("شناسه مشتری مشخص نیست.");
+      throw new Error(
+        "شناسه مشتری مشخص نیست."
+      );
     }
 
     const customerId = id.trim();
@@ -157,7 +193,7 @@ export const customersService = {
     };
 
     if (values.name !== undefined) {
-      updateData.name = values.name;
+      updateData.name = values.name.trim();
     }
 
     if (values.phone !== undefined) {
@@ -201,7 +237,7 @@ export const customersService = {
 
     if (error) {
       logSupabaseError(
-        "خطا در به‌روزرسانی مشتری:",
+        "خطا در بروزرسانی مشتری:",
         error
       );
       throw error;
@@ -209,7 +245,7 @@ export const customersService = {
 
     if (!data) {
       throw new Error(
-        `مشتری با شناسه ${customerId} به‌روزرسانی نشد یا دسترسی ویرایش آن وجود ندارد.`
+        `مشتری با شناسه ${customerId} بروزرسانی نشد.`
       );
     }
 
@@ -234,12 +270,28 @@ export const customersService = {
     const supabase = createSupabaseClient();
 
     if (!values.name?.trim()) {
-      throw new Error("نام مشتری الزامی است.");
+      throw new Error(
+        "نام مشتری الزامی است."
+      );
+    }
+
+    if (!values.city_id?.trim()) {
+      throw new Error(
+        "انتخاب شهر مشتری الزامی است."
+      );
+    }
+
+    if (!values.customer_type) {
+      throw new Error(
+        "نوع مشتری الزامی است."
+      );
     }
 
     const insertData: Record<string, unknown> = {
       company_id: COMPANY_ID,
+      city_id: values.city_id.trim(),
       name: values.name.trim(),
+      customer_type: values.customer_type,
       is_vip: values.is_vip ?? false,
       is_active: values.is_active ?? true,
     };
@@ -251,15 +303,6 @@ export const customersService = {
     if (values.whatsapp_number !== undefined) {
       insertData.whatsapp_number =
         values.whatsapp_number;
-    }
-
-    if (values.customer_type !== undefined) {
-      insertData.customer_type =
-        values.customer_type;
-    }
-
-    if (values.city_id !== undefined) {
-      insertData.city_id = values.city_id;
     }
 
     if (values.metadata !== undefined) {
@@ -280,6 +323,12 @@ export const customersService = {
       throw error;
     }
 
+    if (!data) {
+      throw new Error(
+        "مشتری ایجاد نشد."
+      );
+    }
+
     return data as Customer;
   },
 
@@ -287,7 +336,9 @@ export const customersService = {
     const supabase = createSupabaseClient();
 
     if (!id || !id.trim()) {
-      throw new Error("شناسه مشتری مشخص نیست.");
+      throw new Error(
+        "شناسه مشتری مشخص نیست."
+      );
     }
 
     const customerId = id.trim();
