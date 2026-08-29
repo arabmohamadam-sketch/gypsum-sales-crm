@@ -2,14 +2,22 @@
 
 import Link from "next/link";
 import {
-  useMemo,
-  useState,
-} from "react";
+  Box,
+  CheckCircle2,
+  Clock3,
+  FileText,
+  Plus,
+  RefreshCw,
+  Search,
+  ShoppingCart,
+  Trash2,
+  Users,
+  XCircle,
+} from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { useOrders } from "@/src/lib/hooks/useOrders";
-import {
-  formatJalaliDateTime,
-} from "@/src/lib/utils/jalali";
+import { formatJalaliDateTime } from "@/src/lib/utils/jalali";
 
 type OrderStatus =
   | "all"
@@ -61,21 +69,146 @@ function getStatusClass(status: string): string {
       return "bg-amber-50 text-amber-700 ring-1 ring-amber-100";
 
     default:
-      return "bg-slate-100 text-slate-700";
+      return "bg-slate-100 text-slate-700 ring-1 ring-slate-200";
   }
 }
 
-function getStatusIcon(status: string): string {
+function getStatusIcon(status: string) {
   switch (status) {
     case "confirmed":
-      return "✓";
+      return <CheckCircle2 size={14} />;
 
     case "cancelled":
-      return "×";
+      return <XCircle size={14} />;
 
     default:
-      return "•";
+      return <Clock3 size={14} />;
   }
+}
+
+function StatCard({
+  title,
+  value,
+  description,
+  icon,
+  iconClass,
+  valueClass = "text-slate-900",
+}: {
+  title: string;
+  value: string;
+  description: string;
+  icon: React.ReactNode;
+  iconClass: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="group relative overflow-hidden rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-slate-200 to-transparent opacity-0 transition group-hover:opacity-100" />
+
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-bold text-slate-500">
+            {title}
+          </p>
+
+          <p
+            className={`mt-3 text-3xl font-black tracking-tight ${valueClass}`}
+          >
+            {value}
+          </p>
+
+          <p className="mt-1 text-xs text-slate-400">
+            {description}
+          </p>
+        </div>
+
+        <div
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${iconClass}`}
+        >
+          {icon}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({
+  filtered,
+  hasFilters,
+  onReset,
+}: {
+  filtered: boolean;
+  hasFilters: boolean;
+  onReset: () => void;
+}) {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm">
+      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
+        {filtered ? (
+          <Search size={28} />
+        ) : (
+          <ShoppingCart size={28} />
+        )}
+      </div>
+
+      <h2 className="mt-5 text-xl font-black text-slate-900">
+        {filtered
+          ? "سفارشی با این فیلترها پیدا نشد"
+          : "هنوز سفارشی ثبت نشده است"}
+      </h2>
+
+      <p className="mx-auto mt-2 max-w-md text-sm leading-7 text-slate-500">
+        {filtered
+          ? "عبارت جستجو یا وضعیت انتخاب‌شده را تغییر دهید."
+          : "اولین سفارش مشتری را ثبت کنید تا در این بخش نمایش داده شود."}
+      </p>
+
+      <div className="mt-6 flex flex-wrap justify-center gap-3">
+        {!filtered && (
+          <Link
+            href="/orders/new"
+            className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-600"
+          >
+            <Plus size={17} />
+            ثبت سفارش
+          </Link>
+        )}
+
+        {hasFilters && (
+          <button
+            type="button"
+            onClick={onReset}
+            className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+          >
+            پاک کردن فیلترها
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function LoadingState() {
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-12 shadow-sm">
+      <div className="mx-auto max-w-sm text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+          <ShoppingCart
+            size={24}
+            className="animate-pulse"
+          />
+        </div>
+
+        <p className="mt-4 font-bold text-slate-700">
+          در حال دریافت سفارش‌ها...
+        </p>
+
+        <div className="mx-auto mt-5 h-2 w-48 overflow-hidden rounded-full bg-slate-100">
+          <div className="h-full w-1/2 animate-pulse rounded-full bg-blue-500" />
+        </div>
+      </div>
+    </section>
+  );
 }
 
 export default function OrdersPage() {
@@ -87,102 +220,72 @@ export default function OrdersPage() {
     deleteOrder,
   } = useOrders();
 
-  const [search, setSearch] =
-    useState("");
-
-  const [
-    statusFilter,
-    setStatusFilter,
-  ] = useState<OrderStatus>("all");
-
-  const [
-    deletingId,
-    setDeletingId,
-  ] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] =
+    useState<OrderStatus>("all");
+  const [deletingId, setDeletingId] =
+    useState<string | null>(null);
 
   const filteredOrders = useMemo(() => {
-    const query =
-      search
-        .trim()
+    const query = search.trim().toLowerCase();
+
+    return orders.filter((order) => {
+      const matchesStatus =
+        statusFilter === "all" ||
+        order.status === statusFilter;
+
+      if (!matchesStatus) {
+        return false;
+      }
+
+      if (!query) {
+        return true;
+      }
+
+      const searchableText = [
+        order.id,
+        order.customer_id,
+        order.sales_user_id,
+        order.order_date,
+        order.notes ?? "",
+        order.customer?.name ?? "",
+        order.customer?.phone ?? "",
+        order.sales_user?.full_name ?? "",
+        order.sales_user?.phone ?? "",
+      ]
+        .join(" ")
         .toLowerCase();
 
-    return orders.filter(
-      (order) => {
-        const matchesStatus =
-          statusFilter === "all" ||
-          order.status === statusFilter;
+      return searchableText.includes(query);
+    });
+  }, [orders, search, statusFilter]);
 
-        if (!matchesStatus) {
-          return false;
-        }
+  const totalTonnage = filteredOrders.reduce(
+    (sum, order) =>
+      sum + Number(order.total_tonnage ?? 0),
+    0
+  );
 
-        if (!query) {
-          return true;
-        }
+  const confirmedCount = filteredOrders.filter(
+    (order) => order.status === "confirmed"
+  ).length;
 
-        const searchableText = [
-          order.id,
-          order.customer_id,
-          order.sales_user_id,
-          order.order_date,
-          order.notes ?? "",
-          order.customer?.name ?? "",
-          order.customer?.phone ?? "",
-          order.sales_user?.full_name ?? "",
-          order.sales_user?.phone ?? "",
-        ]
-          .join(" ")
-          .toLowerCase();
+  const draftCount = filteredOrders.filter(
+    (order) => order.status === "draft"
+  ).length;
 
-        return searchableText.includes(
-          query
-        );
-      }
+  const cancelledCount = filteredOrders.filter(
+    (order) => order.status === "cancelled"
+  ).length;
+
+  const hasFilters =
+    Boolean(search.trim()) ||
+    statusFilter !== "all";
+
+  async function handleDelete(id: string) {
+    const confirmed = window.confirm(
+      "آیا از حذف این سفارش مطمئن هستید؟"
     );
-  }, [
-    orders,
-    search,
-    statusFilter,
-  ]);
-
-  const totalTonnage =
-    filteredOrders.reduce(
-      (sum, order) =>
-        sum +
-        Number(
-          order.total_tonnage ?? 0
-        ),
-      0
-    );
-
-  const confirmedCount =
-    filteredOrders.filter(
-      (order) =>
-        order.status ===
-        "confirmed"
-    ).length;
-
-  const draftCount =
-    filteredOrders.filter(
-      (order) =>
-        order.status ===
-        "draft"
-    ).length;
-
-  const cancelledCount =
-    filteredOrders.filter(
-      (order) =>
-        order.status ===
-        "cancelled"
-    ).length;
-
-  async function handleDelete(
-    id: string
-  ) {
-    const confirmed =
-      window.confirm(
-        "آیا از حذف این سفارش مطمئن هستید؟"
-      );
 
     if (!confirmed) {
       return;
@@ -202,27 +305,31 @@ export default function OrdersPage() {
     }
   }
 
+  function resetFilters() {
+    setSearch("");
+    setStatusFilter("all");
+  }
+
   return (
-    <div
+    <main
       dir="rtl"
-      className="mx-auto max-w-7xl space-y-6 p-4 md:p-6"
+      className="mx-auto max-w-[1600px] space-y-6"
     >
-      {/* =====================================================
-          HEADER
-          ===================================================== */}
+      {/* Hero */}
       <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-slate-900 via-violet-500 to-blue-500" />
 
-        <div className="absolute -left-20 -top-24 h-60 w-60 rounded-full bg-violet-100/40 blur-3xl" />
-        <div className="absolute -bottom-24 right-0 h-60 w-60 rounded-full bg-blue-100/40 blur-3xl" />
+        <div className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-violet-100/40 blur-3xl" />
 
-        <div className="relative flex flex-col gap-6 p-6 md:p-8 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-900 to-violet-600 text-2xl text-white shadow-lg shadow-violet-100">
-              📦
+        <div className="pointer-events-none absolute -bottom-24 right-0 h-72 w-72 rounded-full bg-blue-100/40 blur-3xl" />
+
+        <div className="relative flex flex-col gap-7 p-6 md:p-8 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-900 to-violet-600 text-white shadow-lg">
+              <ShoppingCart size={24} />
             </div>
 
-            <div>
+            <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-black tracking-tight text-slate-900 md:text-3xl">
                   سفارش‌ها
@@ -243,155 +350,81 @@ export default function OrdersPage() {
             <button
               type="button"
               onClick={() => void refresh()}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
+              disabled={loading}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              ↻
+              <RefreshCw
+                size={17}
+                className={
+                  loading
+                    ? "animate-spin"
+                    : ""
+                }
+              />
               به‌روزرسانی
             </button>
 
             <Link
               href="/orders/new"
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md"
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-200 transition hover:-translate-y-0.5 hover:bg-blue-600"
             >
-              <span className="text-lg leading-none">
-                +
-              </span>
+              <Plus size={18} />
               ثبت سفارش
             </Link>
           </div>
         </div>
       </section>
 
-      {/* =====================================================
-          STATS
-          ===================================================== */}
+      {/* Stats */}
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-slate-500">
-                کل سفارش‌ها
-              </p>
+        <StatCard
+          title="کل سفارش‌ها"
+          value={formatNumber(filteredOrders.length)}
+          description="سفارش نمایش داده‌شده"
+          icon={<FileText size={21} />}
+          iconClass="bg-slate-100 text-slate-700"
+        />
 
-              <p className="mt-2 text-3xl font-black text-slate-900">
-                {formatNumber(
-                  filteredOrders.length
-                )}
-              </p>
+        <StatCard
+          title="مجموع تناژ"
+          value={formatNumber(totalTonnage)}
+          description="تن فروش"
+          icon={<Box size={21} />}
+          iconClass="bg-blue-50 text-blue-700"
+          valueClass="text-blue-700"
+        />
 
-              <p className="mt-1 text-xs text-slate-400">
-                سفارش نمایش داده‌شده
-              </p>
-            </div>
+        <StatCard
+          title="تأیید شده"
+          value={formatNumber(confirmedCount)}
+          description="سفارش تأییدشده"
+          icon={<CheckCircle2 size={21} />}
+          iconClass="bg-emerald-50 text-emerald-700"
+          valueClass="text-emerald-700"
+        />
 
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-xl">
-              📋
-            </div>
-          </div>
-        </div>
+        <StatCard
+          title="پیش‌نویس"
+          value={formatNumber(draftCount)}
+          description="نیازمند بررسی"
+          icon={<Clock3 size={21} />}
+          iconClass="bg-amber-50 text-amber-700"
+          valueClass="text-amber-700"
+        />
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-slate-500">
-                مجموع تناژ
-              </p>
-
-              <p className="mt-2 text-3xl font-black text-slate-900">
-                {formatNumber(
-                  totalTonnage
-                )}
-              </p>
-
-              <p className="mt-1 text-xs text-slate-400">
-                تن
-              </p>
-            </div>
-
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-xl">
-              ⚖️
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-emerald-100 bg-emerald-50/40 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-emerald-700">
-                تأیید شده
-              </p>
-
-              <p className="mt-2 text-3xl font-black text-emerald-700">
-                {formatNumber(
-                  confirmedCount
-                )}
-              </p>
-
-              <p className="mt-1 text-xs text-emerald-600/70">
-                سفارش آماده فروش
-              </p>
-            </div>
-
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-xl shadow-sm">
-              ✓
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-amber-100 bg-amber-50/40 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-amber-700">
-                پیش‌نویس
-              </p>
-
-              <p className="mt-2 text-3xl font-black text-amber-700">
-                {formatNumber(
-                  draftCount
-                )}
-              </p>
-
-              <p className="mt-1 text-xs text-amber-600/70">
-                نیازمند بررسی
-              </p>
-            </div>
-
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-xl shadow-sm">
-              📝
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-red-100 bg-red-50/40 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-red-700">
-                لغو شده
-              </p>
-
-              <p className="mt-2 text-3xl font-black text-red-700">
-                {formatNumber(
-                  cancelledCount
-                )}
-              </p>
-
-              <p className="mt-1 text-xs text-red-600/70">
-                سفارش لغوشده
-              </p>
-            </div>
-
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-xl shadow-sm">
-              ×
-            </div>
-          </div>
-        </div>
+        <StatCard
+          title="لغو شده"
+          value={formatNumber(cancelledCount)}
+          description="سفارش لغوشده"
+          icon={<XCircle size={21} />}
+          iconClass="bg-red-50 text-red-700"
+          valueClass="text-red-700"
+        />
       </section>
 
-      {/* =====================================================
-          FILTERS
-          ===================================================== */}
+      {/* Filters */}
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
-        <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h2 className="text-xl font-black text-slate-900">
               جستجو و فیلتر سفارش‌ها
@@ -402,14 +435,14 @@ export default function OrdersPage() {
             </p>
           </div>
 
-          <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
-            {filteredOrders.length.toLocaleString(
-              "fa-IR"
-            )} سفارش
+          <div className="inline-flex w-fit items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
+            <ShoppingCart size={13} />
+
+            {formatNumber(filteredOrders.length)} سفارش
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-[1fr_240px]">
+        <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
           <div>
             <label
               htmlFor="orders-search"
@@ -419,22 +452,21 @@ export default function OrdersPage() {
             </label>
 
             <div className="relative">
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-slate-400">
-                🔎
-              </span>
+              <Search
+                size={17}
+                className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+              />
 
               <input
                 id="orders-search"
                 type="text"
                 value={search}
                 onChange={(event) =>
-                  setSearch(
-                    event.target.value
-                  )
+                  setSearch(event.target.value)
                 }
                 placeholder="نام مشتری، شماره تماس، بازاریاب یا شناسه سفارش..."
                 autoComplete="off"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pr-10 pl-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pr-11 pl-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
               />
             </div>
           </div>
@@ -455,48 +487,30 @@ export default function OrdersPage() {
                   event.target.value as OrderStatus
                 )
               }
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
             >
-              <option value="all">
-                همه وضعیت‌ها
-              </option>
-
-              <option value="draft">
-                پیش‌نویس
-              </option>
-
-              <option value="confirmed">
-                تأیید شده
-              </option>
-
-              <option value="cancelled">
-                لغو شده
-              </option>
+              <option value="all">همه وضعیت‌ها</option>
+              <option value="draft">پیش‌نویس</option>
+              <option value="confirmed">تأیید شده</option>
+              <option value="cancelled">لغو شده</option>
             </select>
           </div>
         </div>
 
         <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-slate-500">
-            تعداد سفارش‌های نمایش‌داده‌شده:
-            <span className="mr-2 rounded-full bg-blue-50 px-3 py-1 font-black text-blue-700">
-              {filteredOrders.length.toLocaleString(
-                "fa-IR"
-              )}
-            </span>
-          </div>
+          <p className="text-sm text-slate-500">
+            نمایش{" "}
+            <span className="font-black text-slate-800">
+              {formatNumber(filteredOrders.length)}
+            </span>{" "}
+            سفارش
+          </p>
 
-          {(search.trim() ||
-            statusFilter !== "all") && (
+          {hasFilters && (
             <button
               type="button"
-              onClick={() => {
-                setSearch("");
-                setStatusFilter(
-                  "all"
-                );
-              }}
-              className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
+              onClick={resetFilters}
+              className="inline-flex w-fit items-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
             >
               پاک کردن فیلترها
             </button>
@@ -504,29 +518,19 @@ export default function OrdersPage() {
         </div>
       </section>
 
-      {/* =====================================================
-          CONTENT
-          ===================================================== */}
+      {/* Content */}
       {loading ? (
-        <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-2xl">
-            📦
-          </div>
-
-          <p className="mt-4 text-sm font-medium text-slate-500">
-            در حال دریافت سفارش‌ها...
-          </p>
-        </div>
+        <LoadingState />
       ) : error ? (
-        <div className="overflow-hidden rounded-3xl border border-red-200 bg-white shadow-sm">
+        <section className="overflow-hidden rounded-3xl border border-red-200 bg-white shadow-sm">
           <div className="h-1.5 bg-red-500" />
 
-          <div className="p-6 md:p-8">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-2xl text-red-600">
-              !
+          <div className="p-7 md:p-9">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+              <XCircle size={25} />
             </div>
 
-            <h2 className="mt-4 text-xl font-black text-slate-900">
+            <h2 className="mt-5 text-xl font-black text-slate-900">
               خطا در دریافت سفارش‌ها
             </h2>
 
@@ -537,57 +541,22 @@ export default function OrdersPage() {
             <button
               type="button"
               onClick={() => void refresh()}
-              className="mt-5 rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-red-700"
+              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-red-700"
             >
+              <RefreshCw size={17} />
               تلاش مجدد
             </button>
           </div>
-        </div>
-      ) : filteredOrders.length ===
-        0 ? (
-        <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-3xl">
-            📭
-          </div>
-
-          <h2 className="mt-5 text-xl font-black text-slate-800">
-            سفارشی پیدا نشد
-          </h2>
-
-          <p className="mx-auto mt-2 max-w-md text-sm leading-7 text-slate-500">
-            برای شروع می‌توانید یک سفارش جدید ثبت کنید یا فیلترهای فعلی را پاک کنید.
-          </p>
-
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <Link
-              href="/orders/new"
-              className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
-            >
-              + ثبت سفارش
-            </Link>
-
-            {(search.trim() ||
-              statusFilter !==
-                "all") && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearch("");
-                  setStatusFilter(
-                    "all"
-                  );
-                }}
-                className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
-              >
-                پاک کردن فیلترها
-              </button>
-            )}
-          </div>
-        </div>
+        </section>
+      ) : filteredOrders.length === 0 ? (
+        <EmptyState
+          filtered={hasFilters}
+          hasFilters={hasFilters}
+          onReset={resetFilters}
+        />
       ) : (
         <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          {/* Table Header */}
-          <div className="flex flex-col gap-3 border-b border-slate-100 p-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 border-b border-slate-100 bg-slate-50/70 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-black text-slate-900">
                 فهرست سفارش‌ها
@@ -598,216 +567,331 @@ export default function OrdersPage() {
               </p>
             </div>
 
-            <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
-              {filteredOrders.length.toLocaleString(
-                "fa-IR"
-              )} مورد
+            <div className="inline-flex w-fit items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-slate-600 ring-1 ring-slate-200">
+              <Users size={13} />
+              {formatNumber(filteredOrders.length)} مورد
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-right text-sm">
-              <thead className="bg-slate-50 text-slate-600">
+          {/* Desktop */}
+          <div className="hidden overflow-x-auto md:block">
+            <table className="min-w-[1180px] w-full text-right text-sm">
+              <thead className="border-b border-slate-100 bg-white">
                 <tr>
-                  <th className="whitespace-nowrap px-5 py-4 font-bold">
+                  <th className="whitespace-nowrap px-5 py-4 font-bold text-slate-600">
                     تاریخ
                   </th>
 
-                  <th className="px-5 py-4 font-bold">
+                  <th className="px-5 py-4 font-bold text-slate-600">
                     مشتری
                   </th>
 
-                  <th className="px-5 py-4 font-bold">
+                  <th className="px-5 py-4 font-bold text-slate-600">
                     بازاریاب
                   </th>
 
-                  <th className="whitespace-nowrap px-5 py-4 font-bold">
+                  <th className="whitespace-nowrap px-5 py-4 font-bold text-slate-600">
                     تناژ
                   </th>
 
-                  <th className="px-5 py-4 font-bold">
+                  <th className="px-5 py-4 font-bold text-slate-600">
                     وضعیت
                   </th>
 
-                  <th className="whitespace-nowrap px-5 py-4 font-bold">
+                  <th className="whitespace-nowrap px-5 py-4 font-bold text-slate-600">
                     عملیات
                   </th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {filteredOrders.map(
-                  (order) => (
-                    <tr
-                      key={order.id}
-                      className="group transition hover:bg-slate-50/70"
-                    >
-                      {/* Date */}
-                      <td className="whitespace-nowrap px-5 py-5">
-                        <div className="text-sm font-semibold text-slate-700">
-                          {formatOrderDate(
-                            order.order_date
-                          )}
+                {filteredOrders.map((order) => (
+                  <tr
+                    key={order.id}
+                    className="group transition hover:bg-slate-50/70"
+                  >
+                    <td className="whitespace-nowrap px-5 py-5">
+                      <div className="font-semibold text-slate-700">
+                        {formatOrderDate(order.order_date)}
+                      </div>
+
+                      <div className="mt-1 max-w-[170px] truncate text-[11px] text-slate-400">
+                        {order.id}
+                      </div>
+                    </td>
+
+                    <td className="px-5 py-5">
+                      <Link
+                        href={`/customers/${order.customer_id}`}
+                        className="group/customer flex min-w-[220px] items-center gap-3"
+                      >
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-sm font-black text-blue-700 transition group-hover/customer:bg-blue-100">
+                          {order.customer?.name?.charAt(0) ||
+                            "م"}
                         </div>
 
-                        <div className="mt-1 max-w-[160px] truncate text-[11px] text-slate-400">
-                          {order.id}
-                        </div>
-                      </td>
-
-                      {/* Customer */}
-                      <td className="px-5 py-5">
-                        <Link
-                          href={`/customers/${order.customer_id}`}
-                          className="group/customer flex min-w-[220px] items-center gap-3"
-                        >
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-sm font-black text-blue-700 transition group-hover/customer:bg-blue-100">
-                            {order.customer?.name
-                              ?.charAt(0) ||
-                              "م"}
-                          </div>
-
-                          <div className="min-w-0">
-                            <span className="block truncate text-sm font-black text-slate-900 transition group-hover/customer:text-blue-600">
-                              {order.customer?.name ??
-                                "مشتری نامشخص"}
-                            </span>
-
-                            {order.customer?.phone && (
-                              <span
-                                dir="ltr"
-                                className="mt-1 block text-xs text-slate-500"
-                              >
-                                {
-                                  order
-                                    .customer
-                                    .phone
-                                }
-                              </span>
-                            )}
-
-                            {!order.customer && (
-                              <span className="mt-1 block max-w-[180px] truncate text-xs text-slate-400">
-                                {
-                                  order.customer_id
-                                }
-                              </span>
-                            )}
-                          </div>
-                        </Link>
-                      </td>
-
-                      {/* Sales User */}
-                      <td className="px-5 py-5">
-                        <div className="min-w-[170px]">
-                          <span className="block text-sm font-bold text-slate-800">
-                            {order.sales_user
-                              ?.full_name ??
-                              "بازاریاب نامشخص"}
+                        <div className="min-w-0">
+                          <span className="block truncate font-black text-slate-900 transition group-hover/customer:text-blue-600">
+                            {order.customer?.name ??
+                              "مشتری نامشخص"}
                           </span>
 
-                          {order.sales_user
-                            ?.job_title && (
-                            <span className="mt-1 block text-xs text-slate-500">
-                              {
-                                order
-                                  .sales_user
-                                  .job_title
-                              }
+                          {order.customer?.phone && (
+                            <span
+                              dir="ltr"
+                              className="mt-1 block text-xs text-slate-500"
+                            >
+                              {order.customer.phone}
+                            </span>
+                          )}
+
+                          {!order.customer && (
+                            <span className="mt-1 block max-w-[180px] truncate text-xs text-slate-400">
+                              {order.customer_id}
                             </span>
                           )}
                         </div>
-                      </td>
+                      </Link>
+                    </td>
 
-                      {/* Tonnage */}
-                      <td className="whitespace-nowrap px-5 py-5">
-                        <div className="inline-flex items-center rounded-xl bg-slate-100 px-3 py-2">
-                          <span className="font-black text-slate-900">
-                            {formatNumber(
-                              Number(
-                                order.total_tonnage ??
-                                  0
-                              )
-                            )}
+                    <td className="px-5 py-5">
+                      <div className="min-w-[170px]">
+                        <span className="block font-bold text-slate-800">
+                          {order.sales_user?.full_name ??
+                            "بازاریاب نامشخص"}
+                        </span>
+
+                        {order.sales_user?.job_title && (
+                          <span className="mt-1 block text-xs text-slate-500">
+                            {order.sales_user.job_title}
                           </span>
+                        )}
+                      </div>
+                    </td>
 
-                          <span className="mr-1 text-xs text-slate-500">
-                            تن
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-5 py-5">
-                        <span
-                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${getStatusClass(
-                            order.status
-                          )}`}
-                        >
-                          <span>
-                            {getStatusIcon(
-                              order.status
-                            )}
-                          </span>
-
-                          {getStatusLabel(
-                            order.status
+                    <td className="whitespace-nowrap px-5 py-5">
+                      <div className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-2">
+                        <span className="font-black text-slate-900">
+                          {formatNumber(
+                            Number(
+                              order.total_tonnage ?? 0
+                            )
                           )}
                         </span>
-                      </td>
 
-                      {/* Actions */}
-                      <td className="px-5 py-5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Link
-                            href={`/orders/${order.id}`}
-                            className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-800"
-                          >
-                            مشاهده
-                          </Link>
+                        <span className="text-xs text-slate-500">
+                          تن
+                        </span>
+                      </div>
+                    </td>
 
-                          <Link
-                            href={`/orders/${order.id}`}
-                            className="inline-flex items-center justify-center rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
-                          >
-                            ویرایش
-                          </Link>
+                    <td className="px-5 py-5">
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${getStatusClass(
+                          order.status
+                        )}`}
+                      >
+                        {getStatusIcon(order.status)}
+                        {getStatusLabel(order.status)}
+                      </span>
+                    </td>
 
-                          <Link
-                            href={`/customers/${order.customer_id}`}
-                            className="inline-flex items-center justify-center rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
-                          >
-                            مشتری
-                          </Link>
+                    <td className="px-5 py-5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          href={`/orders/${order.id}`}
+                          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-blue-600"
+                        >
+                          مشاهده
+                        </Link>
 
-                          <button
-                            type="button"
-                            disabled={
-                              deletingId ===
-                              order.id
-                            }
-                            onClick={() =>
-                              void handleDelete(
-                                order.id
-                              )
-                            }
-                            className="inline-flex items-center justify-center rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {deletingId ===
-                            order.id
-                              ? "در حال حذف..."
-                              : "حذف"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                )}
+                        <Link
+                          href={`/orders/${order.id}`}
+                          className="inline-flex items-center justify-center rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+                        >
+                          ویرایش
+                        </Link>
+
+                        <Link
+                          href={`/customers/${order.customer_id}`}
+                          className="inline-flex items-center justify-center rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
+                        >
+                          مشتری
+                        </Link>
+
+                        <button
+                          type="button"
+                          disabled={
+                            deletingId === order.id
+                          }
+                          onClick={() =>
+                            void handleDelete(order.id)
+                          }
+                          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Trash2 size={13} />
+
+                          {deletingId === order.id
+                            ? "در حال حذف..."
+                            : "حذف"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
+
+          {/* Mobile */}
+          <div className="divide-y divide-slate-100 md:hidden">
+            {filteredOrders.map((order) => (
+              <div
+                key={order.id}
+                className="p-5"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <Link
+                    href={`/customers/${order.customer_id}`}
+                    className="flex min-w-0 items-center gap-3"
+                  >
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-sm font-black text-blue-700">
+                      {order.customer?.name?.charAt(0) ||
+                        "م"}
+                    </div>
+
+                    <div className="min-w-0">
+                      <h2 className="truncate font-black text-slate-900">
+                        {order.customer?.name ??
+                          "مشتری نامشخص"}
+                      </h2>
+
+                      {order.customer?.phone && (
+                        <p
+                          dir="ltr"
+                          className="mt-1 text-xs text-slate-400"
+                        >
+                          {order.customer.phone}
+                        </p>
+                      )}
+                    </div>
+                  </Link>
+
+                  <span
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold ${getStatusClass(
+                      order.status
+                    )}`}
+                  >
+                    {getStatusLabel(order.status)}
+                  </span>
+                </div>
+
+                <div className="mt-5 rounded-2xl bg-slate-50 p-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs font-medium text-slate-400">
+                        تاریخ
+                      </p>
+
+                      <p className="mt-1 text-sm font-bold text-slate-700">
+                        {formatOrderDate(order.order_date)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-medium text-slate-400">
+                        تناژ
+                      </p>
+
+                      <p className="mt-1 text-sm font-black text-blue-700">
+                        {formatNumber(
+                          Number(
+                            order.total_tonnage ?? 0
+                          )
+                        )}{" "}
+                        تن
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-medium text-slate-400">
+                        بازاریاب
+                      </p>
+
+                      <p className="mt-1 text-sm font-bold text-slate-700">
+                        {order.sales_user?.full_name ??
+                          "نامشخص"}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-xs font-medium text-slate-400">
+                        شناسه
+                      </p>
+
+                      <p className="mt-1 truncate text-xs text-slate-400">
+                        {order.id}
+                      </p>
+                    </div>
+                  </div>
+
+                  {order.notes && (
+                    <div className="mt-4 border-t border-slate-200 pt-4">
+                      <p className="text-xs font-medium text-slate-400">
+                        توضیحات
+                      </p>
+
+                      <p className="mt-1 text-sm leading-6 text-slate-600">
+                        {order.notes}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <Link
+                    href={`/orders/${order.id}`}
+                    className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-xs font-black text-white transition hover:bg-blue-600"
+                  >
+                    مشاهده سفارش
+                  </Link>
+
+                  <Link
+                    href={`/customers/${order.customer_id}`}
+                    className="inline-flex items-center justify-center rounded-xl bg-emerald-50 px-4 py-3 text-xs font-black text-emerald-700 transition hover:bg-emerald-100"
+                  >
+                    مشتری
+                  </Link>
+
+                  <Link
+                    href={`/orders/${order.id}`}
+                    className="inline-flex items-center justify-center rounded-xl bg-blue-50 px-4 py-3 text-xs font-black text-blue-700 transition hover:bg-blue-100"
+                  >
+                    ویرایش
+                  </Link>
+
+                  <button
+                    type="button"
+                    disabled={
+                      deletingId === order.id
+                    }
+                    onClick={() =>
+                      void handleDelete(order.id)
+                    }
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-red-50 px-4 py-3 text-xs font-black text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Trash2 size={13} />
+
+                    {deletingId === order.id
+                      ? "در حال حذف..."
+                      : "حذف"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </section>
       )}
-    </div>
+    </main>
   );
 }
