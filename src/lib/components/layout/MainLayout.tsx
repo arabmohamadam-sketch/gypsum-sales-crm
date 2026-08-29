@@ -15,7 +15,7 @@ export default function MainLayout({
         <Sidebar />
 
         <div className="min-w-0 flex-1">
-          <main className="min-h-screen px-3 pb-24 pt-3 sm:px-5 sm:pb-24 sm:pt-5 lg:px-8 lg:pb-8 lg:pt-6">
+          <main className="min-h-screen px-3 pb-28 pt-3 sm:px-5 sm:pb-28 sm:pt-5 lg:px-8 lg:pb-8 lg:pt-6">
             <div className="mx-auto w-full max-w-[1600px]">
               <Header />
 

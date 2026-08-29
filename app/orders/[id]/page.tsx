@@ -2,10 +2,6 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import {
-  useParams,
-  useRouter,
-} from "next/navigation";
 
 import {
   ArrowLeft,
@@ -17,9 +13,13 @@ import {
   RefreshCw,
   Trash2,
   UserRound,
-  Users,
   XCircle,
 } from "lucide-react";
+
+import {
+  useParams,
+  useRouter,
+} from "next/navigation";
 
 import {
   formatJalaliDate,
@@ -28,7 +28,18 @@ import {
   jalaliToGregorianDate,
 } from "@/src/lib/utils/jalali";
 
-import { useOrders } from "@/src/lib/hooks/useOrders";
+import {
+  useOrders,
+} from "@/src/lib/hooks/useOrders";
+
+import type {
+  OrderWithRelations,
+  UpdateOrderInput,
+} from "@/src/lib/services/orders";
+
+import type {
+  OrderItem,
+} from "@/src/lib/types/order";
 
 type OrderStatus =
   | "draft"
@@ -42,15 +53,21 @@ function formatNumber(
     return "۰";
   }
 
-  return new Intl.NumberFormat("fa-IR", {
-    maximumFractionDigits: 2,
-  }).format(value);
+  return new Intl.NumberFormat(
+    "fa-IR",
+    {
+      maximumFractionDigits: 2,
+    }
+  ).format(value);
 }
 
 function getStatusLabel(
   status: string
 ): string {
-  const labels: Record<string, string> = {
+  const labels: Record<
+    string,
+    string
+  > = {
     draft: "پیش‌نویس",
     confirmed: "تأیید شده",
     cancelled: "لغو شده",
@@ -80,14 +97,26 @@ function getStatusIcon(
 ) {
   switch (status) {
     case "confirmed":
-      return <CheckCircle2 size={15} />;
+      return (
+        <CheckCircle2
+          size={15}
+        />
+      );
 
     case "cancelled":
-      return <XCircle size={15} />;
+      return (
+        <XCircle
+          size={15}
+        />
+      );
 
     case "draft":
     default:
-      return <FileText size={15} />;
+      return (
+        <FileText
+          size={15}
+        />
+      );
   }
 }
 
@@ -97,9 +126,13 @@ function getSourceLabel(
     | null
     | undefined
 ): string {
-  const labels: Record<string, string> = {
+  const labels: Record<
+    string,
+    string
+  > = {
     manual: "ثبت دستی",
-    mobile_app: "اپلیکیشن موبایل",
+    mobile_app:
+      "اپلیکیشن موبایل",
     whatsapp: "واتساپ",
     sms: "پیامک",
     pwa: "PWA",
@@ -113,6 +146,50 @@ function getSourceLabel(
   return labels[source] ?? source;
 }
 
+function getCustomerTypeLabel(
+  value:
+    | string
+    | null
+    | undefined
+): string {
+  if (!value) {
+    return "—";
+  }
+
+  const labels: Record<
+    string,
+    string
+  > = {
+    building_material_store:
+      "مصالح‌فروشی",
+    building_material_stores:
+      "مصالح‌فروشی",
+    contractor:
+      "پیمانکار",
+    contractor_company:
+      "پیمانکار",
+    employer:
+      "کارفرما",
+    employers:
+      "کارفرما",
+    plasterer:
+      "گچ‌کار",
+    plaster_worker:
+      "گچ‌کار",
+    plasterer_company:
+      "گچ‌کار",
+    distributor:
+      "توزیع‌کننده",
+    retailer:
+      "خرده‌فروشی",
+  };
+
+  return (
+    labels[value] ??
+    value
+  );
+}
+
 function InfoCard({
   label,
   value,
@@ -122,13 +199,21 @@ function InfoCard({
   label: string;
   value: string;
   icon: React.ReactNode;
-  tone?: "slate" | "blue" | "emerald" | "violet";
+  tone?:
+    | "slate"
+    | "blue"
+    | "emerald"
+    | "violet";
 }) {
   const toneClasses = {
-    slate: "bg-slate-100 text-slate-700",
-    blue: "bg-blue-50 text-blue-700",
-    emerald: "bg-emerald-50 text-emerald-700",
-    violet: "bg-violet-50 text-violet-700",
+    slate:
+      "bg-slate-100 text-slate-700",
+    blue:
+      "bg-blue-50 text-blue-700",
+    emerald:
+      "bg-emerald-50 text-emerald-700",
+    violet:
+      "bg-violet-50 text-violet-700",
   };
 
   return (
@@ -184,12 +269,155 @@ function SectionTitle({
   );
 }
 
+function ProductItemCard({
+  item,
+  index,
+}: {
+  item: OrderItem;
+  index: number;
+}) {
+  const quantity =
+    Number(
+      item.quantity ?? 0
+    );
+
+  const weight =
+    Number(
+      item.weight_kg_snapshot ??
+        item.bag_weight_kg ??
+        0
+    );
+
+  const tonnage =
+    Number(
+      item.tonnage ?? 0
+    );
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 transition hover:bg-white hover:shadow-sm">
+      <div className="flex flex-col gap-5">
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 text-sm font-black text-white shadow-sm">
+            {formatNumber(
+              index + 1
+            )}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-lg font-black text-slate-900">
+                {item.product_name_snapshot ||
+                  "بدون نام کالا"}
+              </h3>
+
+              {item.product_id && (
+                <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-400 ring-1 ring-slate-200">
+                  محصول ثبت‌شده
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-bold text-slate-400">
+              تعداد کیسه
+            </p>
+
+            <p className="mt-1 text-lg font-black text-slate-900">
+              {formatNumber(
+                quantity
+              )}{" "}
+              <span className="text-xs font-bold text-slate-400">
+                کیسه
+              </span>
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-bold text-slate-400">
+              وزن هر کیسه
+            </p>
+
+            <p className="mt-1 text-lg font-black text-slate-900">
+              {formatNumber(
+                weight
+              )}{" "}
+              <span className="text-xs font-bold text-slate-400">
+                کیلو
+              </span>
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+            <p className="text-xs font-bold text-blue-500">
+              وزن کل
+            </p>
+
+            <p className="mt-1 text-lg font-black text-blue-800">
+              {formatNumber(
+                quantity *
+                  weight
+              )}{" "}
+              <span className="text-xs font-bold">
+                کیلو
+              </span>
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+            <p className="text-xs font-bold text-emerald-600">
+              تناژ این قلم
+            </p>
+
+            <p className="mt-1 text-lg font-black text-emerald-800">
+              {formatNumber(
+                tonnage
+              )}{" "}
+              <span className="text-xs font-bold">
+                تن
+              </span>
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-slate-400">
+            محاسبه:
+            {" "}
+            {formatNumber(
+              quantity
+            )}
+            {" × "}
+            {formatNumber(
+              weight
+            )}
+            {" ÷ ۱۰۰۰"}
+          </p>
+
+          <p className="text-sm font-black text-emerald-700">
+            {formatNumber(
+              tonnage
+            )}{" "}
+            تن
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function OrderDetailsPage() {
-  const params = useParams();
-  const router = useRouter();
+  const params =
+    useParams();
+
+  const router =
+    useRouter();
 
   const orderId =
-    typeof params.id === "string"
+    typeof params.id ===
+    "string"
       ? params.id
       : "";
 
@@ -199,12 +427,18 @@ export default function OrderDetailsPage() {
     error,
     updateOrder,
     deleteOrder,
+    refresh,
   } = useOrders();
 
   const order =
-    orders.find(
-      (item) =>
-        item.id === orderId
+    (
+      orders.find(
+        (item) =>
+          item.id ===
+          orderId
+      ) as
+        | OrderWithRelations
+        | undefined
     ) ?? null;
 
   const currentJalaliDate =
@@ -226,45 +460,58 @@ export default function OrderDetailsPage() {
   const [formError, setFormError] =
     useState("");
 
-  const [jalaliYear, setJalaliYear] =
-    useState("");
+  const [
+    jalaliYear,
+    setJalaliYear,
+  ] = useState("");
 
-  const [jalaliMonth, setJalaliMonth] =
-    useState("");
+  const [
+    jalaliMonth,
+    setJalaliMonth,
+  ] = useState("");
 
-  const [jalaliDay, setJalaliDay] =
-    useState("");
+  const [
+    jalaliDay,
+    setJalaliDay,
+  ] = useState("");
 
-  const [status, setStatus] =
-    useState<
-      | ""
-      | "draft"
-      | "confirmed"
-      | "cancelled"
-    >("");
+  const [
+    status,
+    setStatus,
+  ] = useState<
+    | ""
+    | "draft"
+    | "confirmed"
+    | "cancelled"
+  >("");
 
-  const [totalTonnage, setTotalTonnage] =
-    useState("");
-
-  const [notes, setNotes] =
-    useState("");
+  const [
+    notes,
+    setNotes,
+  ] = useState("");
 
   const displayJalaliYear =
     jalaliYear ||
     (currentJalaliDate
-      ? String(currentJalaliDate.year)
+      ? String(
+          currentJalaliDate.year
+        )
       : "");
 
   const displayJalaliMonth =
     jalaliMonth ||
     (currentJalaliDate
-      ? String(currentJalaliDate.month)
+      ? String(
+          currentJalaliDate.month
+        )
       : "1");
 
   const displayJalaliDay =
     jalaliDay ||
     (currentJalaliDate
-      ? String(currentJalaliDate.day)
+      ? String(
+          currentJalaliDate.day
+        )
       : "1");
 
   const displayStatus =
@@ -274,18 +521,28 @@ export default function OrderDetailsPage() {
       | undefined) ||
     "draft";
 
-  const displayTotalTonnage =
-    totalTonnage ||
-    (order
-      ? String(
-          order.total_tonnage ?? ""
-        )
-      : "");
-
   const displayNotes =
     notes !== ""
       ? notes
-      : order?.notes ?? "";
+      : order?.notes ??
+        "";
+
+  const orderItems =
+    (order?.items ??
+      []).filter(
+      (item) =>
+        !item.deleted_at
+    );
+
+  const calculatedItemsTonnage =
+    orderItems.reduce(
+      (sum, item) =>
+        sum +
+        Number(
+          item.tonnage ?? 0
+        ),
+      0
+    );
 
   async function handleSave() {
     if (!order) {
@@ -297,17 +554,20 @@ export default function OrderDetailsPage() {
     setFormError("");
 
     try {
-      const year = Number(
-        displayJalaliYear
-      );
+      const year =
+        Number(
+          displayJalaliYear
+        );
 
-      const month = Number(
-        displayJalaliMonth
-      );
+      const month =
+        Number(
+          displayJalaliMonth
+        );
 
-      const day = Number(
-        displayJalaliDay
-      );
+      const day =
+        Number(
+          displayJalaliDay
+        );
 
       const jalaliDate = {
         year,
@@ -325,61 +585,46 @@ export default function OrderDetailsPage() {
         );
       }
 
-      const normalizedTonnage =
-        displayTotalTonnage.replace(
-          ",",
-          "."
-        );
-
-      const tonnage = Number(
-        normalizedTonnage
-      );
-
-      if (
-        !Number.isFinite(
-          tonnage
-        ) ||
-        tonnage <= 0
-      ) {
-        throw new Error(
-          "تناژ سفارش باید بیشتر از صفر باشد."
-        );
-      }
-
       const gregorianDate =
         jalaliToGregorianDate(
           jalaliDate
         );
 
-      await updateOrder(
-        order.id,
+      const payload:
+        UpdateOrderInput =
         {
           order_date:
             gregorianDate,
+
           status:
             displayStatus,
-          total_tonnage:
-            tonnage,
+
           notes:
             displayNotes.trim() ||
             null,
-        }
+        };
+
+      await updateOrder(
+        order.id,
+        payload
       );
 
       setJalaliYear("");
       setJalaliMonth("");
       setJalaliDay("");
       setStatus("");
-      setTotalTonnage("");
       setNotes("");
 
       setMessage(
         "اطلاعات سفارش با موفقیت ذخیره شد."
       );
 
-      window.setTimeout(() => {
-        setMessage("");
-      }, 3000);
+      window.setTimeout(
+        () => {
+          setMessage("");
+        },
+        3000
+      );
     } catch (err) {
       setFormError(
         err instanceof Error
@@ -413,7 +658,9 @@ export default function OrderDetailsPage() {
         order.id
       );
 
-      router.push("/orders");
+      router.push(
+        "/orders"
+      );
     } catch (err) {
       setFormError(
         err instanceof Error
@@ -461,31 +708,44 @@ export default function OrderDetailsPage() {
         dir="rtl"
         className="mx-auto max-w-[1300px]"
       >
-        <div className="overflow-hidden rounded-3xl border border-red-200 bg-white shadow-sm">
+        <section className="overflow-hidden rounded-3xl border border-red-200 bg-white shadow-sm">
           <div className="h-1.5 bg-red-500" />
 
-          <div className="p-7 md:p-10">
+          <div className="p-8">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600">
-              <XCircle size={24} />
+              <XCircle size={25} />
             </div>
 
             <h1 className="mt-5 text-2xl font-black text-slate-900">
               خطا در دریافت سفارش
             </h1>
 
-            <p className="mt-2 max-w-2xl text-sm leading-7 text-red-600">
+            <p className="mt-2 text-sm leading-7 text-red-600">
               {error}
             </p>
 
-            <Link
-              href="/orders"
-              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
-            >
-              بازگشت به سفارش‌ها
-              <ArrowLeft size={16} />
-            </Link>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() =>
+                  void refresh()
+                }
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white hover:bg-blue-600"
+              >
+                <RefreshCw size={16} />
+                تلاش مجدد
+              </button>
+
+              <Link
+                href="/orders"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
+              >
+                بازگشت
+                <ArrowLeft size={16} />
+              </Link>
+            </div>
           </div>
-        </div>
+        </section>
       </main>
     );
   }
@@ -496,29 +756,27 @@ export default function OrderDetailsPage() {
         dir="rtl"
         className="mx-auto max-w-[1300px]"
       >
-        <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="p-12 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-slate-400">
-              <Package size={28} />
-            </div>
-
-            <h1 className="mt-5 text-2xl font-black text-slate-900">
-              سفارش پیدا نشد
-            </h1>
-
-            <p className="mx-auto mt-2 max-w-lg text-sm leading-7 text-slate-500">
-              سفارش موردنظر وجود ندارد یا قبلاً حذف شده است.
-            </p>
-
-            <Link
-              href="/orders"
-              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
-            >
-              بازگشت به سفارش‌ها
-              <ArrowLeft size={16} />
-            </Link>
+        <section className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-100 text-slate-400">
+            <Package size={28} />
           </div>
-        </div>
+
+          <h1 className="mt-5 text-2xl font-black text-slate-900">
+            سفارش پیدا نشد
+          </h1>
+
+          <p className="mx-auto mt-2 max-w-lg text-sm leading-7 text-slate-500">
+            سفارش موردنظر وجود ندارد یا قبلاً حذف شده است.
+          </p>
+
+          <Link
+            href="/orders"
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white hover:bg-blue-600"
+          >
+            بازگشت به سفارش‌ها
+            <ArrowLeft size={16} />
+          </Link>
+        </section>
       </main>
     );
   }
@@ -548,7 +806,7 @@ export default function OrderDetailsPage() {
 
           <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-start gap-4">
-              <div className="flex h-15 w-15 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-slate-900 to-violet-600 text-white shadow-lg shadow-violet-100">
+              <div className="flex h-15 w-15 shrink-0 items-center justify-center rounded-3xl bg-gradient-to-br from-slate-900 to-violet-600 text-white shadow-lg">
                 <Package size={28} />
               </div>
 
@@ -574,7 +832,9 @@ export default function OrderDetailsPage() {
                 </div>
 
                 <p className="mt-2 break-all text-xs text-slate-400">
-                  شناسه سفارش: {order.id}
+                  شناسه سفارش:
+                  {" "}
+                  {order.id}
                 </p>
               </div>
             </div>
@@ -588,13 +848,16 @@ export default function OrderDetailsPage() {
                 مشاهده مشتری
               </Link>
 
-              <Link
-                href="/orders"
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
+              <button
+                type="button"
+                onClick={() =>
+                  void refresh()
+                }
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
               >
-                <ClipboardList size={16} />
-                فهرست سفارش‌ها
-              </Link>
+                <RefreshCw size={16} />
+                بروزرسانی
+              </button>
             </div>
           </div>
         </div>
@@ -658,7 +921,7 @@ export default function OrderDetailsPage() {
 
           <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/80 to-white p-5">
             <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-lg font-black text-white shadow-sm">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-lg font-black text-white">
                 {order.customer?.name?.charAt(
                   0
                 ) || "م"}
@@ -676,16 +939,10 @@ export default function OrderDetailsPage() {
 
                   {order.customer?.customer_type && (
                     <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
-                      {order.customer.customer_type ===
-                      "plasterer"
-                        ? "گچ‌کار"
-                        : order.customer.customer_type ===
-                          "plaster_worker"
-                        ? "گچ‌کار"
-                        : order.customer.customer_type ===
-                          "building_material_store"
-                        ? "مصالح‌فروشی"
-                        : order.customer.customer_type}
+                      {getCustomerTypeLabel(
+                        order.customer
+                          .customer_type
+                      )}
                     </span>
                   )}
                 </div>
@@ -712,7 +969,7 @@ export default function OrderDetailsPage() {
 
           <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50/80 to-white p-5">
             <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-600 text-lg font-black text-white shadow-sm">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-600 text-lg font-black text-white">
                 {order.sales_user?.full_name?.charAt(
                   0
                 ) || "ب"}
@@ -744,13 +1001,13 @@ export default function OrderDetailsPage() {
         </section>
       </section>
 
-      {/* Summary */}
+      {/* Main summary */}
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
         <SectionTitle
           eyebrow="خلاصه سفارش"
           title="اطلاعات اصلی سفارش"
-          description="مشخصات اصلی ثبت‌شده برای سفارش"
+          description="مشخصات اصلی و وضعیت فعلی سفارش"
         />
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -759,28 +1016,39 @@ export default function OrderDetailsPage() {
             value={formatJalaliDate(
               order.order_date
             )}
-            icon={<CalendarDays size={19} />}
+            icon={
+              <CalendarDays
+                size={19}
+              />
+            }
             tone="blue"
           />
 
           <InfoCard
-            label="تناژ سفارش"
+            label="تعداد اقلام"
             value={`${formatNumber(
-              Number(
-                order.total_tonnage ?? 0
-              )
-            )} تن`}
-            icon={<Package size={19} />}
-            tone="emerald"
+              orderItems.length
+            )} قلم`}
+            icon={
+              <Package size={19} />
+            }
+            tone="violet"
           />
 
           <InfoCard
-            label="وضعیت"
-            value={getStatusLabel(
-              order.status
-            )}
-            icon={<CheckCircle2 size={19} />}
-            tone="violet"
+            label="تناژ کل"
+            value={`${formatNumber(
+              Number(
+                order.total_tonnage ??
+                  0
+              )
+            )} تن`}
+            icon={
+              <CheckCircle2
+                size={19}
+              />
+            }
+            tone="emerald"
           />
 
           <InfoCard
@@ -788,19 +1056,134 @@ export default function OrderDetailsPage() {
             value={getSourceLabel(
               order.source
             )}
-            icon={<FileText size={19} />}
+            icon={
+              <FileText size={19} />
+            }
             tone="slate"
           />
         </div>
       </section>
 
-      {/* Edit */}
+      {/* Order items */}
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <SectionTitle
+            eyebrow="اقلام سفارش"
+            title="کالاهای این سفارش"
+            description="جزئیات هر محصول، وزن کیسه، تعداد کیسه و تناژ محاسبه‌شده"
+          />
+
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-3">
+            <p className="text-xs font-bold text-emerald-600">
+              مجموع تناژ اقلام
+            </p>
+
+            <p className="mt-1 text-xl font-black text-emerald-800">
+              {formatNumber(
+                calculatedItemsTonnage
+              )}{" "}
+              تن
+            </p>
+          </div>
+        </div>
+
+        {orderItems.length ===
+        0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
+              <Package size={24} />
+            </div>
+
+            <h3 className="mt-4 font-black text-slate-800">
+              این سفارش هنوز قلم کالایی ندارد
+            </h3>
+
+            <p className="mt-2 text-sm text-slate-500">
+              اطلاعات اقلام این سفارش در دیتابیس ثبت نشده است.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {orderItems.map(
+              (
+                item,
+                index
+              ) => (
+                <ProductItemCard
+                  key={
+                    item.id
+                  }
+                  item={
+                    item
+                  }
+                  index={
+                    index
+                  }
+                />
+              )
+            )}
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 text-white">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-bold text-slate-400">
+                    جمع نهایی
+                  </p>
+
+                  <p className="mt-1 text-base font-black">
+                    {formatNumber(
+                      orderItems.reduce(
+                        (
+                          sum,
+                          item
+                        ) =>
+                          sum +
+                          Number(
+                            item.quantity ??
+                              0
+                          ),
+                        0
+                      )
+                    )}{" "}
+                    کیسه در{" "}
+                    {formatNumber(
+                      orderItems.length
+                    )}{" "}
+                    قلم
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-6 py-4">
+                  <p className="text-xs text-emerald-300">
+                    تناژ نهایی سفارش
+                  </p>
+
+                  <p className="mt-1 text-3xl font-black text-emerald-200">
+                    {formatNumber(
+                      Number(
+                        order.total_tonnage ??
+                          calculatedItemsTonnage
+                      )
+                    )}{" "}
+                    <span className="text-base">
+                      تن
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Edit order */}
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
         <SectionTitle
           eyebrow="ویرایش"
           title="ویرایش اطلاعات سفارش"
-          description="تاریخ، وضعیت، تناژ و توضیحات سفارش را اصلاح کنید."
+          description="تاریخ، وضعیت و توضیحات سفارش را اصلاح کنید."
         />
 
         <div className="grid gap-6 lg:grid-cols-2">
@@ -836,13 +1219,19 @@ export default function OrderDetailsPage() {
                   id="jalali-year"
                   type="text"
                   inputMode="numeric"
-                  value={displayJalaliYear}
-                  onChange={(event) => {
+                  value={
+                    displayJalaliYear
+                  }
+                  onChange={(
+                    event
+                  ) => {
                     const value =
                       event.target.value
                         .replace(
                           /[۰-۹]/g,
-                          (digit) =>
+                          (
+                            digit
+                          ) =>
                             String(
                               "۰۱۲۳۴۵۶۷۸۹".indexOf(
                                 digit
@@ -854,7 +1243,9 @@ export default function OrderDetailsPage() {
                           ""
                         );
 
-                    setJalaliYear(value);
+                    setJalaliYear(
+                      value
+                    );
                   }}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-sm font-black text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                 />
@@ -870,10 +1261,15 @@ export default function OrderDetailsPage() {
 
                 <select
                   id="jalali-month"
-                  value={displayJalaliMonth}
-                  onChange={(event) =>
+                  value={
+                    displayJalaliMonth
+                  }
+                  onChange={(
+                    event
+                  ) =>
                     setJalaliMonth(
-                      event.target.value
+                      event.target
+                        .value
                     )
                   }
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-black text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
@@ -882,14 +1278,21 @@ export default function OrderDetailsPage() {
                     {
                       length: 12,
                     },
-                    (_, index) => {
+                    (
+                      _,
+                      index
+                    ) => {
                       const value =
                         index + 1;
 
                       return (
                         <option
-                          key={value}
-                          value={value}
+                          key={
+                            value
+                          }
+                          value={
+                            value
+                          }
                         >
                           {formatNumber(
                             value
@@ -911,10 +1314,15 @@ export default function OrderDetailsPage() {
 
                 <select
                   id="jalali-day"
-                  value={displayJalaliDay}
-                  onChange={(event) =>
+                  value={
+                    displayJalaliDay
+                  }
+                  onChange={(
+                    event
+                  ) =>
                     setJalaliDay(
-                      event.target.value
+                      event.target
+                        .value
                     )
                   }
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-black text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
@@ -923,14 +1331,21 @@ export default function OrderDetailsPage() {
                     {
                       length: 31,
                     },
-                    (_, index) => {
+                    (
+                      _,
+                      index
+                    ) => {
                       const value =
                         index + 1;
 
                       return (
                         <option
-                          key={value}
-                          value={value}
+                          key={
+                            value
+                          }
+                          value={
+                            value
+                          }
                         >
                           {formatNumber(
                             value
@@ -956,8 +1371,12 @@ export default function OrderDetailsPage() {
 
             <select
               id="order-status"
-              value={displayStatus}
-              onChange={(event) =>
+              value={
+                displayStatus
+              }
+              onChange={(
+                event
+              ) =>
                 setStatus(
                   event.target
                     .value as OrderStatus
@@ -987,7 +1406,8 @@ export default function OrderDetailsPage() {
                 displayStatus
               )}
 
-              وضعیت فعلی:{" "}
+              وضعیت فعلی:
+              {" "}
               {getStatusLabel(
                 displayStatus
               )}
@@ -996,37 +1416,40 @@ export default function OrderDetailsPage() {
 
           {/* Tonnage */}
 
-          <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-5">
-            <label
-              htmlFor="total-tonnage"
-              className="mb-3 block text-sm font-bold text-slate-700"
-            >
-              تناژ سفارش
-            </label>
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-emerald-700 shadow-sm">
+                <Package size={18} />
+              </div>
 
-            <div className="relative">
-              <input
-                id="total-tonnage"
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={displayTotalTonnage}
-                onChange={(event) =>
-                  setTotalTonnage(
-                    event.target.value
-                  )
-                }
-                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-4 pl-16 text-lg font-black text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
-              />
+              <div>
+                <p className="text-sm font-black text-slate-800">
+                  تناژ سفارش
+                </p>
 
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-sm font-black text-emerald-700">
-                تن
-              </span>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  محاسبه‌شده از اقلام سفارش
+                </p>
+              </div>
             </div>
 
-            <p className="mt-3 text-xs text-slate-400">
-              مقدار تناژ نهایی سفارش را وارد کنید.
-            </p>
+            <div className="mt-5 rounded-2xl border border-emerald-100 bg-white p-5">
+              <p className="text-3xl font-black text-emerald-800">
+                {formatNumber(
+                  Number(
+                    order.total_tonnage ??
+                      calculatedItemsTonnage
+                  )
+                )}{" "}
+                <span className="text-base">
+                  تن
+                </span>
+              </p>
+
+              <p className="mt-2 text-xs leading-6 text-slate-400">
+                این مقدار توسط اقلام سفارش و Trigger دیتابیس مدیریت می‌شود.
+              </p>
+            </div>
           </div>
 
           {/* Source */}
@@ -1046,10 +1469,6 @@ export default function OrderDetailsPage() {
                 order.source
               )}
             </div>
-
-            <p className="mt-3 text-xs text-slate-400">
-              منبع ثبت سفارش در این بخش قابل ویرایش نیست.
-            </p>
           </div>
         </div>
 
@@ -1065,10 +1484,15 @@ export default function OrderDetailsPage() {
 
           <textarea
             id="order-notes"
-            value={displayNotes}
-            onChange={(event) =>
+            value={
+              displayNotes
+            }
+            onChange={(
+              event
+            ) =>
               setNotes(
-                event.target.value
+                event.target
+                  .value
               )
             }
             rows={5}
@@ -1101,7 +1525,9 @@ export default function OrderDetailsPage() {
               </>
             ) : (
               <>
-                <Trash2 size={16} />
+                <Trash2
+                  size={16}
+                />
                 حذف سفارش
               </>
             )}
@@ -1136,7 +1562,9 @@ export default function OrderDetailsPage() {
                 </>
               ) : (
                 <>
-                  <CheckCircle2 size={17} />
+                  <CheckCircle2
+                    size={17}
+                  />
                   ذخیره تغییرات
                 </>
               )}
@@ -1151,7 +1579,7 @@ export default function OrderDetailsPage() {
         <SectionTitle
           eyebrow="سیستم"
           title="اطلاعات سیستمی"
-          description="اطلاعات ثبت و همگام‌سازی سفارش"
+          description="اطلاعات ثبت و بروزرسانی سفارش"
         />
 
         <div className="grid gap-4 md:grid-cols-3">
@@ -1160,7 +1588,11 @@ export default function OrderDetailsPage() {
             value={formatJalaliDate(
               order.created_at
             )}
-            icon={<CalendarDays size={19} />}
+            icon={
+              <CalendarDays
+                size={19}
+              />
+            }
             tone="slate"
           />
 
@@ -1169,7 +1601,11 @@ export default function OrderDetailsPage() {
             value={formatJalaliDate(
               order.updated_at
             )}
-            icon={<RefreshCw size={19} />}
+            icon={
+              <RefreshCw
+                size={19}
+              />
+            }
             tone="blue"
           />
 
@@ -1177,10 +1613,15 @@ export default function OrderDetailsPage() {
             label="نسخه همگام‌سازی"
             value={formatNumber(
               Number(
-                order.sync_version ?? 0
+                order.sync_version ??
+                  0
               )
             )}
-            icon={<ClipboardList size={19} />}
+            icon={
+              <ClipboardList
+                size={19}
+              />
+            }
             tone="violet"
           />
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+
 import {
   ArrowLeft,
   CheckCircle2,
@@ -12,35 +13,44 @@ import {
   RefreshCw,
   Search,
   ShoppingCart,
+  Trash2,
   UserRound,
   Users,
   X,
 } from "lucide-react";
+
 import {
   FormEvent,
   Suspense,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+
 import {
   useRouter,
   useSearchParams,
 } from "next/navigation";
+
 import {
   toGregorian,
   toJalaali,
 } from "jalaali-js";
 
 import { customersService } from "@/src/lib/services/customers";
+
 import {
   usersService,
   type SalesUser,
 } from "@/src/lib/services/users";
+
 import {
   ordersService,
   type CreateOrderInput,
+  type OrderItemInput,
 } from "@/src/lib/services/orders";
+
 import type { Customer } from "@/src/lib/types/customer";
 
 const COMPANY_ID =
@@ -56,6 +66,53 @@ type OrderStatus =
   | "draft"
   | "confirmed"
   | "cancelled";
+
+type Product = {
+  id: string;
+  company_id: string;
+  name: string;
+  sku: string;
+  product_line: string;
+  weight_kg: number;
+  is_active: boolean;
+  sort_order: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+type OrderItemForm = {
+  id: string;
+  productId: string;
+  productName: string;
+  bagWeight: string;
+  quantity: string;
+  manualProduct: boolean;
+};
+
+const DEFAULT_BAG_WEIGHTS = [
+  "25",
+  "30",
+  "40",
+];
+
+const MANUAL_PRODUCT_VALUE =
+  "__manual__";
+
+const MANUAL_PRODUCT_LINE =
+  "Manual";
+
+function createInitialOrderItem(): OrderItemForm {
+  return {
+    id: "item-1",
+    productId: "",
+    productName: "",
+    bagWeight: "",
+    quantity: "",
+    manualProduct: false,
+  };
+}
 
 function getTodayJalali(): JalaliDate {
   const now = new Date();
@@ -161,8 +218,49 @@ function formatNumber(
   ).format(value);
 }
 
+function normalizeDigits(
+  value: string
+): string {
+  return value
+    .replace(
+      /[۰-۹]/g,
+      (digit) =>
+        String(
+          "۰۱۲۳۴۵۶۷۸۹".indexOf(
+            digit
+          )
+        )
+    )
+    .replace(/٬/g, "")
+    .replace(/٫/g, ".")
+    .replace(/،/g, ".");
+}
+
+function normalizeDecimal(
+  value: string
+): number {
+  const normalized =
+    normalizeDigits(
+      value
+    ).trim();
+
+  if (!normalized) {
+    return 0;
+  }
+
+  const result =
+    Number(normalized);
+
+  return Number.isFinite(result)
+    ? result
+    : 0;
+}
+
 function customerTypeLabel(
-  value: string | null | undefined
+  value:
+    | string
+    | null
+    | undefined
 ): string {
   const labels: Record<
     string,
@@ -243,14 +341,119 @@ function SectionCard({
   );
 }
 
+function SummaryItem({
+  label,
+  value,
+  highlight = false,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border p-4 ${
+        highlight
+          ? "border-emerald-400/20 bg-emerald-500/10"
+          : "border-white/10 bg-white/5"
+      }`}
+    >
+      <p className="text-xs text-slate-400">
+        {label}
+      </p>
+
+      <p
+        className={`mt-2 truncate font-black ${
+          highlight
+            ? "text-emerald-300"
+            : "text-white"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function ProductItemPreview({
+  item,
+}: {
+  item: OrderItemForm;
+}) {
+  const weight =
+    normalizeDecimal(
+      item.bagWeight
+    );
+
+  const quantity =
+    normalizeDecimal(
+      item.quantity
+    );
+
+  const tonnage =
+    weight > 0 &&
+    quantity > 0
+      ? (weight * quantity) /
+        1000
+      : 0;
+
+  return (
+    <div className="rounded-xl bg-slate-50 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-black text-slate-800">
+            {item.productName ||
+              "نام کالا وارد نشده"}
+          </p>
+
+          {item.manualProduct && (
+            <span className="mt-1 inline-flex rounded-full bg-violet-50 px-2 py-1 text-[10px] font-bold text-violet-700">
+              محصول دستی
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-lg bg-white px-2.5 py-1.5 font-bold text-slate-600 ring-1 ring-slate-200">
+            {quantity > 0
+              ? `${formatNumber(
+                  quantity
+                )} کیسه`
+              : "تعداد نامشخص"}
+          </span>
+
+          <span className="rounded-lg bg-white px-2.5 py-1.5 font-bold text-slate-600 ring-1 ring-slate-200">
+            {weight > 0
+              ? `${formatNumber(
+                  weight
+                )} کیلو`
+              : "وزن نامشخص"}
+          </span>
+
+          <span className="rounded-lg bg-emerald-50 px-2.5 py-1.5 font-black text-emerald-700 ring-1 ring-emerald-100">
+            {tonnage > 0
+              ? `${formatNumber(
+                  tonnage
+                )} تن`
+              : "۰ تن"}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NewOrderForm() {
-  const router = useRouter();
+  const router =
+    useRouter();
 
   const searchParams =
     useSearchParams();
 
   const customerIdFromUrl =
-    searchParams.get("customerId") ?? "";
+    searchParams.get(
+      "customerId"
+    ) ?? "";
 
   const [today] =
     useState<JalaliDate>(
@@ -272,11 +475,20 @@ function NewOrderForm() {
       String(today.day)
     );
 
-  const [customers, setCustomers] =
-    useState<Customer[]>([]);
+  const [
+    customers,
+    setCustomers,
+  ] = useState<Customer[]>([]);
 
-  const [salesUsers, setSalesUsers] =
-    useState<SalesUser[]>([]);
+  const [
+    salesUsers,
+    setSalesUsers,
+  ] = useState<SalesUser[]>([]);
+
+  const [
+    products,
+    setProducts,
+  ] = useState<Product[]>([]);
 
   const [
     loadingCustomers,
@@ -286,6 +498,11 @@ function NewOrderForm() {
   const [
     loadingUsers,
     setLoadingUsers,
+  ] = useState(true);
+
+  const [
+    loadingProducts,
+    setLoadingProducts,
   ] = useState(true);
 
   const [
@@ -323,11 +540,6 @@ function NewOrderForm() {
   ] = useState(false);
 
   const [
-    totalTonnage,
-    setTotalTonnage,
-  ] = useState("");
-
-  const [
     status,
     setStatus,
   ] = useState<OrderStatus>(
@@ -345,6 +557,16 @@ function NewOrderForm() {
   ] = useState("");
 
   const [
+    items,
+    setItems,
+  ] = useState<OrderItemForm[]>([
+    createInitialOrderItem(),
+  ]);
+
+  const itemCounterRef =
+    useRef(1);
+
+  const [
     saving,
     setSaving,
   ] = useState(false);
@@ -358,6 +580,10 @@ function NewOrderForm() {
     success,
     setSuccess,
   ] = useState("");
+
+  /* ========================================================
+     LOAD CUSTOMERS
+     ======================================================== */
 
   useEffect(() => {
     let mounted = true;
@@ -374,7 +600,9 @@ function NewOrderForm() {
           return;
         }
 
-        setCustomers(result);
+        setCustomers(
+          result
+        );
 
         if (customerIdFromUrl) {
           const customerFromUrl =
@@ -429,6 +657,10 @@ function NewOrderForm() {
     };
   }, [customerIdFromUrl]);
 
+  /* ========================================================
+     LOAD SALES USERS
+     ======================================================== */
+
   useEffect(() => {
     let mounted = true;
 
@@ -440,7 +672,9 @@ function NewOrderForm() {
           await usersService.getSalesUsers();
 
         if (mounted) {
-          setSalesUsers(result);
+          setSalesUsers(
+            result
+          );
         }
       } catch (err) {
         if (mounted) {
@@ -464,6 +698,51 @@ function NewOrderForm() {
     };
   }, []);
 
+  /* ========================================================
+     LOAD PRODUCTS
+     ======================================================== */
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadProducts() {
+      try {
+        setLoadingProducts(true);
+
+        const result =
+          await ordersService.getProducts();
+
+        if (mounted) {
+          setProducts(
+            result as Product[]
+          );
+        }
+      } catch (err) {
+        if (mounted) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "خطا در دریافت محصولات."
+          );
+        }
+      } finally {
+        if (mounted) {
+          setLoadingProducts(false);
+        }
+      }
+    }
+
+    void loadProducts();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  /* ========================================================
+     CUSTOMER SEARCH
+     ======================================================== */
+
   const filteredCustomers =
     useMemo(() => {
       const query =
@@ -472,7 +751,10 @@ function NewOrderForm() {
           .toLowerCase();
 
       if (!query) {
-        return customers.slice(0, 12);
+        return customers.slice(
+          0,
+          12
+        );
       }
 
       return customers
@@ -495,11 +777,18 @@ function NewOrderForm() {
             code.includes(query)
           );
         })
-        .slice(0, 12);
+        .slice(
+          0,
+          12
+        );
     }, [
       customers,
       customerSearch,
     ]);
+
+  /* ========================================================
+     SALES USER SEARCH
+     ======================================================== */
 
   const filteredSalesUsers =
     useMemo(() => {
@@ -509,7 +798,10 @@ function NewOrderForm() {
           .toLowerCase();
 
       if (!query) {
-        return salesUsers.slice(0, 10);
+        return salesUsers.slice(
+          0,
+          10
+        );
       }
 
       return salesUsers
@@ -532,39 +824,280 @@ function NewOrderForm() {
             code.includes(query)
           );
         })
-        .slice(0, 10);
+        .slice(
+          0,
+          10
+        );
     }, [
       salesUsers,
       salesUserSearch,
     ]);
 
+  /* ========================================================
+     CUSTOMER
+     ======================================================== */
+
   function selectCustomer(
     customer: Customer
   ) {
-    setSelectedCustomer(customer);
-    setCustomerSearch(customer.name);
-    setShowCustomerResults(false);
+    setSelectedCustomer(
+      customer
+    );
+
+    setCustomerSearch(
+      customer.name
+    );
+
+    setShowCustomerResults(
+      false
+    );
   }
+
+  function clearCustomer() {
+    setSelectedCustomer(
+      null
+    );
+
+    setCustomerSearch("");
+
+    setShowCustomerResults(
+      true
+    );
+  }
+
+  /* ========================================================
+     SALES USER
+     ======================================================== */
 
   function selectSalesUser(
     user: SalesUser
   ) {
-    setSelectedSalesUser(user);
-    setSalesUserSearch(user.full_name);
-    setShowSalesUsers(false);
-  }
+    setSelectedSalesUser(
+      user
+    );
 
-  function clearCustomer() {
-    setSelectedCustomer(null);
-    setCustomerSearch("");
-    setShowCustomerResults(true);
+    setSalesUserSearch(
+      user.full_name
+    );
+
+    setShowSalesUsers(
+      false
+    );
   }
 
   function clearSalesUser() {
-    setSelectedSalesUser(null);
+    setSelectedSalesUser(
+      null
+    );
+
     setSalesUserSearch("");
-    setShowSalesUsers(true);
+
+    setShowSalesUsers(
+      true
+    );
   }
+
+  /* ========================================================
+     ORDER ITEMS
+     ======================================================== */
+
+  function updateItem(
+    id: string,
+    patch: Partial<OrderItemForm>
+  ) {
+    setItems((current) =>
+      current.map(
+        (item) =>
+          item.id === id
+            ? {
+                ...item,
+                ...patch,
+              }
+            : item
+      )
+    );
+  }
+
+  function addItem() {
+    itemCounterRef.current +=
+      1;
+
+    const nextId =
+      `item-${itemCounterRef.current}`;
+
+    setItems((current) => [
+      ...current,
+      {
+        id: nextId,
+        productId: "",
+        productName: "",
+        bagWeight: "",
+        quantity: "",
+        manualProduct: false,
+      },
+    ]);
+  }
+
+  function removeItem(
+    id: string
+  ) {
+    setItems((current) => {
+      if (
+        current.length ===
+        1
+      ) {
+        return [
+          {
+            id: current[0].id,
+            productId: "",
+            productName: "",
+            bagWeight: "",
+            quantity: "",
+            manualProduct: false,
+          },
+        ];
+      }
+
+      return current.filter(
+        (item) =>
+          item.id !== id
+      );
+    });
+  }
+
+  function handleProductChange(
+    id: string,
+    value: string
+  ) {
+    if (
+      value ===
+      MANUAL_PRODUCT_VALUE
+    ) {
+      updateItem(
+        id,
+        {
+          productId: "",
+          productName: "",
+          bagWeight: "",
+          quantity: "",
+          manualProduct: true,
+        }
+      );
+
+      return;
+    }
+
+    const product =
+      products.find(
+        (item) =>
+          item.id === value
+      );
+
+    if (!product) {
+      updateItem(
+        id,
+        {
+          productId: "",
+          productName: "",
+          bagWeight: "",
+          manualProduct: false,
+        }
+      );
+
+      return;
+    }
+
+    updateItem(
+      id,
+      {
+        productId:
+          product.id,
+        productName:
+          product.name,
+        bagWeight:
+          String(
+            product.weight_kg
+          ),
+        manualProduct:
+          false,
+      }
+    );
+  }
+
+  function setBagWeight(
+    id: string,
+    weight: string
+  ) {
+    updateItem(
+      id,
+      {
+        bagWeight:
+          weight,
+      }
+    );
+  }
+
+  const itemCalculations =
+    useMemo(() => {
+      return items.map(
+        (item) => {
+          const weight =
+            normalizeDecimal(
+              item.bagWeight
+            );
+
+          const quantity =
+            normalizeDecimal(
+              item.quantity
+            );
+
+          const tonnage =
+            weight > 0 &&
+            quantity > 0
+              ? (weight *
+                  quantity) /
+                1000
+              : 0;
+
+          return {
+            id: item.id,
+            weight,
+            quantity,
+            tonnage,
+          };
+        }
+      );
+    }, [items]);
+
+  const calculatedTotalTonnage =
+    useMemo(() => {
+      return itemCalculations.reduce(
+        (
+          sum,
+          item
+        ) =>
+          sum +
+          item.tonnage,
+        0
+      );
+    }, [
+      itemCalculations,
+    ]);
+
+  const filledItems =
+    useMemo(() => {
+      return items.filter(
+        (item) =>
+          item.productId.trim() ||
+          item.productName.trim() ||
+          item.bagWeight.trim() ||
+          item.quantity.trim()
+      );
+    }, [items]);
+
+  /* ========================================================
+     SUBMIT
+     ======================================================== */
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>
@@ -599,15 +1132,33 @@ function NewOrderForm() {
       return;
     }
 
-    const year = Number(jalaliYear);
-    const month = Number(jalaliMonth);
-    const day = Number(jalaliDay);
+    const year =
+      Number(
+        normalizeDigits(
+          jalaliYear
+        )
+      );
 
-    const jalaliDate: JalaliDate = {
-      year,
-      month,
-      day,
-    };
+    const month =
+      Number(
+        normalizeDigits(
+          jalaliMonth
+        )
+      );
+
+    const day =
+      Number(
+        normalizeDigits(
+          jalaliDay
+        )
+      );
+
+    const jalaliDate: JalaliDate =
+      {
+        year,
+        month,
+        day,
+      };
 
     if (
       !isValidJalaliDate(
@@ -620,16 +1171,90 @@ function NewOrderForm() {
       return;
     }
 
-    const normalizedTonnage =
-      totalTonnage.replace(",", ".");
+    if (
+      filledItems.length ===
+      0
+    ) {
+      setError(
+        "حداقل یک قلم کالا به سفارش اضافه کنید."
+      );
+      return;
+    }
 
-    const tonnage = Number(
-      normalizedTonnage
-    );
+    for (
+      const item of filledItems
+    ) {
+      if (
+        !item.productId &&
+        !item.manualProduct
+      ) {
+        setError(
+          "برای هر قلم سفارش یک کالا انتخاب کنید."
+        );
+        return;
+      }
+
+      if (
+        item.manualProduct &&
+        !item.productName.trim()
+      ) {
+        setError(
+          "برای محصول جدید نام کالا را وارد کنید."
+        );
+        return;
+      }
+
+      const weight =
+        normalizeDecimal(
+          item.bagWeight
+        );
+
+      if (
+        !Number.isFinite(
+          weight
+        ) ||
+        weight <= 0
+      ) {
+        setError(
+          `وزن کیسه برای "${item.productName || "این کالا"}" باید بیشتر از صفر باشد.`
+        );
+        return;
+      }
+
+      const quantity =
+        normalizeDecimal(
+          item.quantity
+        );
+
+      if (
+        !Number.isFinite(
+          quantity
+        ) ||
+        quantity <= 0
+      ) {
+        setError(
+          `تعداد کیسه برای "${item.productName || "این کالا"}" باید بیشتر از صفر باشد.`
+        );
+        return;
+      }
+
+      if (
+        !Number.isInteger(
+          quantity
+        )
+      ) {
+        setError(
+          `تعداد کیسه برای "${item.productName || "این کالا"}" باید عدد صحیح باشد.`
+        );
+        return;
+      }
+    }
 
     if (
-      !Number.isFinite(tonnage) ||
-      tonnage <= 0
+      !Number.isFinite(
+        calculatedTotalTonnage
+      ) ||
+      calculatedTotalTonnage <= 0
     ) {
       setError(
         "تناژ سفارش باید بیشتر از صفر باشد."
@@ -637,27 +1262,103 @@ function NewOrderForm() {
       return;
     }
 
+    const orderItems: OrderItemInput[] =
+      filledItems.map(
+        (item) => ({
+          product_id:
+            item.productId.trim() ||
+            null,
+
+          product_name_snapshot:
+            item.productName.trim(),
+
+          quantity:
+            Math.trunc(
+              normalizeDecimal(
+                item.quantity
+              )
+            ),
+
+          /*
+           * سرویس orders این مقدار را
+           * برای سازگاری می‌پذیرد؛
+           * مقدار واقعی snapshot توسط Trigger
+           * دیتابیس تعیین می‌شود.
+           */
+          weight_kg_snapshot:
+            Math.round(
+              normalizeDecimal(
+                item.bagWeight
+              )
+            ),
+
+          /*
+           * تناژ Generated است و orders.ts
+           * آن را در INSERT ارسال نمی‌کند.
+           */
+          bag_weight_kg:
+            normalizeDecimal(
+              item.bagWeight
+            ),
+
+          /*
+           * برای سازگاری TypeScript مقدار می‌دهیم،
+           * اما orders.ts آن را به دیتابیس ارسال نمی‌کند.
+           */
+          tonnage:
+            normalizeDecimal(
+              item.bagWeight
+            ) *
+            Math.trunc(
+              normalizeDecimal(
+                item.quantity
+              )
+            ) /
+            1000,
+        })
+      );
+
     setSaving(true);
 
     try {
-      const input: CreateOrderInput = {
-        company_id: COMPANY_ID,
-        customer_id:
-          selectedCustomer.id,
-        sales_user_id:
-          selectedSalesUser.id,
-        order_date:
-          jalaliToGregorianDate(
-            jalaliDate
-          ),
-        status,
-        total_tonnage:
-          tonnage,
-        notes:
-          notes.trim() || null,
-        source:
-          source.trim() || "manual",
-      };
+      const input:
+        CreateOrderInput =
+        {
+          company_id:
+            COMPANY_ID,
+
+          customer_id:
+            selectedCustomer.id,
+
+          sales_user_id:
+            selectedSalesUser.id,
+
+          order_date:
+            jalaliToGregorianDate(
+              jalaliDate
+            ),
+
+          status,
+
+          /*
+           * مجموع اولیه‌ای که در فرم دیده می‌شود.
+           * بعد از ثبت order_items، Trigger دیتابیس
+           * مقدار نهایی orders.total_tonnage را refresh می‌کند.
+           */
+          total_tonnage:
+            calculatedTotalTonnage,
+
+          notes:
+            notes.trim() ||
+            null,
+
+          source:
+            source.trim() ||
+            "manual",
+
+          items:
+            orderItems,
+        };
 
       const order =
         await ordersService.create(
@@ -668,11 +1369,14 @@ function NewOrderForm() {
         "سفارش با موفقیت ثبت شد."
       );
 
-      window.setTimeout(() => {
-        router.push(
-          `/orders/${order.id}`
-        );
-      }, 500);
+      window.setTimeout(
+        () => {
+          router.push(
+            `/orders/${order.id}`
+          );
+        },
+        500
+      );
     } catch (err) {
       console.error(
         "New order submit error:",
@@ -694,6 +1398,7 @@ function NewOrderForm() {
       saving ||
         loadingCustomers ||
         loadingUsers ||
+        loadingProducts ||
         !selectedCustomer ||
         !selectedSalesUser ||
         !jalaliYear ||
@@ -701,16 +1406,14 @@ function NewOrderForm() {
         !jalaliDay
     );
 
-  const currentTonnage = Number(
-    totalTonnage.replace(",", ".")
-  );
-
   return (
     <main
       dir="rtl"
       className="mx-auto max-w-[1300px] space-y-6 pb-14"
     >
-      {/* Header */}
+      {/* =====================================================
+          HEADER
+          ===================================================== */}
 
       <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-slate-900 via-violet-600 to-blue-600" />
@@ -739,8 +1442,8 @@ function NewOrderForm() {
               </div>
 
               <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-500 md:text-base">
-                سفارش مشتری را با اطلاعات کامل و
-                تاریخ جلالی ثبت کنید.
+                سفارش مشتری را با اطلاعات کامل،
+                اقلام کالا و تاریخ جلالی ثبت کنید.
               </p>
             </div>
           </div>
@@ -755,7 +1458,9 @@ function NewOrderForm() {
         </div>
       </section>
 
-      {/* Alerts */}
+      {/* =====================================================
+          ALERTS
+          ===================================================== */}
 
       {error && (
         <section className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
@@ -805,7 +1510,9 @@ function NewOrderForm() {
         onSubmit={handleSubmit}
         className="space-y-6"
       >
-        {/* Customer */}
+        {/* ===================================================
+            CUSTOMER
+            =================================================== */}
 
         <SectionCard>
           <OrderStep
@@ -846,7 +1553,9 @@ function NewOrderForm() {
                             className="inline-flex items-center gap-1"
                           >
                             📞
-                            {selectedCustomer.phone}
+                            {
+                              selectedCustomer.phone
+                            }
                           </span>
                         )}
 
@@ -886,8 +1595,7 @@ function NewOrderForm() {
 
               {customerIdFromUrl && (
                 <div className="border-t border-blue-100 bg-blue-50/60 px-5 py-3 text-xs font-medium text-blue-700">
-                  این مشتری از پروفایل مشتری
-                  به‌صورت خودکار انتخاب شده است.
+                  این مشتری از پروفایل مشتری به‌صورت خودکار انتخاب شده است.
                 </div>
               )}
             </div>
@@ -909,7 +1617,9 @@ function NewOrderForm() {
                 <input
                   id="customer-search"
                   type="text"
-                  value={customerSearch}
+                  value={
+                    customerSearch
+                  }
                   onChange={(event) => {
                     setCustomerSearch(
                       event.target.value
@@ -944,8 +1654,14 @@ function NewOrderForm() {
                     <button
                       type="button"
                       onClick={() => {
-                        setCustomerSearch("");
-                        setSelectedCustomer(null);
+                        setCustomerSearch(
+                          ""
+                        );
+
+                        setSelectedCustomer(
+                          null
+                        );
+
                         setShowCustomerResults(
                           true
                         );
@@ -980,7 +1696,9 @@ function NewOrderForm() {
                       filteredCustomers.map(
                         (customer) => (
                           <button
-                            key={customer.id}
+                            key={
+                              customer.id
+                            }
                             type="button"
                             onClick={() =>
                               selectCustomer(
@@ -999,7 +1717,9 @@ function NewOrderForm() {
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <p className="font-bold text-slate-900">
-                                    {customer.name}
+                                    {
+                                      customer.name
+                                    }
                                   </p>
 
                                   {customer.is_vip && (
@@ -1029,9 +1749,11 @@ function NewOrderForm() {
 
                                   {customer.customer_type && (
                                     <span>
-                                      {customerTypeLabel(
-                                        customer.customer_type
-                                      )}
+                                      {
+                                        customerTypeLabel(
+                                          customer.customer_type
+                                        )
+                                      }
                                     </span>
                                   )}
                                 </div>
@@ -1053,14 +1775,18 @@ function NewOrderForm() {
           )}
         </SectionCard>
 
-        {/* Sales user */}
+        {/* ===================================================
+            SALES USER
+            =================================================== */}
 
         <SectionCard>
           <OrderStep
             number="۲"
             title="انتخاب بازاریاب"
             description="بازاریاب مسئول این سفارش را انتخاب کنید."
-            icon={<UserRound size={21} />}
+            icon={
+              <UserRound size={21} />
+            }
           />
 
           {selectedSalesUser ? (
@@ -1145,7 +1871,9 @@ function NewOrderForm() {
                 <input
                   id="sales-user-search"
                   type="text"
-                  value={salesUserSearch}
+                  value={
+                    salesUserSearch
+                  }
                   onChange={(event) => {
                     setSalesUserSearch(
                       event.target.value
@@ -1160,7 +1888,9 @@ function NewOrderForm() {
                     );
                   }}
                   onFocus={() =>
-                    setShowSalesUsers(true)
+                    setShowSalesUsers(
+                      true
+                    )
                   }
                   placeholder="نام بازاریاب را جستجو کنید..."
                   autoComplete="off"
@@ -1186,7 +1916,9 @@ function NewOrderForm() {
                       filteredSalesUsers.map(
                         (user) => (
                           <button
-                            key={user.id}
+                            key={
+                              user.id
+                            }
                             type="button"
                             onClick={() =>
                               selectSalesUser(
@@ -1253,14 +1985,459 @@ function NewOrderForm() {
           )}
         </SectionCard>
 
-        {/* Order information */}
+        {/* ===================================================
+            ORDER ITEMS
+            =================================================== */}
 
         <SectionCard>
           <OrderStep
             number="۳"
+            title="اقلام سفارش"
+            description="محصول را از فهرست انتخاب کنید یا محصول جدید را دستی اضافه کنید. سپس وزن کیسه و تعداد کیسه را تعیین کنید."
+            icon={
+              <Package size={21} />
+            }
+          />
+
+          <div className="rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm">
+                <Package size={18} />
+              </div>
+
+              <div>
+                <p className="text-sm font-black text-blue-900">
+                  محاسبه خودکار تناژ
+                </p>
+
+                <p className="mt-1 text-xs leading-6 text-blue-700">
+                  تناژ هر قلم از حاصل‌ضرب تعداد کیسه در وزن هر کیسه محاسبه می‌شود و مجموع آن به‌عنوان تناژ سفارش ثبت خواهد شد.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 space-y-4">
+            {items.map(
+              (item, index) => {
+                const calculation =
+                  itemCalculations.find(
+                    (
+                      entry
+                    ) =>
+                      entry.id ===
+                      item.id
+                  );
+
+                return (
+                  <div
+                    key={item.id}
+                    className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5"
+                  >
+                    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-xs font-bold text-blue-600">
+                          قلم سفارش{" "}
+                          {formatNumber(
+                            index + 1
+                          )}
+                        </p>
+
+                        <p className="mt-1 text-sm font-black text-slate-800">
+                          مشخصات کالا
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          removeItem(
+                            item.id
+                          )
+                        }
+                        className="inline-flex w-fit items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-100"
+                      >
+                        <Trash2 size={14} />
+                        حذف قلم
+                      </button>
+                    </div>
+
+                    <div className="grid gap-4 lg:grid-cols-[1fr_220px_220px]">
+                      {/* Product */}
+
+                      <div>
+                        <label
+                          htmlFor={`product-${item.id}`}
+                          className="mb-2 block text-sm font-bold text-slate-700"
+                        >
+                          نام کالا
+                        </label>
+
+                        <div className="relative">
+                          <FileText
+                            size={17}
+                            className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                          />
+
+                          <select
+                            id={`product-${item.id}`}
+                            value={
+                              item.manualProduct
+                                ? MANUAL_PRODUCT_VALUE
+                                : item.productId
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              handleProductChange(
+                                item.id,
+                                event
+                                  .target
+                                  .value
+                              )
+                            }
+                            disabled={
+                              loadingProducts
+                            }
+                            className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3.5 pr-11 pl-4 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50 disabled:cursor-not-allowed disabled:bg-slate-100"
+                          >
+                            <option value="">
+                              {loadingProducts
+                                ? "در حال دریافت محصولات..."
+                                : "انتخاب کالا"}
+                            </option>
+
+                            {products.map(
+                              (
+                                product
+                              ) => (
+                                <option
+                                  key={
+                                    product.id
+                                  }
+                                  value={
+                                    product.id
+                                  }
+                                >
+                                  {
+                                    product.name
+                                  }
+                                  {" — "}
+                                  {formatNumber(
+                                    Number(
+                                      product.weight_kg
+                                    )
+                                  )}
+                                  {" کیلو"}
+                                </option>
+                              )
+                            )}
+
+                            <option value="separator">
+                              ──────────
+                            </option>
+
+                            <option
+                              value={
+                                MANUAL_PRODUCT_VALUE
+                              }
+                            >
+                              + افزودن محصول جدید
+                            </option>
+                          </select>
+                        </div>
+
+                        {item.manualProduct ? (
+                          <div className="mt-3">
+                            <label
+                              htmlFor={`manual-product-name-${item.id}`}
+                              className="mb-2 block text-xs font-bold text-violet-700"
+                            >
+                              نام محصول جدید
+                            </label>
+
+                            <input
+                              id={`manual-product-name-${item.id}`}
+                              type="text"
+                              value={
+                                item.productName
+                              }
+                              onChange={(
+                                event
+                              ) =>
+                                updateItem(
+                                  item.id,
+                                  {
+                                    productName:
+                                      event
+                                        .target
+                                        .value,
+                                  }
+                                )
+                              }
+                              placeholder="مثلاً گچ ویژه پروژه ..."
+                              className="w-full rounded-xl border border-violet-200 bg-violet-50/60 px-4 py-3 text-sm font-bold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-50"
+                            />
+
+                            <p className="mt-2 text-xs leading-5 text-violet-600">
+                              این محصول هنگام ثبت سفارش در فهرست محصولات سیستم نیز ایجاد می‌شود.
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="mt-2 text-xs text-slate-400">
+                            محصولات فعال موجود در دیتابیس از همین فهرست قابل انتخاب هستند.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Bag weight */}
+
+                      <div>
+                        <label
+                          htmlFor={`bag-weight-${item.id}`}
+                          className="mb-2 block text-sm font-bold text-slate-700"
+                        >
+                          وزن هر کیسه
+                        </label>
+
+                        <div className="relative">
+                          <input
+                            id={`bag-weight-${item.id}`}
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            inputMode="decimal"
+                            value={
+                              item.bagWeight
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              setBagWeight(
+                                item.id,
+                                event
+                                  .target
+                                  .value
+                              )
+                            }
+                            placeholder="مثلاً ۲۵"
+                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 pl-16 text-sm font-bold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
+                          />
+
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-black text-emerald-700">
+                            کیلو
+                          </span>
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {DEFAULT_BAG_WEIGHTS.map(
+                            (
+                              weight
+                            ) => (
+                              <button
+                                key={
+                                  weight
+                                }
+                                type="button"
+                                onClick={() =>
+                                  setBagWeight(
+                                    item.id,
+                                    weight
+                                  )
+                                }
+                                className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+                                  item.bagWeight ===
+                                  weight
+                                    ? "bg-emerald-600 text-white"
+                                    : "bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-emerald-50 hover:text-emerald-700"
+                                }`}
+                              >
+                                {formatNumber(
+                                  Number(
+                                    weight
+                                  )
+                                )}{" "}
+                                کیلو
+                              </button>
+                            )
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Quantity */}
+
+                      <div>
+                        <label
+                          htmlFor={`quantity-${item.id}`}
+                          className="mb-2 block text-sm font-bold text-slate-700"
+                        >
+                          تعداد کیسه
+                        </label>
+
+                        <div className="relative">
+                          <input
+                            id={`quantity-${item.id}`}
+                            type="number"
+                            min="1"
+                            step="1"
+                            inputMode="numeric"
+                            value={
+                              item.quantity
+                            }
+                            onChange={(
+                              event
+                            ) =>
+                              updateItem(
+                                item.id,
+                                {
+                                  quantity:
+                                    event
+                                      .target
+                                      .value,
+                                }
+                              )
+                            }
+                            placeholder="مثلاً ۴۰۰"
+                            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-4 pl-20 text-lg font-black text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+                          />
+
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-black text-blue-700">
+                            کیسه
+                          </span>
+                        </div>
+
+                        <p className="mt-2 text-xs text-slate-400">
+                          تعداد بسته‌های این کالا را وارد کنید.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Calculation */}
+
+                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <p className="text-xs font-bold text-slate-400">
+                          وزن هر کیسه
+                        </p>
+
+                        <p className="mt-1 text-lg font-black text-slate-800">
+                          {calculation &&
+                          calculation.weight >
+                            0
+                            ? `${formatNumber(
+                                calculation.weight
+                              )} کیلو`
+                            : "—"}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <p className="text-xs font-bold text-slate-400">
+                          تعداد
+                        </p>
+
+                        <p className="mt-1 text-lg font-black text-slate-800">
+                          {calculation &&
+                          calculation.quantity >
+                            0
+                            ? `${formatNumber(
+                                calculation.quantity
+                              )} کیسه`
+                            : "—"}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+                        <p className="text-xs font-bold text-emerald-600">
+                          تناژ این قلم
+                        </p>
+
+                        <p className="mt-1 text-lg font-black text-emerald-800">
+                          {calculation &&
+                          calculation.tonnage >
+                            0
+                            ? `${formatNumber(
+                                calculation.tonnage
+                              )} تن`
+                            : "۰ تن"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+            )}
+
+            <button
+              type="button"
+              onClick={addItem}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-blue-300 bg-blue-50/50 px-5 py-4 text-sm font-black text-blue-700 transition hover:border-blue-400 hover:bg-blue-50"
+            >
+              <Plus size={18} />
+              افزودن کالای دیگر
+            </button>
+
+            {filledItems.length > 0 && (
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-400">
+                      خلاصه اقلام
+                    </p>
+
+                    <p className="mt-1 text-sm font-black text-slate-800">
+                      {formatNumber(
+                        filledItems.length
+                      )}{" "}
+                      قلم کالا
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-3">
+                    <p className="text-xs font-bold text-emerald-600">
+                      مجموع تناژ
+                    </p>
+
+                    <p className="mt-1 text-xl font-black text-emerald-800">
+                      {formatNumber(
+                        calculatedTotalTonnage
+                      )}{" "}
+                      تن
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  {filledItems.map(
+                    (item) => (
+                      <ProductItemPreview
+                        key={
+                          item.id
+                        }
+                        item={
+                          item
+                        }
+                      />
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </SectionCard>
+
+        {/* ===================================================
+            ORDER INFORMATION
+            =================================================== */}
+
+        <SectionCard>
+          <OrderStep
+            number="۴"
             title="اطلاعات سفارش"
-            description="تاریخ، تناژ و وضعیت سفارش را مشخص کنید."
-            icon={<ClipboardList size={21} />}
+            description="تاریخ و وضعیت سفارش را مشخص کنید."
+            icon={
+              <ClipboardList size={21} />
+            }
           />
 
           <div className="grid gap-5 lg:grid-cols-2">
@@ -1296,9 +2473,15 @@ function NewOrderForm() {
                     id="jalali-year"
                     inputMode="numeric"
                     value={jalaliYear}
-                    onChange={(event) =>
+                    onChange={(
+                      event
+                    ) =>
                       setJalaliYear(
-                        event.target.value
+                        normalizeDigits(
+                          event
+                            .target
+                            .value
+                        )
                       )
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
@@ -1316,23 +2499,37 @@ function NewOrderForm() {
                   <select
                     id="jalali-month"
                     value={jalaliMonth}
-                    onChange={(event) =>
+                    onChange={(
+                      event
+                    ) =>
                       setJalaliMonth(
-                        event.target.value
+                        event
+                          .target
+                          .value
                       )
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                   >
                     {Array.from(
-                      { length: 12 },
-                      (_, index) => {
+                      {
+                        length: 12,
+                      },
+                      (
+                        _,
+                        index
+                      ) => {
                         const value =
-                          index + 1;
+                          index +
+                          1;
 
                         return (
                           <option
-                            key={value}
-                            value={value}
+                            key={
+                              value
+                            }
+                            value={
+                              value
+                            }
                           >
                             {formatNumber(
                               value
@@ -1355,23 +2552,37 @@ function NewOrderForm() {
                   <select
                     id="jalali-day"
                     value={jalaliDay}
-                    onChange={(event) =>
+                    onChange={(
+                      event
+                    ) =>
                       setJalaliDay(
-                        event.target.value
+                        event
+                          .target
+                          .value
                       )
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                   >
                     {Array.from(
-                      { length: 31 },
-                      (_, index) => {
+                      {
+                        length: 31,
+                      },
+                      (
+                        _,
+                        index
+                      ) => {
                         const value =
-                          index + 1;
+                          index +
+                          1;
 
                         return (
                           <option
-                            key={value}
-                            value={value}
+                            key={
+                              value
+                            }
+                            value={
+                              value
+                            }
                           >
                             {formatNumber(
                               value
@@ -1390,77 +2601,71 @@ function NewOrderForm() {
                 </span>
 
                 <span className="text-sm font-black text-slate-800">
-                  {formatNumber(today.year)}/
-                  {formatNumber(today.month)}/
-                  {formatNumber(today.day)}
+                  {formatNumber(
+                    today.year
+                  )}
+                  /
+                  {formatNumber(
+                    today.month
+                  )}
+                  /
+                  {formatNumber(
+                    today.day
+                  )}
                 </span>
               </div>
             </div>
 
-            {/* Tonnage */}
+            {/* Total */}
 
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-5">
+            <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-5">
               <div className="mb-4 flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
                   <Package size={17} />
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="total-tonnage"
-                    className="block text-sm font-black text-slate-800"
-                  >
-                    تناژ سفارش
-                  </label>
+                  <p className="text-sm font-black text-slate-800">
+                    تناژ کل سفارش
+                  </p>
 
                   <span className="text-xs text-slate-400">
-                    مقدار به تن
+                    محاسبه‌شده از اقلام سفارش
                   </span>
                 </div>
               </div>
 
-              <div className="relative">
-                <input
-                  id="total-tonnage"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={totalTonnage}
-                  onChange={(event) =>
-                    setTotalTonnage(
-                      event.target.value
-                    )
-                  }
-                  placeholder="مثلاً ۱۰"
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-4 pl-16 text-lg font-black text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
-                />
+              <div className="rounded-2xl border border-emerald-100 bg-white p-5">
+                <p className="text-xs font-bold text-emerald-600">
+                  تعداد کل اقلام
+                </p>
 
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-sm font-black text-emerald-700">
-                  تن
-                </span>
-              </div>
+                <p className="mt-1 text-lg font-black text-slate-800">
+                  {formatNumber(
+                    filledItems.length
+                  )}{" "}
+                  قلم
+                </p>
 
-              <p className="mt-3 text-xs leading-6 text-slate-400">
-                تناژ نهایی سفارش را وارد کنید.
-              </p>
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <p className="text-xs font-bold text-emerald-600">
+                    مجموع تناژ
+                  </p>
 
-              {Number.isFinite(
-                currentTonnage
-              ) &&
-                currentTonnage > 0 && (
-                  <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
-                    <p className="text-xs text-emerald-700">
-                      تناژ انتخاب‌شده
-                    </p>
-
-                    <p className="mt-1 text-lg font-black text-emerald-800">
-                      {formatNumber(
-                        currentTonnage
-                      )}{" "}
+                  <p className="mt-1 text-3xl font-black text-emerald-800">
+                    {formatNumber(
+                      calculatedTotalTonnage
+                    )}{" "}
+                    <span className="text-base">
                       تن
-                    </p>
-                  </div>
-                )}
+                    </span>
+                  </p>
+                </div>
+
+                <p className="mt-3 text-xs leading-6 text-slate-400">
+                  این مقدار از تعداد کیسه و وزن هر کیسه محاسبه شده و در زمان ثبت با محاسبه دیتابیس همگام می‌شود.
+                </p>
+              </div>
             </div>
 
             {/* Status */}
@@ -1476,7 +2681,9 @@ function NewOrderForm() {
               <select
                 id="order-status"
                 value={status}
-                onChange={(event) =>
+                onChange={(
+                  event
+                ) =>
                   setStatus(
                     event.target
                       .value as OrderStatus
@@ -1511,9 +2718,12 @@ function NewOrderForm() {
               <select
                 id="order-source"
                 value={source}
-                onChange={(event) =>
+                onChange={(
+                  event
+                ) =>
                   setSource(
-                    event.target.value
+                    event.target
+                      .value
                   )
                 }
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
@@ -1558,9 +2768,12 @@ function NewOrderForm() {
             <textarea
               id="order-notes"
               value={notes}
-              onChange={(event) =>
+              onChange={(
+                event
+              ) =>
                 setNotes(
-                  event.target.value
+                  event.target
+                    .value
                 )
               }
               rows={4}
@@ -1570,11 +2783,11 @@ function NewOrderForm() {
           </div>
         </SectionCard>
 
-        {/* Summary */}
+        {/* ===================================================
+            FINAL SUMMARY
+            =================================================== */}
 
         <section className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 text-white shadow-xl">
-          <div className="absolute" />
-
           <div className="p-6 md:p-7">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1593,7 +2806,7 @@ function NewOrderForm() {
               </div>
             </div>
 
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <SummaryItem
                 label="مشتری"
                 value={
@@ -1611,14 +2824,12 @@ function NewOrderForm() {
               />
 
               <SummaryItem
-                label="تناژ"
+                label="تناژ کل"
                 value={
-                  Number.isFinite(
-                    currentTonnage
-                  ) &&
-                  currentTonnage > 0
+                  calculatedTotalTonnage >
+                  0
                     ? `${formatNumber(
-                        currentTonnage
+                        calculatedTotalTonnage
                       )} تن`
                     : "۰ تن"
                 }
@@ -1626,20 +2837,34 @@ function NewOrderForm() {
               />
 
               <SummaryItem
+                label="تعداد اقلام"
+                value={`${formatNumber(
+                  filledItems.length
+                )} قلم`}
+              />
+
+              <SummaryItem
                 label="تاریخ"
                 value={`${formatNumber(
-                  Number(jalaliYear)
+                  Number(
+                    jalaliYear
+                  )
                 )}/${formatNumber(
-                  Number(jalaliMonth)
+                  Number(
+                    jalaliMonth
+                  )
                 )}/${formatNumber(
-                  Number(jalaliDay)
+                  Number(
+                    jalaliDay
+                  )
                 )}`}
               />
 
               <SummaryItem
                 label="وضعیت"
                 value={
-                  status === "draft"
+                  status ===
+                  "draft"
                     ? "پیش‌نویس"
                     : status ===
                       "confirmed"
@@ -1647,20 +2872,13 @@ function NewOrderForm() {
                     : "لغو شده"
                 }
               />
-
-              <SummaryItem
-                label="منبع"
-                value={
-                  source === "manual"
-                    ? "ثبت دستی"
-                    : source.toUpperCase()
-                }
-              />
             </div>
           </div>
         </section>
 
-        {/* Actions */}
+        {/* ===================================================
+            ACTIONS
+            =================================================== */}
 
         <div className="sticky bottom-4 z-20">
           <div className="flex flex-col-reverse gap-3 rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-2xl backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
@@ -1673,7 +2891,9 @@ function NewOrderForm() {
 
             <button
               type="submit"
-              disabled={submitDisabled}
+              disabled={
+                submitDisabled
+              }
               className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-8 py-3.5 text-sm font-black text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-blue-600 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? (
@@ -1682,6 +2902,7 @@ function NewOrderForm() {
                     size={17}
                     className="animate-spin"
                   />
+
                   در حال ثبت سفارش...
                 </>
               ) : (
@@ -1695,40 +2916,6 @@ function NewOrderForm() {
         </div>
       </form>
     </main>
-  );
-}
-
-function SummaryItem({
-  label,
-  value,
-  highlight = false,
-}: {
-  label: string;
-  value: string;
-  highlight?: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-2xl border p-4 ${
-        highlight
-          ? "border-emerald-400/20 bg-emerald-500/10"
-          : "border-white/10 bg-white/5"
-      }`}
-    >
-      <p className="text-xs text-slate-400">
-        {label}
-      </p>
-
-      <p
-        className={`mt-2 truncate font-black ${
-          highlight
-            ? "text-emerald-300"
-            : "text-white"
-        }`}
-      >
-        {value}
-      </p>
-    </div>
   );
 }
 

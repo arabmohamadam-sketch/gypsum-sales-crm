@@ -109,9 +109,7 @@ function getPageInfo(
   }
 
   if (
-    pathname.startsWith(
-      "/activities/calls/"
-    )
+    pathname.startsWith("/activities/calls/")
   ) {
     return {
       title: "ویرایش تماس",
@@ -162,32 +160,30 @@ function getPageInfo(
 
 export default function Header() {
   const pathname = usePathname();
-
-  const pageInfo =
-    getPageInfo(pathname);
+  const pageInfo = getPageInfo(pathname);
 
   return (
     <header
       dir="rtl"
       className="relative z-30 overflow-hidden rounded-3xl border border-slate-200 bg-white/90 shadow-sm backdrop-blur-xl"
     >
-      {/* Decorative background */}
-      <div className="pointer-events-none absolute -left-16 -top-20 h-48 w-48 rounded-full bg-blue-100/40 blur-3xl" />
+      <div className="pointer-events-none absolute -left-20 -top-24 h-52 w-52 rounded-full bg-blue-100/40 blur-3xl" />
 
-      <div className="pointer-events-none absolute -bottom-24 right-20 h-48 w-48 rounded-full bg-cyan-100/30 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-28 right-10 h-52 w-52 rounded-full bg-cyan-100/30 blur-3xl" />
 
-      <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-l from-transparent via-blue-300 to-transparent" />
+      <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-l from-transparent via-blue-300 to-transparent sm:inset-x-8" />
 
-      <div className="relative flex min-h-[78px] items-center justify-between gap-4 px-4 py-3 sm:px-6">
+      <div className="relative flex min-h-[72px] items-center justify-between gap-3 px-3 py-3 sm:min-h-[78px] sm:gap-4 sm:px-6">
         {/* Title */}
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-900 to-slate-700 text-white shadow-md lg:hidden">
-            <LayoutDashboard size={19} />
+
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 sm:gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-900 to-slate-700 text-white shadow-md sm:h-11 sm:w-11 lg:hidden">
+            <LayoutDashboard size={18} />
           </div>
 
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-lg font-black tracking-tight text-slate-900 sm:text-xl">
+            <div className="flex items-center gap-2">
+              <h1 className="truncate text-base font-black tracking-tight text-slate-900 sm:text-xl">
                 {pageInfo.title}
               </h1>
 
@@ -204,8 +200,10 @@ export default function Header() {
         </div>
 
         {/* Actions */}
-        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-3">
           {/* Search */}
+
           <div className="relative hidden xl:block">
             <Search
               size={17}
@@ -219,7 +217,8 @@ export default function Header() {
             />
           </div>
 
-          {/* AI Status */}
+          {/* AI */}
+
           <div className="hidden items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 xl:flex">
             <Sparkles
               size={15}
@@ -232,26 +231,28 @@ export default function Header() {
           </div>
 
           {/* Notifications */}
+
           <button
             type="button"
-            className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
             aria-label="اعلان‌ها"
+            className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-900 sm:h-11 sm:w-11"
           >
             <Bell size={18} />
 
-            <span className="absolute right-2.5 top-2 h-2 w-2 rounded-full border-2 border-white bg-red-500" />
+            <span className="absolute right-2 top-2 h-2 w-2 rounded-full border-2 border-white bg-red-500 sm:right-2.5 sm:top-2" />
           </button>
 
           {/* User */}
+
           <button
             type="button"
-            className="hidden items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 transition hover:bg-slate-50 sm:flex"
+            className="hidden items-center gap-2.5 rounded-2xl border border-slate-200 bg-white px-2.5 py-2 transition hover:bg-slate-50 sm:flex"
           >
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-slate-900 to-slate-700 text-xs font-black text-white">
               م
             </div>
 
-            <div className="max-w-[110px] text-right">
+            <div className="max-w-[105px] text-right">
               <p className="truncate text-xs font-black text-slate-800">
                 محمد عرب
               </p>
@@ -268,9 +269,11 @@ export default function Header() {
           </button>
 
           {/* New Order */}
+
           <Link
             href="/orders/new"
-            className="group flex items-center gap-2 rounded-2xl bg-slate-900 px-3.5 py-3 text-sm font-black text-white shadow-lg shadow-slate-200 transition hover:-translate-y-0.5 hover:bg-blue-600 hover:shadow-xl sm:px-4"
+            aria-label="ثبت سفارش جدید"
+            className="group flex h-10 shrink-0 items-center justify-center gap-2 rounded-2xl bg-slate-900 px-3 text-sm font-black text-white shadow-lg shadow-slate-200 transition hover:-translate-y-0.5 hover:bg-blue-600 hover:shadow-xl sm:h-11 sm:px-4"
           >
             <PlusCircle
               size={18}
