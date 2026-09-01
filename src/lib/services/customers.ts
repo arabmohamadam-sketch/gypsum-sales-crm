@@ -417,7 +417,7 @@ export const customersService = {
     };
   },
 
-  async update(
+   async update(
     id: string,
     values: Partial<
       Pick<
@@ -445,6 +445,9 @@ export const customersService = {
     const customerId =
       id.trim();
 
+    // ابتدا بررسی می‌کنیم مشتری واقعاً وجود دارد.
+    await this.getById(customerId);
+
     const updateData: Record<
       string,
       unknown
@@ -457,8 +460,17 @@ export const customersService = {
       values.name !==
       undefined
     ) {
-      updateData.name =
+      const name =
         values.name.trim();
+
+      if (!name) {
+        throw new Error(
+          "نام مشتری نمی‌تواند خالی باشد."
+        );
+      }
+
+      updateData.name =
+        name;
     }
 
     if (
@@ -505,8 +517,23 @@ export const customersService = {
       values.city_id !==
       undefined
     ) {
+      if (
+        values.city_id !== null &&
+        !String(
+          values.city_id
+        ).trim()
+      ) {
+        throw new Error(
+          "شناسه شهر معتبر نیست."
+        );
+      }
+
       updateData.city_id =
-        values.city_id;
+        values.city_id
+          ? String(
+              values.city_id
+            ).trim()
+          : null;
     }
 
     if (
@@ -518,7 +545,6 @@ export const customersService = {
     }
 
     const {
-      data,
       error,
     } = await supabase
       .from("customers")
@@ -534,25 +560,40 @@ export const customersService = {
       .is(
         "deleted_at",
         null
-      )
-      .maybeSingle();
+      );
 
     if (error) {
-      logSupabaseError(
-        "خطا در بروزرسانی مشتری:",
-        error
+      console.error(
+        "SUPABASE CUSTOMER UPDATE ERROR",
+        {
+          message:
+            error.message ??
+            "",
+          details:
+            error.details ??
+            "",
+          hint:
+            error.hint ??
+            "",
+          code:
+            error.code ??
+            "",
+        }
       );
 
-      throw error;
-    }
-
-    if (!data) {
       throw new Error(
-        `مشتری با شناسه ${customerId} بروزرسانی نشد.`
+        error.message ||
+          "خطا در بروزرسانی مشتری."
       );
     }
 
-    return data as Customer;
+    // بعد از Update رکورد را دوباره می‌خوانیم.
+    const updatedCustomer =
+      await this.getById(
+        customerId
+      );
+
+    return updatedCustomer;
   },
 
   async create(

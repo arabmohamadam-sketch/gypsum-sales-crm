@@ -51,18 +51,6 @@ const customerTypes = [
     value: "plaster_worker",
     label: "گچ‌کار",
   },
-  {
-    value: "plasterer",
-    label: "گچ‌کار",
-  },
-  {
-    value: "distributor",
-    label: "توزیع‌کننده",
-  },
-  {
-    value: "retailer",
-    label: "خرده‌فروشی",
-  },
 ];
 
 interface FormData {
