@@ -8,12 +8,9 @@ import type {
   OrderItemInput,
 } from "@/src/lib/types/order";
 
-export type {
-  OrderItemInput,
-} from "@/src/lib/types/order";
+export type { OrderItemInput } from "@/src/lib/types/order";
 
-const COMPANY_ID =
-  "11111111-1111-1111-1111-111111111111";
+const COMPANY_ID = "11111111-1111-1111-1111-111111111111";
 
 export interface CreateOrderInput {
   company_id?: string;
@@ -37,8 +34,7 @@ export interface UpdateOrderInput {
   source?: string;
 }
 
-export interface OrderWithRelations
-  extends Order {
+export interface OrderWithRelations extends Order {
   customer: OrderCustomer | null;
   sales_user: OrderSalesUser | null;
   items: OrderItem[];
@@ -53,45 +49,11 @@ interface ProductRecord {
   weight_kg: number;
   is_active: boolean;
   sort_order: number;
-  metadata: Record<
-    string,
-    unknown
-  >;
+  metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
 }
-
-const ORDER_SELECT = `
-  *,
-  customer:customers!orders_customer_id_fkey (
-    id,
-    name,
-    phone,
-    customer_type
-  ),
-  sales_user:users!orders_sales_user_id_fkey (
-    id,
-    full_name,
-    phone,
-    job_title,
-    employee_code
-  ),
-  items:order_items!order_items_order_id_fkey (
-    id,
-    company_id,
-    order_id,
-    product_id,
-    quantity,
-    weight_kg_snapshot,
-    tonnage,
-    product_name_snapshot,
-    bag_weight_kg,
-    created_at,
-    updated_at,
-    deleted_at
-  )
-`;
 
 const ORDER_ITEM_SELECT = `
   id,
@@ -133,10 +95,7 @@ interface SupabaseErrorLike {
 function isSupabaseError(
   error: unknown
 ): error is SupabaseErrorLike {
-  return (
-    typeof error === "object" &&
-    error !== null
-  );
+  return typeof error === "object" && error !== null;
 }
 
 function getErrorMessage(
@@ -144,11 +103,7 @@ function getErrorMessage(
   fallback: string
 ): string {
   if (isSupabaseError(error)) {
-    return (
-      error.message ??
-      error.details ??
-      fallback
-    );
+    return error.message ?? error.details ?? fallback;
   }
 
   if (error instanceof Error) {
@@ -167,30 +122,12 @@ function logSupabaseError(
   );
 
   if (isSupabaseError(error)) {
-    console.error(
-      "message :",
-      error.message
-    );
-
-    console.error(
-      "code    :",
-      error.code
-    );
-
-    console.error(
-      "details :",
-      error.details
-    );
-
-    console.error(
-      "hint    :",
-      error.hint
-    );
+    console.error("message :", error.message);
+    console.error("code    :", error.code);
+    console.error("details :", error.details);
+    console.error("hint    :", error.hint);
   } else {
-    console.error(
-      "error   :",
-      error
-    );
+    console.error("error   :", error);
   }
 
   console.error(
@@ -224,9 +161,7 @@ function validateStatus(
   value: string | undefined
 ): string {
   if (!value?.trim()) {
-    throw new Error(
-      "وضعیت سفارش الزامی است."
-    );
+    throw new Error("وضعیت سفارش الزامی است.");
   }
 
   return value.trim();
@@ -236,9 +171,7 @@ function validateSource(
   value: string | undefined
 ): string {
   if (!value?.trim()) {
-    throw new Error(
-      "منبع سفارش الزامی است."
-    );
+    throw new Error("منبع سفارش الزامی است.");
   }
 
   return value.trim();
@@ -266,10 +199,7 @@ function normalizeProductName(
 function normalizeProductId(
   value: unknown
 ): string | null {
-  const result = String(
-    value ?? ""
-  ).trim();
-
+  const result = String(value ?? "").trim();
   return result || null;
 }
 
@@ -321,13 +251,10 @@ function normalizeOrderItem(
   const quantity =
     item.quantity === undefined
       ? 1
-      : normalizeQuantity(
-          item.quantity
-        );
+      : normalizeQuantity(item.quantity);
 
   const bagWeight =
-    item.bag_weight_kg !==
-      undefined &&
+    item.bag_weight_kg !== undefined &&
     item.bag_weight_kg !== null
       ? normalizePositiveNumber(
           item.bag_weight_kg
@@ -337,36 +264,24 @@ function normalizeOrderItem(
         );
 
   return {
-    product_id:
-      normalizeProductId(
-        item.product_id
-      ),
-
-    product_name_snapshot:
-      productName,
-
+    product_id: normalizeProductId(
+      item.product_id
+    ),
+    product_name_snapshot: productName,
     quantity,
-
-    bag_weight_kg:
-      bagWeight,
+    bag_weight_kg: bagWeight,
   };
 }
 
 function validateOrderItem(
   item: NormalizedOrderItem
 ): void {
-  if (
-    !item.product_name_snapshot
-  ) {
-    throw new Error(
-      "نام کالا الزامی است."
-    );
+  if (!item.product_name_snapshot) {
+    throw new Error("نام کالا الزامی است.");
   }
 
   if (
-    !Number.isFinite(
-      item.quantity
-    ) ||
+    !Number.isFinite(item.quantity) ||
     item.quantity <= 0
   ) {
     throw new Error(
@@ -374,20 +289,14 @@ function validateOrderItem(
     );
   }
 
-  if (
-    !Number.isInteger(
-      item.quantity
-    )
-  ) {
+  if (!Number.isInteger(item.quantity)) {
     throw new Error(
       "تعداد کیسه باید عدد صحیح باشد."
     );
   }
 
   if (
-    !Number.isFinite(
-      item.bag_weight_kg
-    ) ||
+    !Number.isFinite(item.bag_weight_kg) ||
     item.bag_weight_kg <= 0
   ) {
     throw new Error(
@@ -401,15 +310,9 @@ function mapOrder(
 ): OrderWithRelations {
   return {
     ...order,
-
-    customer:
-      order.customer ?? null,
-
-    sales_user:
-      order.sales_user ?? null,
-
-    items:
-      order.items ?? [],
+    customer: order.customer ?? null,
+    sales_user: order.sales_user ?? null,
+    items: order.items ?? [],
   };
 }
 
@@ -437,22 +340,10 @@ async function getProductById(
   } = await supabase
     .from("products")
     .select(PRODUCT_SELECT)
-    .eq(
-      "id",
-      productId
-    )
-    .eq(
-      "company_id",
-      COMPANY_ID
-    )
-    .eq(
-      "is_active",
-      true
-    )
-    .is(
-      "deleted_at",
-      null
-    )
+    .eq("id", productId)
+    .eq("company_id", COMPANY_ID)
+    .eq("is_active", true)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (error) {
@@ -495,9 +386,7 @@ async function createManualProduct(
   }
 
   if (
-    !Number.isFinite(
-      weightKg
-    ) ||
+    !Number.isFinite(weightKg) ||
     weightKg <= 0
   ) {
     throw new Error(
@@ -506,49 +395,27 @@ async function createManualProduct(
   }
 
   const productPayload = {
-    company_id:
-      COMPANY_ID,
-
-    name:
-      productName,
-
-    sku:
-      createManualSku(),
-
-    product_line:
-      "Manual",
-
-    weight_kg:
-      Math.round(weightKg),
-
-    is_active:
-      true,
-
-    sort_order:
-      9999,
-
+    company_id: COMPANY_ID,
+    name: productName,
+    sku: createManualSku(),
+    product_line: "Manual",
+    weight_kg: Math.round(weightKg),
+    is_active: true,
+    sort_order: 9999,
     metadata: {
-      source:
-        "crm_manual_order",
-
-      created_from:
-        "order_form",
+      source: "crm_manual_order",
+      created_from: "order_form",
     },
   };
 
   const {
     data,
     error,
-  } =
-    await supabase
-      .from("products")
-      .insert(
-        productPayload
-      )
-      .select(
-        PRODUCT_SELECT
-      )
-      .single();
+  } = await supabase
+    .from("products")
+    .insert(productPayload)
+    .select(PRODUCT_SELECT)
+    .single();
 
   if (error) {
     logSupabaseError(
@@ -582,29 +449,13 @@ async function resolveOrderItemProduct(
 
     return {
       product,
-
-      productId:
-        product.id,
-
-      /*
-       * Trigger دیتابیس همین وزن
-       * را در weight_kg_snapshot قرار می‌دهد.
-       *
-       * بنابراین برای محصولات موجود،
-       * وزن واقعی از products خوانده می‌شود.
-       */
-      weightKg:
-        Number(
-          product.weight_kg
-        ),
+      productId: product.id,
+      weightKg: Number(
+        product.weight_kg
+      ),
     };
   }
 
-  /*
-   * محصول جدید دستی:
-   * ابتدا رکورد products ساخته می‌شود
-   * تا order_items همیشه product_id معتبر داشته باشد.
-   */
   const product =
     await createManualProduct(
       item.product_name_snapshot,
@@ -613,14 +464,10 @@ async function resolveOrderItemProduct(
 
   return {
     product,
-
-    productId:
-      product.id,
-
-    weightKg:
-      Number(
-        product.weight_kg
-      ),
+    productId: product.id,
+    weightKg: Number(
+      product.weight_kg
+    ),
   };
 }
 
@@ -644,7 +491,13 @@ async function resolveOrderItems(
     validateOrderItem
   );
 
-  const resolved = [];
+  const resolved: Array<{
+    product_id: string;
+    product_name_snapshot: string;
+    quantity: number;
+    weight_kg_snapshot: number;
+    bag_weight_kg: number;
+  }> = [];
 
   for (
     const item of normalizedItems
@@ -658,35 +511,15 @@ async function resolveOrderItems(
         item
       );
 
-    /*
-     * نکته مهم:
-     *
-     * Trigger دیتابیس در INSERT
-     * مقدار weight_kg_snapshot را
-     * از products می‌خواند.
-     *
-     * بنابراین برای محصول موجود،
-     * bag_weight_kg صرفاً اطلاعات
-     * فرم است ولی وزن نهایی معتبر
-     * همان products.weight_kg است.
-     */
     resolved.push({
-      product_id:
-        productId,
-
+      product_id: productId,
       product_name_snapshot:
         product.name,
-
-      quantity:
-        Math.trunc(
-          item.quantity
-        ),
-
+      quantity: Math.trunc(
+        item.quantity
+      ),
       weight_kg_snapshot:
-        Math.round(
-          weightKg
-        ),
-
+        Math.round(weightKg),
       bag_weight_kg:
         item.bag_weight_kg,
     });
@@ -695,19 +528,292 @@ async function resolveOrderItems(
   return resolved;
 }
 
-export const ordersService = {
-  async getAll(): Promise<
-    OrderWithRelations[]
-  > {
-    const supabase =
-      createSupabaseClient();
+/**
+ * دریافت سفارش‌ها بدون JOIN مستقیم
+ *
+ * ابتدا خود orders خوانده می‌شود و سپس
+ * customers / users / order_items جداگانه
+ * دریافت و به سفارش‌ها متصل می‌شوند.
+ */
+async function getOrdersWithRelations(
+  orderRows: Order[]
+): Promise<OrderWithRelations[]> {
+  if (orderRows.length === 0) {
+    return [];
+  }
 
+  const supabase =
+    createSupabaseClient();
+
+  const customerIds = Array.from(
+    new Set(
+      orderRows
+        .map(
+          (order) =>
+            order.customer_id
+        )
+        .filter(
+          (
+            id
+          ): id is string =>
+            Boolean(id)
+        )
+    )
+  );
+
+  const salesUserIds = Array.from(
+    new Set(
+      orderRows
+        .map(
+          (order) =>
+            order.sales_user_id
+        )
+        .filter(
+          (
+            id
+          ): id is string =>
+            Boolean(id)
+        )
+    )
+  );
+
+  const orderIds =
+    orderRows.map(
+      (order) => order.id
+    );
+
+  let customers: OrderCustomer[] = [];
+  let salesUsers: OrderSalesUser[] = [];
+  let items: OrderItem[] = [];
+
+  if (customerIds.length > 0) {
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("customers")
+      .select(
+        `
+          id,
+          name,
+          phone,
+          customer_type
+        `
+      )
+      .in("id", customerIds);
+
+    if (error) {
+      logSupabaseError(
+        "GET ORDER CUSTOMERS",
+        error
+      );
+
+      throw new Error(
+        getErrorMessage(
+          error,
+          "خطا در دریافت مشتریان سفارش‌ها."
+        )
+      );
+    }
+
+    customers =
+      (data ??
+        []) as OrderCustomer[];
+  }
+
+  if (salesUserIds.length > 0) {
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("users")
+      .select(
+        `
+          id,
+          full_name,
+          phone,
+          job_title,
+          employee_code
+        `
+      )
+      .in("id", salesUserIds);
+
+    if (error) {
+      logSupabaseError(
+        "GET ORDER SALES USERS",
+        error
+      );
+
+      throw new Error(
+        getErrorMessage(
+          error,
+          "خطا در دریافت بازاریاب‌های سفارش‌ها."
+        )
+      );
+    }
+
+    salesUsers =
+      (data ??
+        []) as OrderSalesUser[];
+  }
+
+  if (orderIds.length > 0) {
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("order_items")
+      .select(
+        ORDER_ITEM_SELECT
+      )
+      .in(
+        "order_id",
+        orderIds
+      )
+      .eq(
+        "company_id",
+        COMPANY_ID
+      )
+      .is(
+        "deleted_at",
+        null
+      )
+      .order(
+        "created_at",
+        {
+          ascending: true,
+        }
+      );
+
+    if (error) {
+      logSupabaseError(
+        "GET ORDER ITEMS FOR LIST",
+        error
+      );
+
+      throw new Error(
+        getErrorMessage(
+          error,
+          "خطا در دریافت کالاهای سفارش‌ها."
+        )
+      );
+    }
+
+    items =
+      (data ??
+        []) as OrderItem[];
+  }
+
+  const customersById =
+    new Map(
+      customers.map(
+        (customer) => [
+          customer.id,
+          customer,
+        ]
+      )
+    );
+
+  const salesUsersById =
+    new Map(
+      salesUsers.map(
+        (salesUser) => [
+          salesUser.id,
+          salesUser,
+        ]
+      )
+    );
+
+  const itemsByOrderId =
+    new Map<
+      string,
+      OrderItem[]
+    >();
+
+  for (const item of items) {
+    const current =
+      itemsByOrderId.get(
+        item.order_id
+      ) ?? [];
+
+    current.push(item);
+    itemsByOrderId.set(
+      item.order_id,
+      current
+    );
+  }
+
+  return orderRows.map(
+    (order) =>
+      mapOrder({
+        ...order,
+        customer:
+          order.customer_id
+            ? customersById.get(
+                order.customer_id
+              ) ?? null
+            : null,
+        sales_user:
+          order.sales_user_id
+            ? salesUsersById.get(
+                order.sales_user_id
+              ) ?? null
+            : null,
+        items:
+          itemsByOrderId.get(
+            order.id
+          ) ?? [],
+      } as OrderWithRelations)
+  );
+}
+
+export const ordersService = {
+  async getAll(): Promise<OrderWithRelations[]> {
+    const supabase = createSupabaseClient();
+  
+    // اطمینان از آماده بودن Session قبل از Query
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+  
+    if (sessionError) {
+      console.error(
+        "ORDERS SESSION ERROR:",
+        sessionError
+      );
+  
+      throw new Error(
+        "نشست کاربر معتبر نیست. لطفاً دوباره وارد شوید."
+      );
+    }
+  
+    if (!session) {
+      console.error(
+        "ORDERS GET ALL: هیچ Session فعالی وجود ندارد."
+      );
+  
+      throw new Error(
+        "نشست ورود شما فعال نیست. لطفاً دوباره وارد شوید."
+      );
+    }
+  
+    console.log(
+      "ORDERS AUTH USER:",
+      session.user.id
+    );
+  
+    console.log(
+      "ORDERS AUTH EMAIL:",
+      session.user.email
+    );
+  
     const {
       data,
       error,
     } = await supabase
       .from("orders")
-      .select(ORDER_SELECT)
+      .select("*")
       .eq(
         "company_id",
         COMPANY_ID
@@ -728,13 +834,13 @@ export const ordersService = {
           ascending: false,
         }
       );
-
+  
     if (error) {
       logSupabaseError(
         "GET ALL",
         error
       );
-
+  
       throw new Error(
         getErrorMessage(
           error,
@@ -742,11 +848,26 @@ export const ordersService = {
         )
       );
     }
-
-    return (
-      (data ??
-        []) as OrderWithRelations[]
-    ).map(mapOrder);
+  
+    const orderRows =
+      (data ?? []) as Order[];
+  
+    console.log(
+      "ORDERS GET ALL: تعداد سفارش‌های اصلی =",
+      orderRows.length
+    );
+  
+    const result =
+      await getOrdersWithRelations(
+        orderRows
+      );
+  
+    console.log(
+      "ORDERS GET ALL: تعداد نهایی =",
+      result.length
+    );
+  
+    return result;
   },
 
   async getById(
@@ -766,7 +887,7 @@ export const ordersService = {
       error,
     } = await supabase
       .from("orders")
-      .select(ORDER_SELECT)
+      .select("*")
       .eq(
         "id",
         orderId
@@ -795,9 +916,21 @@ export const ordersService = {
       );
     }
 
-    return mapOrder(
-      data as OrderWithRelations
-    );
+    const result =
+      await getOrdersWithRelations([
+        data as Order,
+      ]);
+
+    const order =
+      result[0];
+
+    if (!order) {
+      throw new Error(
+        "سفارش موردنظر پیدا نشد."
+      );
+    }
+
+    return order;
   },
 
   async getByCustomerId(
@@ -817,7 +950,7 @@ export const ordersService = {
       error,
     } = await supabase
       .from("orders")
-      .select(ORDER_SELECT)
+      .select("*")
       .eq(
         "customer_id",
         id
@@ -857,10 +990,10 @@ export const ordersService = {
       );
     }
 
-    return (
+    return getOrdersWithRelations(
       (data ??
-        []) as OrderWithRelations[]
-    ).map(mapOrder);
+        []) as Order[]
+    );
   },
 
   async getByDateRange(
@@ -893,7 +1026,7 @@ export const ordersService = {
       error,
     } = await supabase
       .from("orders")
-      .select(ORDER_SELECT)
+      .select("*")
       .eq(
         "company_id",
         COMPANY_ID
@@ -937,15 +1070,13 @@ export const ordersService = {
       );
     }
 
-    return (
+    return getOrdersWithRelations(
       (data ??
-        []) as OrderWithRelations[]
-    ).map(mapOrder);
+        []) as Order[]
+    );
   },
 
-  async getProducts(): Promise<
-    ProductRecord[]
-  > {
+  async getProducts(): Promise<ProductRecord[]> {
     const supabase =
       createSupabaseClient();
 
@@ -1039,26 +1170,17 @@ export const ordersService = {
         input.total_tonnage
       );
 
-    /*
-     * اگر اقلام وجود داشته باشند،
-     * مجموع واقعی آن‌ها بعد از INSERT
-     * توسط Trigger دیتابیس محاسبه می‌شود.
-     *
-     * مقدار total_tonnage برای سازگاری
-     * با ساختار فعلی orders نگه داشته شده است.
-     */
     validateTonnage(
       inputTonnage
     );
 
-    let resolvedItems:
-      Array<{
-        product_id: string;
-        product_name_snapshot: string;
-        quantity: number;
-        weight_kg_snapshot: number;
-        bag_weight_kg: number;
-      }> = [];
+    let resolvedItems: Array<{
+      product_id: string;
+      product_name_snapshot: string;
+      quantity: number;
+      weight_kg_snapshot: number;
+      bag_weight_kg: number;
+    }> = [];
 
     if (
       input.items &&
@@ -1078,42 +1200,20 @@ export const ordersService = {
       .insert({
         company_id:
           COMPANY_ID,
-
         customer_id:
           customerId,
-
         sales_user_id:
           salesUserId,
-
         order_date:
           orderDate,
-
         status,
-
         total_tonnage:
           inputTonnage,
-
         notes:
           input.notes ?? null,
-
         source,
       })
-      .select(`
-        *,
-        customer:customers!orders_customer_id_fkey (
-          id,
-          name,
-          phone,
-          customer_type
-        ),
-        sales_user:users!orders_sales_user_id_fkey (
-          id,
-          full_name,
-          phone,
-          job_title,
-          employee_code
-        )
-      `)
+      .select("*")
       .single();
 
     if (orderError) {
@@ -1136,38 +1236,21 @@ export const ordersService = {
     if (
       resolvedItems.length > 0
     ) {
-      /*
-       * مهم:
-       *
-       * tonnage ارسال نمی‌شود.
-       *
-       * weight_kg_snapshot هم توسط
-       * Trigger دیتابیس بازنویسی می‌شود
-       * و از products.weight_kg می‌آید.
-       *
-       * product_id هم همیشه معتبر است.
-       */
       const itemsPayload =
         resolvedItems.map(
           (item) => ({
             company_id:
               COMPANY_ID,
-
             order_id:
               order.id,
-
             product_id:
               item.product_id,
-
             product_name_snapshot:
               item.product_name_snapshot,
-
             quantity:
               item.quantity,
-
             weight_kg_snapshot:
               item.weight_kg_snapshot,
-
             bag_weight_kg:
               item.bag_weight_kg,
           })
@@ -1178,9 +1261,7 @@ export const ordersService = {
         error: itemsError,
       } =
         await supabase
-          .from(
-            "order_items"
-          )
+          .from("order_items")
           .insert(
             itemsPayload
           )
@@ -1202,7 +1283,6 @@ export const ordersService = {
           .update({
             deleted_at:
               now,
-
             updated_at:
               now,
           })
@@ -1228,64 +1308,20 @@ export const ordersService = {
           []) as OrderItem[];
     }
 
-    /*
-     * Trigger دیتابیس هنگام INSERT
-     * روی order_items اجرا می‌شود و
-     * orders.total_tonnage را تازه می‌کند.
-     *
-     * برای دریافت مقدار نهایی واقعی،
-     * سفارش را مجدداً از دیتابیس می‌خوانیم.
-     */
-    if (
-      resolvedItems.length > 0
-    ) {
-      const {
-        data: refreshedOrder,
-        error:
-          refreshError,
-      } =
-        await supabase
-          .from("orders")
-          .select(
-            ORDER_SELECT
-          )
-          .eq(
-            "id",
-            order.id
-          )
-          .eq(
-            "company_id",
-            COMPANY_ID
-          )
-          .is(
-            "deleted_at",
-            null
-          )
-          .single();
+    const refreshed =
+      await this.getById(
+        order.id
+      );
 
-      if (
-        !refreshError &&
-        refreshedOrder
-      ) {
-        return mapOrder(
-          refreshedOrder as OrderWithRelations
-        );
-      }
+    if (refreshed) {
+      return refreshed;
     }
 
     return {
       ...(order as OrderWithRelations),
-
-      customer:
-        order.customer ??
-        null,
-
-      sales_user:
-        order.sales_user ??
-        null,
-
-      items:
-        savedItems,
+      customer: null,
+      sales_user: null,
+      items: savedItems,
     };
   },
 
@@ -1413,9 +1449,7 @@ export const ordersService = {
         "deleted_at",
         null
       )
-      .select(
-        ORDER_SELECT
-      )
+      .select("*")
       .single();
 
     if (error) {
@@ -1432,8 +1466,8 @@ export const ordersService = {
       );
     }
 
-    return mapOrder(
-      data as OrderWithRelations
+    return this.getById(
+      data.id
     );
   },
 
@@ -1518,31 +1552,17 @@ export const ordersService = {
       normalized
     );
 
+    const result =
+      await resolveOrderItemProduct(
+        normalized
+      );
+
     const {
       productId,
       weightKg,
-      productName,
-    } = await (async () => {
-      const result =
-        await resolveOrderItemProduct(
-          normalized
-        );
+      product,
+    } = result;
 
-      return {
-        productId:
-          result.productId,
-
-        weightKg:
-          result.weightKg,
-
-        productName:
-          result.product.name,
-      };
-    })();
-
-    /*
-     * tonnage ارسال نمی‌شود.
-     */
     const {
       data,
       error,
@@ -1551,26 +1571,20 @@ export const ordersService = {
       .insert({
         company_id:
           COMPANY_ID,
-
         order_id:
           id,
-
         product_id:
           productId,
-
         product_name_snapshot:
-          productName,
-
+          product.name,
         quantity:
           Math.trunc(
             normalized.quantity
           ),
-
         weight_kg_snapshot:
           Math.round(
             weightKg
           ),
-
         bag_weight_kg:
           normalized.bag_weight_kg,
       })
@@ -1618,31 +1632,17 @@ export const ordersService = {
       normalized
     );
 
+    const result =
+      await resolveOrderItemProduct(
+        normalized
+      );
+
     const {
       productId,
       weightKg,
-      productName,
-    } = await (async () => {
-      const result =
-        await resolveOrderItemProduct(
-          normalized
-        );
+      product,
+    } = result;
 
-      return {
-        productId:
-          result.productId,
-
-        weightKg:
-          result.weightKg,
-
-        productName:
-          result.product.name,
-      };
-    })();
-
-    /*
-     * tonnage عمداً ارسال نمی‌شود.
-     */
     const {
       data,
       error,
@@ -1651,23 +1651,18 @@ export const ordersService = {
       .update({
         product_id:
           productId,
-
         product_name_snapshot:
-          productName,
-
+          product.name,
         quantity:
           Math.trunc(
             normalized.quantity
           ),
-
         weight_kg_snapshot:
           Math.round(
             weightKg
           ),
-
         bag_weight_kg:
           normalized.bag_weight_kg,
-
         updated_at:
           new Date().toISOString(),
       })
@@ -1728,7 +1723,6 @@ export const ordersService = {
       .update({
         deleted_at:
           now,
-
         updated_at:
           now,
       })
@@ -1791,7 +1785,6 @@ export const ordersService = {
       .update({
         deleted_at:
           now,
-
         updated_at:
           now,
       })
@@ -1851,7 +1844,6 @@ export const ordersService = {
       .update({
         deleted_at:
           null,
-
         updated_at:
           new Date().toISOString(),
       })
@@ -1868,9 +1860,7 @@ export const ordersService = {
         "is",
         null
       )
-      .select(
-        ORDER_SELECT
-      )
+      .select("*")
       .single();
 
     if (error) {
@@ -1887,8 +1877,8 @@ export const ordersService = {
       );
     }
 
-    return mapOrder(
-      data as OrderWithRelations
+    return this.getById(
+      data.id
     );
   },
 };

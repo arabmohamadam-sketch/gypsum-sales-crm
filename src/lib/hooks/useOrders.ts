@@ -1,6 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 
 import {
   ordersService,
@@ -10,85 +14,171 @@ import {
 
 import type { Order } from "@/src/lib/types/order";
 
+import { useAuth } from "@/src/lib/auth/AuthProvider";
+
 export function useOrders() {
-  const [data, setData] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    loading: authLoading,
+    isAuthenticated,
+  } = useAuth();
 
-  const fetchOrders = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const [mounted, setMounted] =
+    useState(false);
 
-      const orders = await ordersService.getAll();
+  const [data, setData] =
+    useState<Order[]>([]);
 
-      setData(orders);
-    } catch (err) {
-      console.error(err);
+  const [loading, setLoading] =
+    useState(false);
 
-      setError(
-        err instanceof Error
-          ? err.message
-          : "خطا در دریافت سفارش‌ها"
-      );
-    } finally {
-      setLoading(false);
-    }
+  const [error, setError] =
+    useState<string | null>(null);
+
+  /*
+   * سرور و اولین render مرورگر باید دقیقاً
+   * یک خروجی داشته باشند.
+   */
+  useEffect(() => {
+    setMounted(true);
   }, []);
 
+  const fetchOrders =
+    useCallback(async () => {
+      if (!mounted) {
+        return;
+      }
+
+      if (authLoading) {
+        return;
+      }
+
+      if (!isAuthenticated) {
+        setData([]);
+        setError(
+          "برای دریافت سفارش‌ها باید وارد حساب کاربری شوید."
+        );
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        const orders =
+          await ordersService.getAll();
+
+        setData(orders);
+      } catch (err) {
+        console.error(
+          "USE ORDERS ERROR:",
+          err
+        );
+
+        setData([]);
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "خطا در دریافت سفارش‌ها."
+        );
+      } finally {
+        setLoading(false);
+      }
+    }, [
+      mounted,
+      authLoading,
+      isAuthenticated,
+    ]);
+
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void fetchOrders();
-    }, 0);
+    if (!mounted) {
+      return;
+    }
+
+    if (authLoading) {
+      return;
+    }
+
+    const timer =
+      window.setTimeout(() => {
+        void fetchOrders();
+      }, 0);
 
     return () => {
       window.clearTimeout(timer);
     };
-  }, [fetchOrders]);
+  }, [
+    mounted,
+    authLoading,
+    isAuthenticated,
+    fetchOrders,
+  ]);
 
-  const createOrder = useCallback(
-    async (input: CreateOrderInput) => {
-      const order = await ordersService.create(input);
+  const createOrder =
+    useCallback(
+      async (
+        input: CreateOrderInput
+      ) => {
+        const order =
+          await ordersService.create(
+            input
+          );
 
-      await fetchOrders();
+        await fetchOrders();
 
-      return order;
-    },
-    [fetchOrders]
-  );
+        return order;
+      },
+      [fetchOrders]
+    );
 
-  const updateOrder = useCallback(
-    async (
-      id: string,
-      input: UpdateOrderInput
-    ) => {
-      const order = await ordersService.update(
-        id,
-        input
-      );
+  const updateOrder =
+    useCallback(
+      async (
+        id: string,
+        input: UpdateOrderInput
+      ) => {
+        const order =
+          await ordersService.update(
+            id,
+            input
+          );
 
-      await fetchOrders();
+        await fetchOrders();
 
-      return order;
-    },
-    [fetchOrders]
-  );
+        return order;
+      },
+      [fetchOrders]
+    );
 
-  const deleteOrder = useCallback(
-    async (id: string) => {
-      await ordersService.softDelete(id);
+  const deleteOrder =
+    useCallback(
+      async (id: string) => {
+        await ordersService.softDelete(
+          id
+        );
 
-      await fetchOrders();
-    },
-    [fetchOrders]
-  );
+        await fetchOrders();
+      },
+      [fetchOrders]
+    );
 
   return {
     data,
     orders: data,
-    loading,
+
+    /*
+     * تا قبل از hydration همیشه false است
+     * تا HTML سرور و اولین HTML کلاینت یکسان بمانند.
+     */
+    loading:
+      mounted &&
+      (authLoading || loading),
+
     error,
+
     refresh: fetchOrders,
+
     createOrder,
     updateOrder,
     deleteOrder,

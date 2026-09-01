@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+
 import {
   ArrowLeft,
   CalendarDays,
@@ -13,29 +13,57 @@ import {
   RefreshCw,
   Search,
   Truck,
+  UserRound,
   XCircle,
 } from "lucide-react";
 
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import { waybillsService } from "@/src/lib/services/waybills";
+
+import {
+  ordersService,
+  type OrderWithRelations,
+} from "@/src/lib/services/orders";
+
 import type {
   Waybill,
   WaybillStatus,
 } from "@/src/lib/types/waybill";
+
 import { formatJalaliDate } from "@/src/lib/utils/jalali";
 
-type FilterStatus = "all" | WaybillStatus;
+type FilterStatus =
+  | "all"
+  | WaybillStatus;
 
-function formatNumber(value: number): string {
+type OrderMap = Record<
+  string,
+  OrderWithRelations
+>;
+
+function formatNumber(
+  value: number
+): string {
   if (!Number.isFinite(value)) {
     return "۰";
   }
 
-  return new Intl.NumberFormat("fa-IR", {
-    maximumFractionDigits: 2,
-  }).format(value);
+  return new Intl.NumberFormat(
+    "fa-IR",
+    {
+      maximumFractionDigits: 2,
+    }
+  ).format(value);
 }
 
-function getStatusLabel(status: string): string {
+function getStatusLabel(
+  status: string
+): string {
   switch (status) {
     case "draft":
       return "پیش‌نویس";
@@ -54,7 +82,9 @@ function getStatusLabel(status: string): string {
   }
 }
 
-function getStatusClass(status: string): string {
+function getStatusClass(
+  status: string
+): string {
   switch (status) {
     case "issued":
       return "bg-blue-50 text-blue-700 ring-1 ring-blue-100";
@@ -71,43 +101,192 @@ function getStatusClass(status: string): string {
   }
 }
 
-function getStatusIcon(status: string) {
+function getStatusIcon(
+  status: string
+) {
   switch (status) {
     case "loading_confirmed":
-      return <CheckCircle2 size={14} />;
+      return (
+        <CheckCircle2 size={14} />
+      );
 
     case "cancelled":
-      return <XCircle size={14} />;
+      return (
+        <XCircle size={14} />
+      );
 
     case "issued":
-      return <Truck size={14} />;
+      return (
+        <Truck size={14} />
+      );
 
     case "draft":
     default:
-      return <Clock3 size={14} />;
+      return (
+        <Clock3 size={14} />
+      );
   }
 }
 
-function getOrderTonnage(waybill: Waybill): number {
-  return (waybill.items ?? []).reduce(
-    (sum, item) => {
-      const tonnage = Number(item.tonnage ?? 0);
+function getLoadingStatusLabel(
+  waybill: Waybill
+): string {
+  if (
+    waybill.status ===
+    "loading_confirmed"
+  ) {
+    return "بارگیری تأیید شده";
+  }
 
-      if (tonnage > 0) {
-        return sum + tonnage;
+  if (
+    waybill.loading?.status ===
+    "confirmed"
+  ) {
+    return "بارگیری تأیید شده";
+  }
+
+  if (
+    waybill.loading?.status ===
+    "pending"
+  ) {
+    return "در انتظار بارگیری";
+  }
+
+  if (
+    waybill.loading?.status ===
+    "cancelled"
+  ) {
+    return "بارگیری لغو شده";
+  }
+
+  if (
+    waybill.status ===
+    "issued"
+  ) {
+    return "آماده بارگیری";
+  }
+
+  if (
+    waybill.status ===
+    "draft"
+  ) {
+    return "هنوز صادر نشده";
+  }
+
+  return "—";
+}
+
+function getLoadingStatusClass(
+  waybill: Waybill
+): string {
+  if (
+    waybill.status ===
+    "loading_confirmed" ||
+    waybill.loading?.status ===
+      "confirmed"
+  ) {
+    return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100";
+  }
+
+  if (
+    waybill.loading?.status ===
+    "pending"
+  ) {
+    return "bg-blue-50 text-blue-700 ring-1 ring-blue-100";
+  }
+
+  if (
+    waybill.loading?.status ===
+    "cancelled"
+  ) {
+    return "bg-red-50 text-red-700 ring-1 ring-red-100";
+  }
+
+  return "bg-slate-100 text-slate-600 ring-1 ring-slate-200";
+}
+
+function getWaybillTonnage(
+  waybill: Waybill
+): number {
+  return (
+    waybill.items ?? []
+  ).reduce(
+    (sum, item) => {
+      const directTonnage =
+        Number(item.tonnage ?? 0);
+
+      if (
+        Number.isFinite(
+          directTonnage
+        ) &&
+        directTonnage > 0
+      ) {
+        return (
+          sum + directTonnage
+        );
+      }
+
+      const quantity =
+        Number(
+          item.quantity ?? 0
+        );
+
+      const weight =
+        Number(
+          item.weight_kg_snapshot ??
+            0
+        );
+
+      if (
+        !Number.isFinite(
+          quantity
+        ) ||
+        !Number.isFinite(
+          weight
+        )
+      ) {
+        return sum;
       }
 
       return (
         sum +
-        (
-          Number(item.quantity ?? 0) *
-          Number(item.weight_kg_snapshot ?? 0)
-        ) /
+        (quantity * weight) /
           1000
       );
     },
     0
   );
+}
+
+function getLoadingTonnage(
+  waybill: Waybill
+): number {
+  if (
+    waybill.status !==
+    "loading_confirmed"
+  ) {
+    return 0;
+  }
+
+  return getWaybillTonnage(
+    waybill
+  );
+}
+
+function formatDateSafe(
+  value?: string | null
+): string {
+  if (!value) {
+    return "—";
+  }
+
+  try {
+    return formatJalaliDate(
+      value
+    );
+  } catch {
+    return value;
+  }
 }
 
 function StatCard({
@@ -177,15 +356,33 @@ function EmptyState({
 }
 
 export default function WaybillsPage() {
-  const [waybills, setWaybills] = useState<Waybill[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
+  const [waybills, setWaybills] =
+    useState<Waybill[]>([]);
+
+  const [ordersById, setOrdersById] =
+    useState<OrderMap>({});
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
+  const [relationsLoading, setRelationsLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [search, setSearch] =
+    useState("");
+
   const [statusFilter, setStatusFilter] =
     useState<FilterStatus>("all");
 
-  async function loadWaybills(showRefreshState = false) {
+  async function loadWaybills(
+    showRefreshState = false
+  ) {
     try {
       if (showRefreshState) {
         setRefreshing(true);
@@ -195,11 +392,83 @@ export default function WaybillsPage() {
 
       setError("");
 
-      const result = await waybillsService.getAll();
+      const result =
+        await waybillsService.getAll();
 
       setWaybills(result);
+
+      const orderIds =
+        Array.from(
+          new Set(
+            result
+              .map(
+                (waybill) =>
+                  waybill.order_id
+              )
+              .filter(Boolean)
+          )
+        );
+
+      if (
+        orderIds.length > 0
+      ) {
+        setRelationsLoading(
+          true
+        );
+
+        const entries =
+          await Promise.all(
+            orderIds.map(
+              async (orderId) => {
+                try {
+                  const order =
+                    await ordersService.getById(
+                      orderId
+                    );
+
+                  return [
+                    orderId,
+                    order,
+                  ] as const;
+                } catch (err) {
+                  console.error(
+                    "WAYBILL ORDER LOAD ERROR:",
+                    orderId,
+                    err
+                  );
+
+                  return null;
+                }
+              }
+            )
+          );
+
+        const nextOrders: OrderMap =
+          {};
+
+        for (
+          const entry of entries
+        ) {
+          if (!entry) {
+            continue;
+          }
+
+          nextOrders[
+            entry[0]
+          ] = entry[1];
+        }
+
+        setOrdersById(
+          nextOrders
+        );
+      } else {
+        setOrdersById({});
+      }
     } catch (err) {
-      console.error("Waybills load error:", err);
+      console.error(
+        "WAYBILLS LOAD ERROR:",
+        err
+      );
 
       setError(
         err instanceof Error
@@ -209,6 +478,7 @@ export default function WaybillsPage() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setRelationsLoading(false);
     }
   }
 
@@ -216,71 +486,146 @@ export default function WaybillsPage() {
     void loadWaybills();
   }, []);
 
-  const filteredWaybills = useMemo(() => {
-    const query = search.trim().toLowerCase();
+  const filteredWaybills =
+    useMemo(() => {
+      const query =
+        search
+          .trim()
+          .toLowerCase();
 
-    return waybills.filter((waybill) => {
-      const matchesStatus =
-        statusFilter === "all" ||
-        waybill.status === statusFilter;
+      return waybills.filter(
+        (waybill) => {
+          const matchesStatus =
+            statusFilter ===
+              "all" ||
+            waybill.status ===
+              statusFilter;
 
-      if (!matchesStatus) {
-        return false;
-      }
+          if (
+            !matchesStatus
+          ) {
+            return false;
+          }
 
-      if (!query) {
-        return true;
-      }
+          if (!query) {
+            return true;
+          }
 
-      const searchableText = [
-        String(waybill.waybill_number),
-        waybill.id,
-        waybill.order_id,
-        waybill.notes ?? "",
-        waybill.waybill_date,
-        ...(waybill.items ?? []).map(
-          (item) =>
-            `${item.product_name_snapshot} ${item.product_id}`
-        ),
-      ]
-        .join(" ")
-        .toLowerCase();
+          const order =
+            ordersById[
+              waybill.order_id
+            ];
 
-      return searchableText.includes(query);
-    });
-  }, [waybills, search, statusFilter]);
+          const searchableText = [
+            String(
+              waybill.waybill_number
+            ),
+            waybill.id,
+            waybill.order_id,
+            waybill.waybill_date,
+            waybill.notes ?? "",
+            order?.customer?.name ??
+              "",
+            order?.customer?.phone ??
+              "",
+            order?.customer
+              ?.customer_type ??
+              "",
+            order?.total_tonnage ??
+              "",
+            ...(waybill.items ??
+              []
+            ).map(
+              (item) =>
+                `${item.product_name_snapshot ?? ""} ${
+                  item.product_id
+                }`
+            ),
+            getStatusLabel(
+              waybill.status
+            ),
+            getLoadingStatusLabel(
+              waybill
+            ),
+          ]
+            .join(" ")
+            .toLowerCase();
 
-  const totalTonnage = useMemo(() => {
-    return filteredWaybills.reduce(
-      (sum, waybill) => sum + getOrderTonnage(waybill),
-      0
-    );
-  }, [filteredWaybills]);
+          return searchableText.includes(
+            query
+          );
+        }
+      );
+    }, [
+      waybills,
+      ordersById,
+      search,
+      statusFilter,
+    ]);
 
-  const issuedCount = filteredWaybills.filter(
-    (waybill) => waybill.status === "issued"
-  ).length;
+  const totalTonnage =
+    useMemo(() => {
+      return filteredWaybills.reduce(
+        (sum, waybill) =>
+          sum +
+          getWaybillTonnage(
+            waybill
+          ),
+        0
+      );
+    }, [filteredWaybills]);
 
-  const loadingConfirmedCount = filteredWaybills.filter(
-    (waybill) =>
-      waybill.status === "loading_confirmed"
-  ).length;
+  const loadingTonnage =
+    useMemo(() => {
+      return filteredWaybills.reduce(
+        (sum, waybill) =>
+          sum +
+          getLoadingTonnage(
+            waybill
+          ),
+        0
+      );
+    }, [filteredWaybills]);
 
-  const draftCount = filteredWaybills.filter(
-    (waybill) => waybill.status === "draft"
-  ).length;
+  const issuedCount =
+    filteredWaybills.filter(
+      (waybill) =>
+        waybill.status ===
+        "issued"
+    ).length;
 
-  const cancelledCount = filteredWaybills.filter(
-    (waybill) => waybill.status === "cancelled"
-  ).length;
+  const loadingConfirmedCount =
+    filteredWaybills.filter(
+      (waybill) =>
+        waybill.status ===
+        "loading_confirmed"
+    ).length;
+
+  const draftCount =
+    filteredWaybills.filter(
+      (waybill) =>
+        waybill.status ===
+        "draft"
+    ).length;
+
+  const cancelledCount =
+    filteredWaybills.filter(
+      (waybill) =>
+        waybill.status ===
+        "cancelled"
+    ).length;
 
   const hasFilters =
-    Boolean(search.trim()) ||
+    Boolean(
+      search.trim()
+    ) ||
     statusFilter !== "all";
 
   function resetFilters() {
     setSearch("");
-    setStatusFilter("all");
+    setStatusFilter(
+      "all"
+    );
   }
 
   return (
@@ -288,6 +633,7 @@ export default function WaybillsPage() {
       dir="rtl"
       className="mx-auto max-w-[1600px] space-y-6 pb-14"
     >
+      {/* Hero */}
       <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-slate-900 via-violet-600 to-blue-600" />
 
@@ -321,16 +667,26 @@ export default function WaybillsPage() {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => void loadWaybills(true)}
-              disabled={refreshing || loading}
+              onClick={() =>
+                void loadWaybills(
+                  true
+                )
+              }
+              disabled={
+                refreshing ||
+                loading
+              }
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <RefreshCw
                 size={17}
                 className={
-                  refreshing ? "animate-spin" : ""
+                  refreshing
+                    ? "animate-spin"
+                    : ""
                 }
               />
+
               به‌روزرسانی
             </button>
 
@@ -338,55 +694,103 @@ export default function WaybillsPage() {
               href="/orders"
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-600"
             >
-              <Package size={17} />
+              <Package
+                size={17}
+              />
+
               سفارش‌ها
             </Link>
           </div>
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+      {/* Stats */}
+      <section className="grid grid-cols-2 gap-4 xl:grid-cols-6">
         <StatCard
           title="کل حواله‌ها"
-          value={formatNumber(filteredWaybills.length)}
+          value={formatNumber(
+            filteredWaybills.length
+          )}
           description="حواله نمایش داده‌شده"
-          icon={<FileText size={20} />}
+          icon={
+            <FileText
+              size={20}
+            />
+          }
           className="bg-slate-100 text-slate-700"
         />
 
         <StatCard
           title="مجموع تناژ"
-          value={formatNumber(totalTonnage)}
+          value={formatNumber(
+            totalTonnage
+          )}
           description="تناژ حواله‌ها"
-          icon={<Package size={20} />}
+          icon={
+            <Package
+              size={20}
+            />
+          }
           className="bg-blue-50 text-blue-700"
         />
 
         <StatCard
           title="صادر شده"
-          value={formatNumber(issuedCount)}
+          value={formatNumber(
+            issuedCount
+          )}
           description="حواله آماده بارگیری"
-          icon={<Truck size={20} />}
+          icon={
+            <Truck size={20} />
+          }
           className="bg-blue-50 text-blue-700"
         />
 
         <StatCard
           title="بارگیری تأیید شده"
-          value={formatNumber(loadingConfirmedCount)}
+          value={formatNumber(
+            loadingConfirmedCount
+          )}
           description="بارگیری نهایی"
-          icon={<CheckCircle2 size={20} />}
+          icon={
+            <CheckCircle2
+              size={20}
+            />
+          }
           className="bg-emerald-50 text-emerald-700"
         />
 
         <StatCard
+          title="تناژ بارگیری"
+          value={formatNumber(
+            loadingTonnage
+          )}
+          description="تناژ نهایی بارگیری"
+          icon={
+            <Truck
+              size={20}
+            />
+          }
+          className="bg-violet-50 text-violet-700"
+        />
+
+        <StatCard
           title="پیش‌نویس / لغو"
-          value={formatNumber(draftCount + cancelledCount)}
+          value={formatNumber(
+            draftCount +
+              cancelledCount
+          )}
           description="وضعیت‌های غیرنهایی"
-          icon={<Clock3 size={20} />}
+          icon={
+            <Clock3
+              size={20}
+            />
+          }
           className="bg-amber-50 text-amber-700"
         />
       </section>
 
+      {/* Filters */}
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -395,13 +799,19 @@ export default function WaybillsPage() {
             </h2>
 
             <p className="mt-1 text-sm leading-6 text-slate-500">
-              بر اساس شماره حواله، شناسه سفارش، محصول یا وضعیت جستجو کنید.
+              بر اساس شماره حواله، مشتری، شناسه سفارش، محصول یا وضعیت جستجو کنید.
             </p>
           </div>
 
           <div className="inline-flex w-fit items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
-            <FileText size={13} />
-            {formatNumber(filteredWaybills.length)} حواله
+            <FileText
+              size={13}
+            />
+
+            {formatNumber(
+              filteredWaybills.length
+            )}{" "}
+            حواله
           </div>
         </div>
 
@@ -425,9 +835,11 @@ export default function WaybillsPage() {
                 type="text"
                 value={search}
                 onChange={(event) =>
-                  setSearch(event.target.value)
+                  setSearch(
+                    event.target.value
+                  )
                 }
-                placeholder="شماره حواله، شناسه سفارش، نام محصول..."
+                placeholder="شماره حواله، مشتری، شناسه سفارش، نام محصول..."
                 autoComplete="off"
                 className="min-h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pr-11 pl-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
               />
@@ -444,10 +856,13 @@ export default function WaybillsPage() {
 
             <select
               id="waybill-status"
-              value={statusFilter}
+              value={
+                statusFilter
+              }
               onChange={(event) =>
                 setStatusFilter(
-                  event.target.value as FilterStatus
+                  event.target
+                    .value as FilterStatus
                 )
               }
               className="min-h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
@@ -479,7 +894,9 @@ export default function WaybillsPage() {
           <div className="mt-5 border-t border-slate-100 pt-5">
             <button
               type="button"
-              onClick={resetFilters}
+              onClick={
+                resetFilters
+              }
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 transition hover:bg-slate-50"
             >
               پاک کردن فیلترها
@@ -488,6 +905,7 @@ export default function WaybillsPage() {
         )}
       </section>
 
+      {/* Loading */}
       {loading ? (
         <section className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
@@ -507,7 +925,9 @@ export default function WaybillsPage() {
 
           <div className="p-8">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600">
-              <XCircle size={25} />
+              <XCircle
+                size={25}
+              />
             </div>
 
             <h2 className="mt-5 text-xl font-black text-slate-900">
@@ -520,16 +940,28 @@ export default function WaybillsPage() {
 
             <button
               type="button"
-              onClick={() => void loadWaybills(true)}
+              onClick={() =>
+                void loadWaybills(
+                  true
+                )
+              }
               className="mt-5 inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-red-700"
             >
-              <RefreshCw size={17} />
+              <RefreshCw
+                size={17}
+              />
+
               تلاش مجدد
             </button>
           </div>
         </section>
-      ) : filteredWaybills.length === 0 ? (
-        <EmptyState hasFilter={hasFilters} />
+      ) : filteredWaybills.length ===
+        0 ? (
+        <EmptyState
+          hasFilter={
+            hasFilters
+          }
+        />
       ) : (
         <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-slate-50/70 px-5 py-5 md:px-6">
@@ -544,15 +976,34 @@ export default function WaybillsPage() {
                 </p>
               </div>
 
-              <div className="inline-flex w-fit items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-slate-600 ring-1 ring-slate-200">
-                <FileText size={13} />
-                {formatNumber(filteredWaybills.length)} مورد
-              </div>
+              {relationsLoading && (
+                <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
+                  <Loader2
+                    size={13}
+                    className="animate-spin"
+                  />
+                  در حال دریافت اطلاعات سفارش
+                </div>
+              )}
+
+              {!relationsLoading && (
+                <div className="inline-flex w-fit items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-slate-600 ring-1 ring-slate-200">
+                  <FileText
+                    size={13}
+                  />
+
+                  {formatNumber(
+                    filteredWaybills.length
+                  )}{" "}
+                  مورد
+                </div>
+              )}
             </div>
           </div>
 
+          {/* Desktop */}
           <div className="hidden overflow-x-auto md:block">
-            <table className="min-w-[1150px] w-full text-right text-sm">
+            <table className="min-w-[1500px] w-full text-right text-sm">
               <thead className="border-b border-slate-100 bg-white">
                 <tr>
                   <th className="whitespace-nowrap px-5 py-4 font-bold text-slate-600">
@@ -564,6 +1015,10 @@ export default function WaybillsPage() {
                   </th>
 
                   <th className="px-5 py-4 font-bold text-slate-600">
+                    مشتری
+                  </th>
+
+                  <th className="px-5 py-4 font-bold text-slate-600">
                     سفارش
                   </th>
 
@@ -572,11 +1027,23 @@ export default function WaybillsPage() {
                   </th>
 
                   <th className="whitespace-nowrap px-5 py-4 font-bold text-slate-600">
-                    تناژ
+                    تناژ سفارش
+                  </th>
+
+                  <th className="whitespace-nowrap px-5 py-4 font-bold text-slate-600">
+                    تناژ حواله
                   </th>
 
                   <th className="px-5 py-4 font-bold text-slate-600">
                     وضعیت
+                  </th>
+
+                  <th className="px-5 py-4 font-bold text-slate-600">
+                    بارگیری
+                  </th>
+
+                  <th className="whitespace-nowrap px-5 py-4 font-bold text-slate-600">
+                    تاریخ بارگیری
                   </th>
 
                   <th className="whitespace-nowrap px-5 py-4 font-bold text-slate-600">
@@ -586,81 +1053,304 @@ export default function WaybillsPage() {
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {filteredWaybills.map((waybill) => {
-                  const tonnage =
-                    getOrderTonnage(waybill);
+                {filteredWaybills.map(
+                  (waybill) => {
+                    const order =
+                      ordersById[
+                        waybill.order_id
+                      ];
 
-                  return (
-                    <tr
-                      key={waybill.id}
-                      className="transition hover:bg-slate-50/70"
-                    >
-                      <td className="whitespace-nowrap px-5 py-5">
-                        <div className="font-black text-slate-900">
-                          {formatNumber(
-                            Number(
-                              waybill.waybill_number
-                            )
+                    const waybillTonnage =
+                      getWaybillTonnage(
+                        waybill
+                      );
+
+                    return (
+                      <tr
+                        key={
+                          waybill.id
+                        }
+                        className="transition hover:bg-slate-50/70"
+                      >
+                        <td className="whitespace-nowrap px-5 py-5">
+                          <div className="font-black text-slate-900">
+                            {formatNumber(
+                              Number(
+                                waybill.waybill_number
+                              )
+                            )}
+                          </div>
+
+                          <div
+                            dir="ltr"
+                            className="mt-1 max-w-[170px] truncate text-[11px] text-slate-400"
+                          >
+                            {
+                              waybill.id
+                            }
+                          </div>
+                        </td>
+
+                        <td className="whitespace-nowrap px-5 py-5">
+                          <div className="inline-flex items-center gap-2 text-slate-700">
+                            <CalendarDays
+                              size={16}
+                              className="text-slate-400"
+                            />
+
+                            {formatDateSafe(
+                              waybill.waybill_date
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-5">
+                          {order ? (
+                            <Link
+                              href={`/customers/${order.customer_id}`}
+                              className="group/customer flex min-w-[240px] items-center gap-3"
+                            >
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-sm font-black text-blue-700 transition group-hover/customer:bg-blue-100">
+                                {order.customer?.name?.charAt(
+                                  0
+                                ) ||
+                                  "م"}
+                              </div>
+
+                              <div className="min-w-0">
+                                <span className="block truncate font-black text-slate-900 transition group-hover/customer:text-blue-600">
+                                  {order.customer
+                                    ?.name ??
+                                    "مشتری نامشخص"}
+                                </span>
+
+                                {order.customer
+                                  ?.phone && (
+                                  <span
+                                    dir="ltr"
+                                    className="mt-1 block text-xs text-slate-500"
+                                  >
+                                    {
+                                      order
+                                        .customer
+                                        .phone
+                                    }
+                                  </span>
+                                )}
+                              </div>
+                            </Link>
+                          ) : (
+                            <div className="flex min-w-[240px] items-center gap-3">
+                              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
+                                <UserRound
+                                  size={18}
+                                />
+                              </div>
+
+                              <div>
+                                <span className="block font-bold text-slate-500">
+                                  اطلاعات مشتری در دسترس نیست
+                                </span>
+
+                                <span
+                                  dir="ltr"
+                                  className="mt-1 block text-[11px] text-slate-400"
+                                >
+                                  {
+                                    waybill.order_id
+                                  }
+                                </span>
+                              </div>
+                            </div>
                           )}
-                        </div>
+                        </td>
 
-                        <div className="mt-1 text-[11px] text-slate-400">
-                          {waybill.id}
-                        </div>
-                      </td>
+                        <td className="px-5 py-5">
+                          <Link
+                            href={`/orders/${waybill.order_id}`}
+                            className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-blue-50 hover:text-blue-700"
+                          >
+                            <Package
+                              size={14}
+                            />
 
-                      <td className="whitespace-nowrap px-5 py-5">
-                        <div className="inline-flex items-center gap-2 text-slate-700">
-                          <CalendarDays
-                            size={16}
-                            className="text-slate-400"
-                          />
+                            مشاهده سفارش
+                          </Link>
 
-                          {formatJalaliDate(
-                            waybill.waybill_date
+                          <p
+                            dir="ltr"
+                            className="mt-2 max-w-[220px] truncate text-[11px] text-slate-400"
+                          >
+                            {
+                              waybill.order_id
+                            }
+                          </p>
+                        </td>
+
+                        <td className="px-5 py-5">
+                          <span className="inline-flex items-center gap-2 rounded-xl bg-violet-50 px-3 py-2 font-bold text-violet-700">
+                            <FileText
+                              size={14}
+                            />
+
+                            {formatNumber(
+                              waybill.items
+                                ?.length ??
+                                0
+                            )}{" "}
+                            قلم
+                          </span>
+                        </td>
+
+                        <td className="whitespace-nowrap px-5 py-5">
+                          <div className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-2">
+                            <span className="font-black text-slate-800">
+                              {formatNumber(
+                                Number(
+                                  order?.total_tonnage ??
+                                    0
+                                )
+                              )}
+                            </span>
+
+                            <span className="text-xs text-slate-500">
+                              تن
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="whitespace-nowrap px-5 py-5">
+                          <div className="inline-flex items-center gap-1 rounded-xl bg-emerald-50 px-3 py-2">
+                            <span className="font-black text-emerald-800">
+                              {formatNumber(
+                                waybillTonnage
+                              )}
+                            </span>
+
+                            <span className="text-xs font-bold text-emerald-600">
+                              تن
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-5">
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${getStatusClass(
+                              waybill.status
+                            )}`}
+                          >
+                            {getStatusIcon(
+                              waybill.status
+                            )}
+
+                            {getStatusLabel(
+                              waybill.status
+                            )}
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-5">
+                          <span
+                            className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-bold ${getLoadingStatusClass(
+                              waybill
+                            )}`}
+                          >
+                            {getLoadingStatusLabel(
+                              waybill
+                            )}
+                          </span>
+                        </td>
+
+                        <td className="whitespace-nowrap px-5 py-5">
+                          {waybill.loading
+                            ?.loading_date ? (
+                            <div className="text-xs font-bold text-slate-700">
+                              {formatDateSafe(
+                                waybill
+                                  .loading
+                                  .loading_date
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">
+                              —
+                            </span>
                           )}
+                        </td>
+
+                        <td className="px-5 py-5">
+                          <div className="flex flex-wrap gap-2">
+                            <Link
+                              href={`/waybills/${waybill.id}`}
+                              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-600"
+                            >
+                              جزئیات حواله
+                              <ArrowLeft
+                                size={14}
+                              />
+                            </Link>
+
+                            <Link
+                              href={`/orders/${waybill.order_id}`}
+                              className="inline-flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-2.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
+                            >
+                              سفارش
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile */}
+          <div className="divide-y divide-slate-100 md:hidden">
+            {filteredWaybills.map(
+              (waybill) => {
+                const order =
+                  ordersById[
+                    waybill.order_id
+                  ];
+
+                const waybillTonnage =
+                  getWaybillTonnage(
+                    waybill
+                  );
+
+                return (
+                  <article
+                    key={
+                      waybill.id
+                    }
+                    className="p-4"
+                  >
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-bold text-slate-400">
+                            شماره حواله
+                          </p>
+
+                          <p className="mt-1 text-xl font-black text-slate-900">
+                            {formatNumber(
+                              Number(
+                                waybill.waybill_number
+                              )
+                            )}
+                          </p>
+
+                          <p className="mt-1 text-xs text-slate-400">
+                            {formatDateSafe(
+                              waybill.waybill_date
+                            )}
+                          </p>
                         </div>
-                      </td>
 
-                      <td className="px-5 py-5">
-                        <Link
-                          href={`/orders/${waybill.order_id}`}
-                          className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-blue-50 hover:text-blue-700"
-                        >
-                          <Package size={14} />
-                          مشاهده سفارش
-                        </Link>
-
-                        <p className="mt-2 max-w-[220px] truncate text-[11px] text-slate-400">
-                          {waybill.order_id}
-                        </p>
-                      </td>
-
-                      <td className="px-5 py-5">
-                        <span className="inline-flex items-center gap-2 rounded-xl bg-violet-50 px-3 py-2 font-bold text-violet-700">
-                          <FileText size={14} />
-                          {formatNumber(
-                            waybill.items?.length ?? 0
-                          )}{" "}
-                          قلم
-                        </span>
-                      </td>
-
-                      <td className="whitespace-nowrap px-5 py-5">
-                        <div className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2">
-                          <span className="font-black text-emerald-800">
-                            {formatNumber(tonnage)}
-                          </span>
-
-                          <span className="text-xs font-bold text-emerald-600">
-                            تن
-                          </span>
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-5">
                         <span
-                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold ${getStatusClass(
+                          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold ${getStatusClass(
                             waybill.status
                           )}`}
                         >
@@ -672,148 +1362,176 @@ export default function WaybillsPage() {
                             waybill.status
                           )}
                         </span>
-                      </td>
-
-                      <td className="px-5 py-5">
-                        <Link
-                          href={`/waybills/${waybill.id}`}
-                          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-600"
-                        >
-                          جزئیات حواله
-                          <ArrowLeft size={14} />
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="divide-y divide-slate-100 md:hidden">
-            {filteredWaybills.map((waybill) => {
-              const tonnage =
-                getOrderTonnage(waybill);
-
-              return (
-                <article
-                  key={waybill.id}
-                  className="p-4"
-                >
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-bold text-slate-400">
-                          شماره حواله
-                        </p>
-
-                        <p className="mt-1 text-xl font-black text-slate-900">
-                          {formatNumber(
-                            Number(
-                              waybill.waybill_number
-                            )
-                          )}
-                        </p>
                       </div>
 
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-bold ${getStatusClass(
-                          waybill.status
-                        )}`}
-                      >
-                        {getStatusIcon(
-                          waybill.status
-                        )}
+                      <div className="mt-4 rounded-2xl bg-blue-50/70 p-4">
+                        <p className="text-[10px] font-bold text-blue-400">
+                          مشتری
+                        </p>
 
-                        {getStatusLabel(
-                          waybill.status
-                        )}
-                      </span>
-                    </div>
+                        <div className="mt-2 flex items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-sm font-black text-blue-700">
+                            {order?.customer?.name?.charAt(
+                              0
+                            ) || "م"}
+                          </div>
 
-                    <div className="mt-4 grid grid-cols-2 gap-2.5">
-                      <div className="rounded-xl bg-slate-50 p-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black text-blue-900">
+                              {order
+                                ?.customer
+                                ?.name ??
+                                "مشتری نامشخص"}
+                            </p>
+
+                            {order
+                              ?.customer
+                              ?.phone && (
+                              <p
+                                dir="ltr"
+                                className="mt-1 text-xs text-blue-700"
+                              >
+                                {
+                                  order
+                                    .customer
+                                    .phone
+                                }
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-2.5">
+                        <div className="rounded-xl bg-slate-50 p-3">
+                          <p className="text-[10px] font-bold text-slate-400">
+                            تناژ سفارش
+                          </p>
+
+                          <p className="mt-1 text-sm font-black text-slate-800">
+                            {formatNumber(
+                              Number(
+                                order?.total_tonnage ??
+                                  0
+                              )
+                            )}{" "}
+                            تن
+                          </p>
+                        </div>
+
+                        <div className="rounded-xl bg-emerald-50 p-3">
+                          <p className="text-[10px] font-bold text-emerald-500">
+                            تناژ حواله
+                          </p>
+
+                          <p className="mt-1 text-sm font-black text-emerald-800">
+                            {formatNumber(
+                              waybillTonnage
+                            )}{" "}
+                            تن
+                          </p>
+                        </div>
+
+                        <div className="rounded-xl bg-violet-50 p-3">
+                          <p className="text-[10px] font-bold text-violet-500">
+                            تعداد اقلام
+                          </p>
+
+                          <p className="mt-1 text-sm font-black text-violet-800">
+                            {formatNumber(
+                              waybill
+                                .items
+                                ?.length ??
+                                0
+                            )}{" "}
+                            قلم
+                          </p>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-50 p-3">
+                          <p className="text-[10px] font-bold text-slate-400">
+                            تاریخ حواله
+                          </p>
+
+                          <p className="mt-1 text-xs font-black text-slate-700">
+                            {formatDateSafe(
+                              waybill.waybill_date
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 rounded-xl bg-slate-50 p-3">
                         <p className="text-[10px] font-bold text-slate-400">
-                          تاریخ حواله
+                          وضعیت بارگیری
                         </p>
 
-                        <p className="mt-1 text-xs font-black text-slate-700">
-                          {formatJalaliDate(
-                            waybill.waybill_date
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-1.5 text-[10px] font-bold ${getLoadingStatusClass(
+                              waybill
+                            )}`}
+                          >
+                            {getLoadingStatusLabel(
+                              waybill
+                            )}
+                          </span>
+
+                          {waybill.loading
+                            ?.loading_date && (
+                            <span className="text-[10px] font-bold text-slate-500">
+                              تاریخ:{" "}
+                              {formatDateSafe(
+                                waybill
+                                  .loading
+                                  .loading_date
+                              )}
+                            </span>
                           )}
-                        </p>
+                        </div>
                       </div>
 
-                      <div className="rounded-xl bg-emerald-50 p-3">
-                        <p className="text-[10px] font-bold text-emerald-500">
-                          تناژ
-                        </p>
-
-                        <p className="mt-1 text-sm font-black text-emerald-800">
-                          {formatNumber(tonnage)} تن
-                        </p>
-                      </div>
-
-                      <div className="rounded-xl bg-violet-50 p-3">
-                        <p className="text-[10px] font-bold text-violet-500">
-                          تعداد اقلام
-                        </p>
-
-                        <p className="mt-1 text-sm font-black text-violet-800">
-                          {formatNumber(
-                            waybill.items?.length ?? 0
-                          )}{" "}
-                          قلم
-                        </p>
-                      </div>
-
-                      <div className="rounded-xl bg-blue-50 p-3">
-                        <p className="text-[10px] font-bold text-blue-500">
-                          سفارش
+                      <div className="mt-3 rounded-xl bg-slate-50 p-3">
+                        <p className="text-[10px] font-bold text-slate-400">
+                          شناسه سفارش
                         </p>
 
                         <p
                           dir="ltr"
-                          className="mt-1 truncate text-[10px] font-medium text-blue-700"
+                          className="mt-1 truncate text-[10px] font-medium text-slate-500"
                         >
-                          {waybill.order_id}
+                          {
+                            waybill.order_id
+                          }
                         </p>
                       </div>
-                    </div>
 
-                    {waybill.notes && (
-                      <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
-                        <p className="text-[10px] font-bold text-slate-400">
-                          توضیحات
-                        </p>
+                      <div className="mt-4 flex flex-col gap-2">
+                        <Link
+                          href={`/waybills/${waybill.id}`}
+                          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white transition hover:bg-blue-600"
+                        >
+                          جزئیات حواله
+                          <ArrowLeft
+                            size={14}
+                          />
+                        </Link>
 
-                        <p className="mt-1 text-xs leading-6 text-slate-600">
-                          {waybill.notes}
-                        </p>
+                        <Link
+                          href={`/orders/${waybill.order_id}`}
+                          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+                        >
+                          مشاهده سفارش
+                          <Package
+                            size={14}
+                          />
+                        </Link>
                       </div>
-                    )}
-
-                    <div className="mt-4 flex flex-col gap-2">
-                      <Link
-                        href={`/waybills/${waybill.id}`}
-                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white transition hover:bg-blue-600"
-                      >
-                        جزئیات حواله
-                        <ArrowLeft size={14} />
-                      </Link>
-
-                      <Link
-                        href={`/orders/${waybill.order_id}`}
-                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
-                      >
-                        مشاهده سفارش
-                        <Package size={14} />
-                      </Link>
                     </div>
-                  </div>
-                </article>
-              );
-            })}
+                  </article>
+                );
+              }
+            )}
           </div>
         </section>
       )}

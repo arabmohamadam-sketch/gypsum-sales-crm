@@ -57,8 +57,7 @@ function toPersianDigits(
 
   return String(value).replace(
     /\d/g,
-    (digit) =>
-      digits[Number(digit)]
+    (digit) => digits[Number(digit)]
   );
 }
 
@@ -106,6 +105,20 @@ function getTodayJalali() {
     month: jalali.month,
     day: jalali.day,
   };
+}
+
+function getJalaliMonthLastDay(
+  month: number
+): number {
+  if (month >= 1 && month <= 6) {
+    return 31;
+  }
+
+  if (month >= 7 && month <= 11) {
+    return 30;
+  }
+
+  return 29;
 }
 
 function buildStartOfDayIso(
@@ -197,9 +210,7 @@ function getJalaliDateParts(
     return null;
   }
 
-  return gregorianToJalali(
-    date
-  );
+  return gregorianToJalali(date);
 }
 
 function ReportCard({
@@ -280,7 +291,7 @@ function SummaryItem({
   return (
     <div className="rounded-2xl bg-slate-50 p-5">
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-bold text-slate-500">
             {title}
           </p>
@@ -295,7 +306,7 @@ function SummaryItem({
         </div>
 
         <div
-          className={`flex h-11 w-11 items-center justify-center rounded-2xl ${iconClass}`}
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${iconClass}`}
         >
           {icon}
         </div>
@@ -339,8 +350,32 @@ function sortCityReports(
       const orderB =
         getCityTableOrder(b);
 
-      if (orderA !== orderB) {
-        return orderA - orderB;
+      if (
+        orderA !== orderB
+      ) {
+        return (
+          orderA - orderB
+        );
+      }
+
+      if (
+        b.salesTonnage !==
+        a.salesTonnage
+      ) {
+        return (
+          b.salesTonnage -
+          a.salesTonnage
+        );
+      }
+
+      if (
+        b.loadingTonnage !==
+        a.loadingTonnage
+      ) {
+        return (
+          b.loadingTonnage -
+          a.loadingTonnage
+        );
       }
 
       return a.cityName.localeCompare(
@@ -351,11 +386,164 @@ function sortCityReports(
   );
 }
 
+function CityPerformanceCard({
+  city,
+}: {
+  city: CityReport;
+}) {
+  const loadingRate =
+    city.salesTonnage > 0
+      ? Math.round(
+          (city.loadingTonnage /
+            city.salesTonnage) *
+            100
+        )
+      : 0;
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-black text-slate-900">
+            {city.cityName}
+          </h3>
+
+          <p className="mt-1 text-xs text-slate-400">
+            عملکرد فروش و عملیات
+          </p>
+        </div>
+
+        <div className="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700">
+          {formatNumber(
+            city.customersCount
+          )}{" "}
+          مشتری
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl bg-blue-50 p-4">
+          <p className="text-xs font-bold text-blue-700">
+            سفارش
+          </p>
+
+          <p className="mt-2 text-xl font-black text-blue-900">
+            {formatNumber(
+              city.ordersCount
+            )}
+          </p>
+        </div>
+
+        <div className="rounded-xl bg-emerald-50 p-4">
+          <p className="text-xs font-bold text-emerald-700">
+            فروش
+          </p>
+
+          <p className="mt-2 text-xl font-black text-emerald-900">
+            {formatTonnage(
+              city.salesTonnage
+            )}
+          </p>
+        </div>
+
+        <div className="rounded-xl bg-violet-50 p-4">
+          <p className="text-xs font-bold text-violet-700">
+            بارگیری
+          </p>
+
+          <p className="mt-2 text-xl font-black text-violet-900">
+            {formatTonnage(
+              city.loadingTonnage
+            )}
+          </p>
+        </div>
+
+        <div className="rounded-xl bg-amber-50 p-4">
+          <p className="text-xs font-bold text-amber-700">
+            تحقق بارگیری
+          </p>
+
+          <p className="mt-2 text-xl font-black text-amber-900">
+            {toPersianDigits(
+              loadingRate
+            )}
+            ٪
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+        <div className="rounded-xl bg-slate-50 px-3 py-3">
+          <span className="text-slate-400">
+            تماس
+          </span>
+
+          <span className="mr-2 font-black text-slate-800">
+            {formatNumber(
+              city.callsCount
+            )}
+          </span>
+        </div>
+
+        <div className="rounded-xl bg-slate-50 px-3 py-3">
+          <span className="text-slate-400">
+            پیگیری
+          </span>
+
+          <span className="mr-2 font-black text-slate-800">
+            {formatNumber(
+              city.followUpsCount
+            )}
+          </span>
+        </div>
+
+        <div className="rounded-xl bg-slate-50 px-3 py-3">
+          <span className="text-slate-400">
+            حواله
+          </span>
+
+          <span className="mr-2 font-black text-slate-800">
+            {formatNumber(
+              city.waybillsCount
+            )}
+          </span>
+        </div>
+
+        <div className="rounded-xl bg-slate-50 px-3 py-3">
+          <span className="text-slate-400">
+            بارگیری نهایی
+          </span>
+
+          <span className="mr-2 font-black text-slate-800">
+            {formatNumber(
+              city.loadingConfirmedCount
+            )}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ReportsPage() {
   const today = useMemo(
     () => getTodayJalali(),
     []
   );
+
+  /*
+   * پیش‌فرض گزارش:
+   * ماه جاری جلالی
+   *
+   * مثال:
+   * اگر امروز ۱۴۰۵/۰۶/۱۰ باشد:
+   * از ۱۴۰۵/۰۶/۰۱
+   * تا ۱۴۰۵/۰۶/۳۱
+   */
+  const currentMonthLastDay =
+    getJalaliMonthLastDay(
+      today.month
+    );
 
   const [fromYear, setFromYear] =
     useState(
@@ -371,12 +559,7 @@ export default function ReportsPage() {
     );
 
   const [fromDay, setFromDay] =
-    useState(
-      String(today.day).padStart(
-        2,
-        "0"
-      )
-    );
+    useState("01");
 
   const [toYear, setToYear] =
     useState(
@@ -393,10 +576,9 @@ export default function ReportsPage() {
 
   const [toDay, setToDay] =
     useState(
-      String(today.day).padStart(
-        2,
-        "0"
-      )
+      String(
+        currentMonthLastDay
+      ).padStart(2, "0")
     );
 
   const [report, setReport] =
@@ -417,78 +599,78 @@ export default function ReportsPage() {
     useState("");
 
   const currentPeriod =
-    useMemo<ReportPeriod | null>(() => {
-      const fromYearNumber =
-        Number(fromYear);
+    useMemo<ReportPeriod | null>(
+      () => {
+        const fromYearNumber =
+          Number(fromYear);
 
-      const fromMonthNumber =
-        Number(fromMonth);
+        const fromMonthNumber =
+          Number(fromMonth);
 
-      const fromDayNumber =
-        Number(fromDay);
+        const fromDayNumber =
+          Number(fromDay);
 
-      const toYearNumber =
-        Number(toYear);
+        const toYearNumber =
+          Number(toYear);
 
-      const toMonthNumber =
-        Number(toMonth);
+        const toMonthNumber =
+          Number(toMonth);
 
-      const toDayNumber =
-        Number(toDay);
+        const toDayNumber =
+          Number(toDay);
 
-      if (
-        !Number.isInteger(
-          fromYearNumber
-        ) ||
-        !Number.isInteger(
-          fromMonthNumber
-        ) ||
-        !Number.isInteger(
-          fromDayNumber
-        ) ||
-        !Number.isInteger(
-          toYearNumber
-        ) ||
-        !Number.isInteger(
-          toMonthNumber
-        ) ||
-        !Number.isInteger(
-          toDayNumber
-        )
-      ) {
-        return null;
-      }
-
-      try {
-        const from =
-          buildStartOfDayIso(
-            fromYearNumber,
-            fromMonthNumber,
+        if (
+          !Number.isInteger(
+            fromYearNumber
+          ) ||
+          !Number.isInteger(
+            fromMonthNumber
+          ) ||
+          !Number.isInteger(
             fromDayNumber
-          );
-
-        const to =
-          buildEndOfDayIso(
-            toYearNumber,
-            toMonthNumber,
+          ) ||
+          !Number.isInteger(
+            toYearNumber
+          ) ||
+          !Number.isInteger(
+            toMonthNumber
+          ) ||
+          !Number.isInteger(
             toDayNumber
-          );
+          )
+        ) {
+          return null;
+        }
 
-        return {
-          from,
-          to,
-        };
-      } catch {
-        return null;
-      }
-    }, [
-      fromYear,
-      fromMonth,
-      fromDay,
-      toYear,
-      toMonth,
-      toDay,
-    ]);
+        try {
+          return {
+            from:
+              buildStartOfDayIso(
+                fromYearNumber,
+                fromMonthNumber,
+                fromDayNumber
+              ),
+
+            to:
+              buildEndOfDayIso(
+                toYearNumber,
+                toMonthNumber,
+                toDayNumber
+              ),
+          };
+        } catch {
+          return null;
+        }
+      },
+      [
+        fromYear,
+        fromMonth,
+        fromDay,
+        toYear,
+        toMonth,
+        toDay,
+      ]
+    );
 
   async function loadReport(
     showRefresh = false
@@ -497,18 +679,22 @@ export default function ReportsPage() {
       setError(
         "بازه تاریخ واردشده معتبر نیست."
       );
+
       setLoading(false);
       setRefreshing(false);
+
       return;
     }
 
-    const fromDate = new Date(
-      currentPeriod.from
-    );
+    const fromDate =
+      new Date(
+        currentPeriod.from
+      );
 
-    const toDate = new Date(
-      currentPeriod.to
-    );
+    const toDate =
+      new Date(
+        currentPeriod.to
+      );
 
     if (
       Number.isNaN(
@@ -521,13 +707,17 @@ export default function ReportsPage() {
       setError(
         "بازه تاریخ واردشده معتبر نیست."
       );
+
       return;
     }
 
-    if (fromDate > toDate) {
+    if (
+      fromDate > toDate
+    ) {
       setError(
         "تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد."
       );
+
       return;
     }
 
@@ -548,7 +738,7 @@ export default function ReportsPage() {
       setReport(result);
     } catch (err) {
       console.error(
-        "خطا در دریافت گزارش‌ها:",
+        "REPORT PAGE LOAD ERROR:",
         err
       );
 
@@ -572,7 +762,9 @@ export default function ReportsPage() {
       }, 0);
 
     return () => {
-      window.clearTimeout(timer);
+      window.clearTimeout(
+        timer
+      );
     };
   }, []);
 
@@ -628,12 +820,10 @@ export default function ReportsPage() {
     const month =
       current.month;
 
-    const day =
-      month <= 6
-        ? 31
-        : month <= 11
-          ? 30
-          : 29;
+    const lastDay =
+      getJalaliMonthLastDay(
+        month
+      );
 
     setFromYear(
       String(current.year)
@@ -660,7 +850,7 @@ export default function ReportsPage() {
     );
 
     setToDay(
-      String(day).padStart(
+      String(lastDay).padStart(
         2,
         "0"
       )
@@ -702,7 +892,9 @@ export default function ReportsPage() {
           .toLowerCase();
 
       const sorted =
-        sortCityReports(cities);
+        sortCityReports(
+          cities
+        );
 
       if (!query) {
         return sorted;
@@ -770,6 +962,81 @@ export default function ReportsPage() {
       );
     }, [cityReports]);
 
+  const bestSalesCity =
+    useMemo(() => {
+      return (
+        cityReports
+          .filter(
+            (city) =>
+              city.salesTonnage > 0
+          )
+          .sort(
+            (a, b) =>
+              b.salesTonnage -
+              a.salesTonnage
+          )[0] ?? null
+      );
+    }, [cityReports]);
+
+  const bestLoadingCity =
+    useMemo(() => {
+      return (
+        cityReports
+          .filter(
+            (city) =>
+              city.loadingTonnage > 0
+          )
+          .sort(
+            (a, b) =>
+              b.loadingTonnage -
+              a.loadingTonnage
+          )[0] ?? null
+      );
+    }, [cityReports]);
+
+  const loadingAchievementRate =
+    (report?.sales.totalTonnage ??
+      0) > 0
+      ? Math.round(
+          ((report?.waybills
+            .loadingTonnage ??
+            0) /
+            (report?.sales
+              .totalTonnage ??
+              1)) *
+            100
+        )
+      : 0;
+
+  const completedRate =
+    (report?.activities
+      .followUpsCount ??
+      0) > 0
+      ? Math.round(
+          ((report?.activities
+            .completedFollowUpsCount ??
+            0) /
+            (report?.activities
+              .followUpsCount ??
+              1)) *
+            100
+        )
+      : 0;
+
+  const reportFrom =
+    currentPeriod
+      ? getJalaliDateParts(
+          currentPeriod.from
+        )
+      : null;
+
+  const reportTo =
+    currentPeriod
+      ? getJalaliDateParts(
+          currentPeriod.to
+        )
+      : null;
+
   if (loading) {
     return (
       <main
@@ -782,7 +1049,7 @@ export default function ReportsPage() {
           <div className="p-7 md:p-9">
             <div className="h-5 w-28 animate-pulse rounded-full bg-slate-200" />
 
-            <div className="mt-5 h-10 w-80 animate-pulse rounded-xl bg-slate-200" />
+            <div className="mt-5 h-10 w-80 max-w-full animate-pulse rounded-xl bg-slate-200" />
 
             <div className="mt-3 h-5 w-[500px] max-w-full animate-pulse rounded-xl bg-slate-100" />
 
@@ -793,12 +1060,14 @@ export default function ReportsPage() {
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({
             length: 8,
-          }).map((_, index) => (
-            <div
-              key={index}
-              className="h-36 animate-pulse rounded-3xl bg-slate-100"
-            />
-          ))}
+          }).map(
+            (_, index) => (
+              <div
+                key={index}
+                className="h-36 animate-pulse rounded-3xl bg-slate-100"
+              />
+            )
+          )}
         </section>
       </main>
     );
@@ -830,9 +1099,13 @@ export default function ReportsPage() {
               <button
                 type="button"
                 onClick={() =>
-                  void loadReport(true)
+                  void loadReport(
+                    true
+                  )
                 }
-                disabled={refreshing}
+                disabled={
+                  refreshing
+                }
                 className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <RefreshCw
@@ -861,51 +1134,23 @@ export default function ReportsPage() {
     );
   }
 
-  const sales = report?.sales;
-  const waybills = report?.waybills;
-  const activities = report?.activities;
-  const customers = report?.customers;
+  const sales =
+    report?.sales;
 
-  const totalOperationalItems =
-    (waybills?.draftCount ?? 0) +
-    (waybills?.issuedCount ?? 0) +
-    (waybills?.loadingConfirmedCount ??
-      0) +
-    (waybills?.cancelledCount ??
-      0);
+  const waybills =
+    report?.waybills;
 
-  const completedRate =
-    activities &&
-    activities.followUpsCount >
-      0
-      ? Math.round(
-          (activities.completedFollowUpsCount /
-            activities.followUpsCount) *
-            100
-        )
-      : 0;
+  const activities =
+    report?.activities;
 
-  const reportFrom =
-    currentPeriod
-      ? getJalaliDateParts(
-          currentPeriod.from
-        )
-      : null;
-
-  const reportTo =
-    currentPeriod
-      ? getJalaliDateParts(
-          currentPeriod.to
-        )
-      : null;
+  const customers =
+    report?.customers;
 
   return (
     <main
       dir="rtl"
       className="mx-auto max-w-[1600px] space-y-6"
     >
-      {/* HEADER */}
-
       <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-slate-900 via-blue-600 to-emerald-500" />
 
@@ -941,9 +1186,7 @@ export default function ReportsPage() {
                   </div>
 
                   <p className="mt-2 text-sm leading-7 text-slate-500 md:text-base">
-                    بررسی عملکرد فروش، حواله،
-                    بارگیری و فعالیت مشتریان در
-                    بازه زمانی انتخاب‌شده
+                    بررسی عملکرد فروش، حواله، بارگیری و فعالیت مشتریان در بازه زمانی انتخاب‌شده
                   </p>
                 </div>
               </div>
@@ -953,9 +1196,13 @@ export default function ReportsPage() {
               <button
                 type="button"
                 onClick={() =>
-                  void loadReport(true)
+                  void loadReport(
+                    true
+                  )
                 }
-                disabled={refreshing}
+                disabled={
+                  refreshing
+                }
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <RefreshCw
@@ -981,8 +1228,6 @@ export default function ReportsPage() {
         </div>
       </section>
 
-      {/* FILTER */}
-
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
         <SectionHeader
           title="فیلتر بازه گزارش"
@@ -993,7 +1238,9 @@ export default function ReportsPage() {
         />
 
         <form
-          onSubmit={handleSubmit}
+          onSubmit={
+            handleSubmit
+          }
           className="space-y-5"
         >
           <div className="grid gap-5 lg:grid-cols-2">
@@ -1018,7 +1265,7 @@ export default function ReportsPage() {
                         event.target.value
                       )
                     }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                     required
                   />
                 </div>
@@ -1029,13 +1276,15 @@ export default function ReportsPage() {
                   </label>
 
                   <select
-                    value={fromMonth}
+                    value={
+                      fromMonth
+                    }
                     onChange={(event) =>
                       setFromMonth(
                         event.target.value
                       )
                     }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                     required
                   >
                     {Array.from({
@@ -1052,8 +1301,12 @@ export default function ReportsPage() {
 
                         return (
                           <option
-                            key={value}
-                            value={value}
+                            key={
+                              value
+                            }
+                            value={
+                              value
+                            }
                           >
                             {toPersianDigits(
                               value
@@ -1080,7 +1333,7 @@ export default function ReportsPage() {
                         event.target.value
                       )
                     }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                     required
                   />
                 </div>
@@ -1108,7 +1361,7 @@ export default function ReportsPage() {
                         event.target.value
                       )
                     }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
                     required
                   />
                 </div>
@@ -1119,13 +1372,15 @@ export default function ReportsPage() {
                   </label>
 
                   <select
-                    value={toMonth}
+                    value={
+                      toMonth
+                    }
                     onChange={(event) =>
                       setToMonth(
                         event.target.value
                       )
                     }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
                     required
                   >
                     {Array.from({
@@ -1142,8 +1397,12 @@ export default function ReportsPage() {
 
                         return (
                           <option
-                            key={value}
-                            value={value}
+                            key={
+                              value
+                            }
+                            value={
+                              value
+                            }
                           >
                             {toPersianDigits(
                               value
@@ -1170,7 +1429,7 @@ export default function ReportsPage() {
                         event.target.value
                       )
                     }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
                     required
                   />
                 </div>
@@ -1178,11 +1437,19 @@ export default function ReportsPage() {
             </div>
           </div>
 
+          {error && (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={setToday}
+                onClick={
+                  setToday
+                }
                 className="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-200"
               >
                 امروز
@@ -1190,7 +1457,9 @@ export default function ReportsPage() {
 
               <button
                 type="button"
-                onClick={setCurrentMonth}
+                onClick={
+                  setCurrentMonth
+                }
                 className="rounded-xl bg-blue-50 px-4 py-2.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
               >
                 ماه جاری
@@ -1221,30 +1490,6 @@ export default function ReportsPage() {
         </form>
       </section>
 
-      {error && (
-        <section className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
-          <div className="h-1 bg-red-500" />
-
-          <div className="flex items-start gap-3 p-5">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
-              <XCircle size={18} />
-            </div>
-
-            <div>
-              <p className="font-black text-red-800">
-                خطا در فیلتر گزارش
-              </p>
-
-              <p className="mt-1 text-sm leading-6 text-red-600">
-                {error}
-              </p>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* PERIOD */}
-
       <section className="rounded-3xl border border-slate-200 bg-slate-900 p-6 text-white shadow-lg md:p-7">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -1260,36 +1505,103 @@ export default function ReportsPage() {
           <div className="flex flex-wrap gap-3 text-xs">
             <span className="rounded-xl bg-white/10 px-4 py-2.5 font-bold text-slate-300">
               شروع:
-              {" "}
               {reportFrom
-                ? `${toPersianDigits(
+                ? ` ${toPersianDigits(
                     reportFrom.year
                   )}/${toPersianDigits(
                     reportFrom.month
                   )}/${toPersianDigits(
                     reportFrom.day
                   )}`
-                : "—"}
+                : " —"}
             </span>
 
             <span className="rounded-xl bg-white/10 px-4 py-2.5 font-bold text-slate-300">
               پایان:
-              {" "}
               {reportTo
-                ? `${toPersianDigits(
+                ? ` ${toPersianDigits(
                     reportTo.year
                   )}/${toPersianDigits(
                     reportTo.month
                   )}/${toPersianDigits(
                     reportTo.day
                   )}`
-                : "—"}
+                : " —"}
             </span>
           </div>
         </div>
       </section>
 
-      {/* SALES */}
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <ReportCard
+          title="تعداد سفارش"
+          value={formatNumber(
+            sales?.ordersCount ??
+              0
+          )}
+          description="سفارش تأییدشده"
+          icon={
+            <ShoppingCart
+              size={22}
+            />
+          }
+          className="bg-violet-50 text-violet-700"
+        />
+
+        <ReportCard
+          title="تناژ فروش"
+          value={formatTonnage(
+            sales?.totalTonnage ??
+              0
+          )}
+          description="تناژ فروش در بازه"
+          icon={
+            <BarChart3
+              size={22}
+            />
+          }
+          className="bg-emerald-50 text-emerald-700"
+        />
+
+        <ReportCard
+          title="تناژ بارگیری"
+          value={formatTonnage(
+            waybills?.loadingTonnage ??
+              0
+          )}
+          description="بارگیری نهایی"
+          icon={
+            <Truck size={22} />
+          }
+          className="bg-blue-50 text-blue-700"
+        />
+
+        <ReportCard
+          title="تحقق بارگیری"
+          value={`${toPersianDigits(
+            loadingAchievementRate
+          )}٪`}
+          description="نسبت بارگیری به فروش"
+          icon={
+            <CheckCircle2
+              size={22}
+            />
+          }
+          className="bg-amber-50 text-amber-700"
+        />
+
+        <ReportCard
+          title="تکمیل پیگیری"
+          value={`${toPersianDigits(
+            completedRate
+          )}٪`}
+          description="پیگیری‌های تکمیل‌شده"
+          icon={
+            <Bell size={22} />
+          }
+          className="bg-cyan-50 text-cyan-700"
+        />
+      </section>
 
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="p-6 md:p-7">
@@ -1297,39 +1609,45 @@ export default function ReportsPage() {
             title="گزارش فروش"
             description="خلاصه سفارش‌های تأییدشده و تناژ فروش"
             icon={
-              <ShoppingCart size={19} />
+              <ShoppingCart
+                size={19}
+              />
             }
           />
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <ReportCard
+            <SummaryItem
               title="تعداد سفارش‌ها"
               value={formatNumber(
-                sales?.ordersCount ?? 0
+                sales?.ordersCount ??
+                  0
               )}
               description="سفارش‌های تأییدشده در بازه"
               icon={
-                <ShoppingCart size={22} />
+                <ShoppingCart
+                  size={20}
+                />
               }
-              className="bg-violet-50 text-violet-700"
+              iconClass="bg-violet-50 text-violet-700"
             />
 
-            <ReportCard
+            <SummaryItem
               title="تناژ فروش"
               value={formatTonnage(
-                sales?.totalTonnage ?? 0
+                sales?.totalTonnage ??
+                  0
               )}
               description="مجموع تناژ سفارش‌های تأییدشده"
               icon={
-                <BarChart3 size={22} />
+                <BarChart3
+                  size={20}
+                />
               }
-              className="bg-emerald-50 text-emerald-700"
+              iconClass="bg-emerald-50 text-emerald-700"
             />
           </div>
         </div>
       </section>
-
-      {/* WAYBILLS */}
 
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="p-6 md:p-7">
@@ -1355,11 +1673,14 @@ export default function ReportsPage() {
             <ReportCard
               title="کل حواله‌ها"
               value={formatNumber(
-                waybills?.totalCount ?? 0
+                waybills?.totalCount ??
+                  0
               )}
-              description="کل حواله‌های بازه"
+              description="حواله‌های بازه"
               icon={
-                <FileText size={22} />
+                <FileText
+                  size={22}
+                />
               }
               className="bg-slate-100 text-slate-700"
             />
@@ -1367,11 +1688,14 @@ export default function ReportsPage() {
             <ReportCard
               title="پیش‌نویس"
               value={formatNumber(
-                waybills?.draftCount ?? 0
+                waybills?.draftCount ??
+                  0
               )}
-              description="حواله‌های هنوز صادرنشده"
+              description="هنوز صادر نشده"
               icon={
-                <FileText size={22} />
+                <FileText
+                  size={22}
+                />
               }
               className="bg-slate-100 text-slate-700"
             />
@@ -1379,7 +1703,8 @@ export default function ReportsPage() {
             <ReportCard
               title="صادرشده"
               value={formatNumber(
-                waybills?.issuedCount ?? 0
+                waybills?.issuedCount ??
+                  0
               )}
               description="در انتظار بارگیری"
               icon={
@@ -1394,9 +1719,11 @@ export default function ReportsPage() {
                 waybills?.loadingConfirmedCount ??
                   0
               )}
-              description="بارگیری نهایی‌شده"
+              description="بارگیری نهایی"
               icon={
-                <CheckCircle2 size={22} />
+                <CheckCircle2
+                  size={22}
+                />
               }
               className="bg-emerald-50 text-emerald-700"
             />
@@ -1404,11 +1731,14 @@ export default function ReportsPage() {
             <ReportCard
               title="لغوشده"
               value={formatNumber(
-                waybills?.cancelledCount ?? 0
+                waybills?.cancelledCount ??
+                  0
               )}
-              description="حواله‌های لغوشده"
+              description="حواله لغوشده"
               icon={
-                <XCircle size={22} />
+                <XCircle
+                  size={22}
+                />
               }
               className="bg-red-50 text-red-700"
             />
@@ -1419,7 +1749,7 @@ export default function ReportsPage() {
                 waybills?.loadingTonnage ??
                   0
               )}
-              description="تناژ حواله‌های بارگیری‌شده"
+              description="مجموع بارگیری نهایی"
               icon={
                 <Truck size={22} />
               }
@@ -1428,8 +1758,6 @@ export default function ReportsPage() {
           </div>
         </div>
       </section>
-
-      {/* ACTIVITIES */}
 
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="p-6 md:p-7">
@@ -1445,9 +1773,10 @@ export default function ReportsPage() {
             <ReportCard
               title="تماس‌ها"
               value={formatNumber(
-                activities?.callsCount ?? 0
+                activities?.callsCount ??
+                  0
               )}
-              description="کل تماس‌های ثبت‌شده"
+              description="تماس ثبت‌شده"
               icon={
                 <Phone size={22} />
               }
@@ -1460,7 +1789,7 @@ export default function ReportsPage() {
                 activities?.followUpsCount ??
                   0
               )}
-              description="همه پیگیری‌های بازه"
+              description="پیگیری‌های بازه"
               icon={
                 <Bell size={22} />
               }
@@ -1473,9 +1802,11 @@ export default function ReportsPage() {
                 activities?.completedFollowUpsCount ??
                   0
               )}
-              description="پیگیری‌های تکمیل‌شده"
+              description="پیگیری تکمیل‌شده"
               icon={
-                <CheckCircle2 size={22} />
+                <CheckCircle2
+                  size={22}
+                />
               }
               className="bg-emerald-50 text-emerald-700"
             />
@@ -1486,7 +1817,7 @@ export default function ReportsPage() {
                 activities?.pendingFollowUpsCount ??
                   0
               )}
-              description="پیگیری‌های در انتظار"
+              description="پیگیری در انتظار"
               icon={
                 <Bell size={22} />
               }
@@ -1499,9 +1830,11 @@ export default function ReportsPage() {
                 activities?.cancelledFollowUpsCount ??
                   0
               )}
-              description="پیگیری‌های لغوشده"
+              description="پیگیری لغوشده"
               icon={
-                <XCircle size={22} />
+                <XCircle
+                  size={22}
+                />
               }
               className="bg-red-50 text-red-700"
             />
@@ -1509,13 +1842,11 @@ export default function ReportsPage() {
         </div>
       </section>
 
-      {/* CUSTOMERS */}
-
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="p-6 md:p-7">
           <SectionHeader
             title="گزارش مشتریان"
-            description="تعداد مشتریان فعال در سیستم"
+            description="تصویر کلی مشتریان فعال و کیفیت پیگیری"
             icon={
               <Users size={19} />
             }
@@ -1539,10 +1870,12 @@ export default function ReportsPage() {
               title="نرخ تکمیل پیگیری"
               value={`${toPersianDigits(
                 completedRate
-              )}%`}
+              )}٪`}
               description="درصد پیگیری‌های تکمیل‌شده در بازه"
               icon={
-                <CheckCircle2 size={20} />
+                <CheckCircle2
+                  size={20}
+                />
               }
               iconClass="bg-emerald-50 text-emerald-700"
             />
@@ -1550,30 +1883,22 @@ export default function ReportsPage() {
         </div>
       </section>
 
-      {/* CITY REPORT */}
-
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="p-6 md:p-7">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <SectionHeader
-              title="گزارش تفکیکی شهرها"
-              description="مقایسه عملکرد فروش، فعالیت، حواله و بارگیری به تفکیک شهر"
+              title="عملکرد به تفکیک شهر"
+              description="مقایسه فروش، بارگیری و فعالیت فروش در شهرهای تحت پوشش"
               icon={
-                <Users size={19} />
+                <BarChart3
+                  size={19}
+                />
               }
             />
 
             <div className="mb-6 w-full lg:w-72">
-              <label
-                htmlFor="citySearch"
-                className="sr-only"
-              >
-                جستجوی شهر
-              </label>
-
               <input
-                id="citySearch"
-                type="text"
+                type="search"
                 value={citySearch}
                 onChange={(event) =>
                   setCitySearch(
@@ -1581,441 +1906,267 @@ export default function ReportsPage() {
                   )
                 }
                 placeholder="جستجوی شهر..."
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
               />
             </div>
           </div>
 
-          {cityReports.length === 0 ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {cityReports.map(
+              (city) => (
+                <CityPerformanceCard
+                  key={
+                    city.cityId ??
+                    city.cityName
+                  }
+                  city={city}
+                />
+              )
+            )}
+          </div>
+
+          {cityReports.length ===
+            0 && (
             <div className="rounded-2xl bg-slate-50 p-10 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
                 <Users size={24} />
               </div>
 
-              <p className="mt-4 font-black text-slate-700">
-                گزارشی برای شهر موردنظر پیدا نشد
+              <p className="mt-4 font-bold text-slate-700">
+                شهری برای نمایش پیدا نشد
               </p>
 
-              <p className="mt-1 text-xs leading-6 text-slate-400">
-                بازه تاریخ یا عبارت جستجوی شهر را تغییر دهید.
+              <p className="mt-1 text-xs text-slate-400">
+                عبارت جستجو را تغییر دهید.
               </p>
             </div>
-          ) : (
-            <>
-              {/* Desktop */}
+          )}
 
-              <div className="hidden overflow-x-auto lg:block">
-                <table className="min-w-[1250px] w-full text-right text-sm">
-                  <thead className="border-b border-slate-200 bg-slate-50">
-                    <tr>
-                      <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                        شهر
-                      </th>
+          <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200">
+            <table className="min-w-[1100px] w-full text-right text-sm">
+              <thead className="border-b bg-slate-50">
+                <tr>
+                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
+                    شهر
+                  </th>
 
-                      <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                        مشتری
-                      </th>
+                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
+                    مشتری
+                  </th>
 
-                      <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                        سفارش
-                      </th>
+                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
+                    سفارش
+                  </th>
 
-                      <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                        تناژ فروش
-                      </th>
+                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
+                    فروش
+                  </th>
 
-                      <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                        تماس
-                      </th>
+                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
+                    تماس
+                  </th>
 
-                      <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                        پیگیری
-                      </th>
+                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
+                    پیگیری
+                  </th>
 
-                      <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                        تکمیل
-                      </th>
+                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
+                    حواله
+                  </th>
 
-                      <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                        حواله
-                      </th>
+                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
+                    بارگیری
+                  </th>
 
-                      <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                        بارگیری
-                      </th>
+                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
+                    تناژ بارگیری
+                  </th>
+                </tr>
+              </thead>
 
-                      <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                        تناژ بارگیری
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody className="divide-y divide-slate-100">
-                    {cityReports.map(
-                      (city) => (
-                        <tr
-                          key={
-                            city.cityId ??
-                            city.cityName
-                          }
-                          className="transition hover:bg-slate-50"
-                        >
-                          <td className="px-4 py-4">
-                            <div className="font-black text-slate-900">
-                              {city.cityName}
-                            </div>
-                          </td>
-
-                          <td className="px-4 py-4 font-bold text-blue-700">
-                            {formatNumber(
-                              city.customersCount
-                            )}
-                          </td>
-
-                          <td className="px-4 py-4 font-bold text-violet-700">
-                            {formatNumber(
-                              city.ordersCount
-                            )}
-                          </td>
-
-                          <td className="whitespace-nowrap px-4 py-4 font-black text-emerald-700">
-                            {formatTonnage(
-                              city.salesTonnage
-                            )}
-                          </td>
-
-                          <td className="px-4 py-4 font-bold text-sky-700">
-                            {formatNumber(
-                              city.callsCount
-                            )}
-                          </td>
-
-                          <td className="px-4 py-4 font-bold text-amber-700">
-                            {formatNumber(
-                              city.followUpsCount
-                            )}
-                          </td>
-
-                          <td className="px-4 py-4">
-                            <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
-                              {formatNumber(
-                                city.completedFollowUpsCount
-                              )}
-                            </span>
-                          </td>
-
-                          <td className="px-4 py-4 font-bold text-slate-700">
-                            {formatNumber(
-                              city.waybillsCount
-                            )}
-                          </td>
-
-                          <td className="px-4 py-4">
-                            <span className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
-                              {formatNumber(
-                                city.loadingConfirmedCount
-                              )}
-                            </span>
-                          </td>
-
-                          <td className="whitespace-nowrap px-4 py-4 font-black text-violet-700">
-                            {formatTonnage(
-                              city.loadingTonnage
-                            )}
-                          </td>
-                        </tr>
-                      )
-                    )}
-
-                    <tr className="bg-slate-900 text-white">
-                      <td className="px-4 py-4 font-black">
-                        جمع کل
-                      </td>
-
-                      <td className="px-4 py-4 font-black">
-                        {formatNumber(
-                          cityTotals.customersCount
-                        )}
-                      </td>
-
-                      <td className="px-4 py-4 font-black">
-                        {formatNumber(
-                          cityTotals.ordersCount
-                        )}
-                      </td>
-
-                      <td className="whitespace-nowrap px-4 py-4 font-black text-emerald-300">
-                        {formatTonnage(
-                          cityTotals.salesTonnage
-                        )}
-                      </td>
-
-                      <td className="px-4 py-4 font-black">
-                        {formatNumber(
-                          cityTotals.callsCount
-                        )}
-                      </td>
-
-                      <td className="px-4 py-4 font-black">
-                        {formatNumber(
-                          cityTotals.followUpsCount
-                        )}
-                      </td>
-
-                      <td className="px-4 py-4 font-black">
-                        {formatNumber(
-                          cityTotals.completedFollowUpsCount
-                        )}
-                      </td>
-
-                      <td className="px-4 py-4 font-black">
-                        {formatNumber(
-                          cityTotals.waybillsCount
-                        )}
-                      </td>
-
-                      <td className="px-4 py-4 font-black">
-                        {formatNumber(
-                          cityTotals.loadingConfirmedCount
-                        )}
-                      </td>
-
-                      <td className="whitespace-nowrap px-4 py-4 font-black text-violet-300">
-                        {formatTonnage(
-                          cityTotals.loadingTonnage
-                        )}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Mobile */}
-
-              <div className="space-y-3 lg:hidden">
+              <tbody className="divide-y divide-slate-100">
                 {cityReports.map(
                   (city) => (
-                    <div
-                      key={
+                    <tr
+                      key={`table-${
                         city.cityId ??
                         city.cityName
-                      }
-                      className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4"
+                      }`}
+                      className="transition hover:bg-slate-50"
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-base font-black text-slate-900">
-                            {city.cityName}
-                          </p>
-
-                          <p className="mt-1 text-xs text-slate-400">
-                            گزارش عملکرد شهر
-                          </p>
-                        </div>
-
-                        <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700">
-                          {formatNumber(
-                            city.customersCount
-                          )}{" "}
-                          مشتری
+                      <td className="px-4 py-4">
+                        <span className="font-black text-slate-900">
+                          {
+                            city.cityName
+                          }
                         </span>
-                      </div>
+                      </td>
 
-                      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        <div className="rounded-xl bg-white p-3">
-                          <p className="text-[11px] font-bold text-slate-400">
-                            سفارش
-                          </p>
+                      <td className="px-4 py-4 text-slate-700">
+                        {formatNumber(
+                          city.customersCount
+                        )}
+                      </td>
 
-                          <p className="mt-1 font-black text-violet-700">
-                            {formatNumber(
-                              city.ordersCount
-                            )}
-                          </p>
-                        </div>
+                      <td className="px-4 py-4 text-slate-700">
+                        {formatNumber(
+                          city.ordersCount
+                        )}
+                      </td>
 
-                        <div className="rounded-xl bg-white p-3">
-                          <p className="text-[11px] font-bold text-slate-400">
-                            فروش
-                          </p>
+                      <td className="px-4 py-4 font-black text-emerald-700">
+                        {formatTonnage(
+                          city.salesTonnage
+                        )}
+                      </td>
 
-                          <p className="mt-1 font-black text-emerald-700">
-                            {formatTonnage(
-                              city.salesTonnage
-                            )}
-                          </p>
-                        </div>
+                      <td className="px-4 py-4 text-slate-700">
+                        {formatNumber(
+                          city.callsCount
+                        )}
+                      </td>
 
-                        <div className="rounded-xl bg-white p-3">
-                          <p className="text-[11px] font-bold text-slate-400">
-                            تماس
-                          </p>
+                      <td className="px-4 py-4 text-slate-700">
+                        {formatNumber(
+                          city.followUpsCount
+                        )}
+                      </td>
 
-                          <p className="mt-1 font-black text-sky-700">
-                            {formatNumber(
-                              city.callsCount
-                            )}
-                          </p>
-                        </div>
+                      <td className="px-4 py-4 text-slate-700">
+                        {formatNumber(
+                          city.waybillsCount
+                        )}
+                      </td>
 
-                        <div className="rounded-xl bg-white p-3">
-                          <p className="text-[11px] font-bold text-slate-400">
-                            پیگیری
-                          </p>
+                      <td className="px-4 py-4 font-black text-blue-700">
+                        {formatNumber(
+                          city.loadingConfirmedCount
+                        )}
+                      </td>
 
-                          <p className="mt-1 font-black text-amber-700">
-                            {formatNumber(
-                              city.followUpsCount
-                            )}
-                          </p>
-                        </div>
-
-                        <div className="rounded-xl bg-white p-3">
-                          <p className="text-[11px] font-bold text-slate-400">
-                            حواله
-                          </p>
-
-                          <p className="mt-1 font-black text-slate-700">
-                            {formatNumber(
-                              city.waybillsCount
-                            )}
-                          </p>
-                        </div>
-
-                        <div className="rounded-xl bg-white p-3">
-                          <p className="text-[11px] font-bold text-slate-400">
-                            بارگیری
-                          </p>
-
-                          <p className="mt-1 font-black text-blue-700">
-                            {formatNumber(
-                              city.loadingConfirmedCount
-                            )}
-                          </p>
-                        </div>
-
-                        <div className="rounded-xl bg-white p-3 sm:col-span-3">
-                          <p className="text-[11px] font-bold text-slate-400">
-                            تناژ بارگیری
-                          </p>
-
-                          <p className="mt-1 font-black text-violet-700">
-                            {formatTonnage(
-                              city.loadingTonnage
-                            )}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+                      <td className="px-4 py-4 font-black text-violet-700">
+                        {formatTonnage(
+                          city.loadingTonnage
+                        )}
+                      </td>
+                    </tr>
                   )
                 )}
+              </tbody>
 
-                <div className="rounded-2xl bg-slate-900 p-4 text-white">
-                  <p className="font-black">
-                    جمع کل شهرهای نمایش‌داده‌شده
-                  </p>
+              <tfoot className="border-t bg-slate-50">
+                <tr>
+                  <td className="px-4 py-4 font-black text-slate-900">
+                    جمع
+                  </td>
 
-                  <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl bg-white/10 p-3">
-                      <p className="text-[11px] text-slate-400">
-                        مشتری
-                      </p>
+                  <td className="px-4 py-4 font-black text-slate-900">
+                    {formatNumber(
+                      cityTotals.customersCount
+                    )}
+                  </td>
 
-                      <p className="mt-1 font-black">
-                        {formatNumber(
-                          cityTotals.customersCount
-                        )}
-                      </p>
-                    </div>
+                  <td className="px-4 py-4 font-black text-slate-900">
+                    {formatNumber(
+                      cityTotals.ordersCount
+                    )}
+                  </td>
 
-                    <div className="rounded-xl bg-white/10 p-3">
-                      <p className="text-[11px] text-slate-400">
-                        سفارش
-                      </p>
+                  <td className="px-4 py-4 font-black text-emerald-700">
+                    {formatTonnage(
+                      cityTotals.salesTonnage
+                    )}
+                  </td>
 
-                      <p className="mt-1 font-black">
-                        {formatNumber(
-                          cityTotals.ordersCount
-                        )}
-                      </p>
-                    </div>
+                  <td className="px-4 py-4 font-black text-slate-900">
+                    {formatNumber(
+                      cityTotals.callsCount
+                    )}
+                  </td>
 
-                    <div className="rounded-xl bg-white/10 p-3">
-                      <p className="text-[11px] text-slate-400">
-                        فروش
-                      </p>
+                  <td className="px-4 py-4 font-black text-slate-900">
+                    {formatNumber(
+                      cityTotals.followUpsCount
+                    )}
+                  </td>
 
-                      <p className="mt-1 font-black text-emerald-300">
-                        {formatTonnage(
-                          cityTotals.salesTonnage
-                        )}
-                      </p>
-                    </div>
+                  <td className="px-4 py-4 font-black text-slate-900">
+                    {formatNumber(
+                      cityTotals.waybillsCount
+                    )}
+                  </td>
 
-                    <div className="rounded-xl bg-white/10 p-3">
-                      <p className="text-[11px] text-slate-400">
-                        تماس
-                      </p>
+                  <td className="px-4 py-4 font-black text-blue-700">
+                    {formatNumber(
+                      cityTotals.loadingConfirmedCount
+                    )}
+                  </td>
 
-                      <p className="mt-1 font-black">
-                        {formatNumber(
-                          cityTotals.callsCount
-                        )}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl bg-white/10 p-3">
-                      <p className="text-[11px] text-slate-400">
-                        پیگیری
-                      </p>
-
-                      <p className="mt-1 font-black">
-                        {formatNumber(
-                          cityTotals.followUpsCount
-                        )}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl bg-white/10 p-3">
-                      <p className="text-[11px] text-slate-400">
-                        حواله
-                      </p>
-
-                      <p className="mt-1 font-black">
-                        {formatNumber(
-                          cityTotals.waybillsCount
-                        )}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl bg-white/10 p-3 sm:col-span-3">
-                      <p className="text-[11px] text-slate-400">
-                        تناژ بارگیری
-                      </p>
-
-                      <p className="mt-1 font-black text-violet-300">
-                        {formatTonnage(
-                          cityTotals.loadingTonnage
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
+                  <td className="px-4 py-4 font-black text-violet-700">
+                    {formatTonnage(
+                      cityTotals.loadingTonnage
+                    )}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
       </section>
 
-      {/* MANAGEMENT SUMMARY */}
+      <section className="grid gap-4 md:grid-cols-2">
+        <SummaryItem
+          title="شهر برتر فروش"
+          value={
+            bestSalesCity
+              ? bestSalesCity.cityName
+              : "—"
+          }
+          description={
+            bestSalesCity
+              ? formatTonnage(
+                  bestSalesCity.salesTonnage
+                )
+              : "فروشی در بازه ثبت نشده است"
+          }
+          icon={
+            <ShoppingCart
+              size={20}
+            />
+          }
+          iconClass="bg-emerald-50 text-emerald-700"
+        />
+
+        <SummaryItem
+          title="شهر برتر بارگیری"
+          value={
+            bestLoadingCity
+              ? bestLoadingCity.cityName
+              : "—"
+          }
+          description={
+            bestLoadingCity
+              ? formatTonnage(
+                  bestLoadingCity.loadingTonnage
+                )
+              : "بارگیری در بازه ثبت نشده است"
+          }
+          icon={
+            <Truck size={20} />
+          }
+          iconClass="bg-blue-50 text-blue-700"
+        />
+      </section>
 
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="p-6 md:p-7">
           <SectionHeader
             title="جمع‌بندی مدیریتی"
-            description="نمای سریع از وضعیت فروش و عملیات در بازه انتخاب‌شده"
+            description="نمای سریع از وضعیت فروش، فعالیت و عملیات در بازه انتخاب‌شده"
             icon={
-              <BarChart3 size={19} />
+              <BarChart3
+                size={19}
+              />
             }
           />
 
@@ -2023,13 +2174,17 @@ export default function ReportsPage() {
             <SummaryItem
               title="فروش"
               value={formatTonnage(
-                sales?.totalTonnage ?? 0
+                sales?.totalTonnage ??
+                  0
               )}
               description={`${formatNumber(
-                sales?.ordersCount ?? 0
+                sales?.ordersCount ??
+                  0
               )} سفارش تأییدشده`}
               icon={
-                <ShoppingCart size={20} />
+                <ShoppingCart
+                  size={20}
+                />
               }
               iconClass="bg-violet-50 text-violet-700"
             />
@@ -2053,14 +2208,17 @@ export default function ReportsPage() {
             <SummaryItem
               title="فعالیت"
               value={formatNumber(
-                activities?.callsCount ?? 0
+                activities?.callsCount ??
+                  0
               )}
               description={`${formatNumber(
                 activities?.followUpsCount ??
                   0
               )} پیگیری ثبت‌شده`}
               icon={
-                <Activity size={20} />
+                <Activity
+                  size={20}
+                />
               }
               iconClass="bg-sky-50 text-sky-700"
             />
@@ -2068,11 +2226,14 @@ export default function ReportsPage() {
             <SummaryItem
               title="عملیات حواله"
               value={formatNumber(
-                totalOperationalItems
+                waybills?.totalCount ??
+                  0
               )}
-              description="مجموع وضعیت‌های ثبت‌شده"
+              description="مجموع حواله‌های بازه"
               icon={
-                <FileText size={20} />
+                <FileText
+                  size={20}
+                />
               }
               iconClass="bg-slate-100 text-slate-700"
             />

@@ -13,7 +13,7 @@ import type {
 const COMPANY_ID =
   "11111111-1111-1111-1111-111111111111";
 
-const WAYBILL_SELECT = `
+const WAYBILL_BASE_SELECT = `
   id,
   company_id,
   order_id,
@@ -25,21 +25,22 @@ const WAYBILL_SELECT = `
   issued_by,
   created_at,
   updated_at,
-  deleted_at,
-  items:waybill_items!waybill_items_waybill_id_fkey (
-    id,
-    company_id,
-    waybill_id,
-    order_item_id,
-    product_id,
-    product_name_snapshot,
-    quantity,
-    weight_kg_snapshot,
-    tonnage,
-    created_at,
-    updated_at,
-    deleted_at
-  )
+  deleted_at
+`;
+
+const WAYBILL_ITEM_SELECT = `
+  id,
+  company_id,
+  waybill_id,
+  order_item_id,
+  product_id,
+  product_name_snapshot,
+  quantity,
+  weight_kg_snapshot,
+  tonnage,
+  created_at,
+  updated_at,
+  deleted_at
 `;
 
 const LOADING_SELECT = `
@@ -56,116 +57,342 @@ const LOADING_SELECT = `
   deleted_at
 `;
 
-function getErrorMessage(error: unknown): string {
+function getErrorMessage(
+  error: unknown
+): string {
   if (
     error &&
     typeof error === "object" &&
     "message" in error
   ) {
-    return String(
-      (error as { message?: unknown }).message
-    );
+    const message =
+      (error as {
+        message?: unknown;
+      }).message;
+
+    if (typeof message === "string") {
+      return message;
+    }
+  }
+
+  if (error instanceof Error) {
+    return error.message;
   }
 
   return "خطای نامشخص در ارتباط با حواله.";
 }
 
-function normalizeWaybill(row: unknown): Waybill {
-  const data = row as Record<string, unknown>;
+function logWaybillError(
+  operation: string,
+  error: unknown
+): void {
+  console.error(
+    `========== WAYBILL ${operation} ERROR ==========`
+  );
+
+  if (
+    error &&
+    typeof error === "object"
+  ) {
+    console.error(
+      "message:",
+      getErrorMessage(error)
+    );
+
+    if ("code" in error) {
+      console.error(
+        "code:",
+        (error as { code?: unknown })
+          .code
+      );
+    }
+
+    if ("details" in error) {
+      console.error(
+        "details:",
+        (error as { details?: unknown })
+          .details
+      );
+    }
+
+    if ("hint" in error) {
+      console.error(
+        "hint:",
+        (error as { hint?: unknown })
+          .hint
+      );
+    }
+  } else {
+    console.error(error);
+  }
+
+  console.error(
+    "=============================================="
+  );
+}
+
+function normalizeWaybill(
+  row: unknown
+): Waybill {
+  const data =
+    row as Record<string, unknown>;
 
   return {
     id: String(data.id),
-    company_id: String(data.company_id),
-    order_id: String(data.order_id),
-    waybill_number: Number(data.waybill_number),
-    waybill_date: String(data.waybill_date),
-    status: data.status as Waybill["status"],
+    company_id: String(
+      data.company_id
+    ),
+    order_id: String(
+      data.order_id
+    ),
+    waybill_number: Number(
+      data.waybill_number
+    ),
+    waybill_date: String(
+      data.waybill_date
+    ),
+    status:
+      data.status as Waybill["status"],
     notes:
-      (data.notes as string | null) ?? null,
+      (data.notes as
+        | string
+        | null) ?? null,
     issued_at:
-      (data.issued_at as string | null) ?? null,
+      (data.issued_at as
+        | string
+        | null) ?? null,
     issued_by:
-      (data.issued_by as string | null) ?? null,
-    created_at: String(data.created_at),
-    updated_at: String(data.updated_at),
+      (data.issued_by as
+        | string
+        | null) ?? null,
+    created_at: String(
+      data.created_at
+    ),
+    updated_at: String(
+      data.updated_at
+    ),
     deleted_at:
-      (data.deleted_at as string | null) ?? null,
-    items: Array.isArray(data.items)
+      (data.deleted_at as
+        | string
+        | null) ?? null,
+    items: Array.isArray(
+      data.items
+    )
       ? (data.items as WaybillItem[])
       : [],
-    loading: null,
+    loading:
+      data.loading &&
+      typeof data.loading ===
+        "object"
+        ? (data.loading as Loading)
+        : null,
+  };
+}
+
+async function getWaybillItems(
+  waybillId: string
+): Promise<WaybillItem[]> {
+  const supabase =
+    createSupabaseClient();
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from("waybill_items")
+    .select(
+      WAYBILL_ITEM_SELECT
+    )
+    .eq(
+      "waybill_id",
+      waybillId
+    )
+    .eq(
+      "company_id",
+      COMPANY_ID
+    )
+    .is(
+      "deleted_at",
+      null
+    )
+    .order(
+      "created_at",
+      {
+        ascending: true,
+      }
+    );
+
+  if (error) {
+    logWaybillError(
+      "GET ITEMS",
+      error
+    );
+
+    throw new Error(
+      getErrorMessage(error)
+    );
+  }
+
+  return (
+    (data ??
+      []) as WaybillItem[]
+  );
+}
+
+async function getWaybillLoading(
+  waybillId: string
+): Promise<Loading | null> {
+  const supabase =
+    createSupabaseClient();
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from("loading")
+    .select(
+      LOADING_SELECT
+    )
+    .eq(
+      "waybill_id",
+      waybillId
+    )
+    .eq(
+      "company_id",
+      COMPANY_ID
+    )
+    .is(
+      "deleted_at",
+      null
+    )
+    .maybeSingle();
+
+  if (error) {
+    logWaybillError(
+      "GET LOADING",
+      error
+    );
+
+    throw new Error(
+      getErrorMessage(error)
+    );
+  }
+
+  return (
+    data as Loading | null
+  );
+}
+
+async function hydrateWaybill(
+  waybill: Waybill
+): Promise<Waybill> {
+  const [
+    items,
+    loading,
+  ] = await Promise.all([
+    getWaybillItems(
+      waybill.id
+    ),
+    getWaybillLoading(
+      waybill.id
+    ),
+  ]);
+
+  return {
+    ...waybill,
+    items,
+    loading,
   };
 }
 
 export const waybillsService = {
   async getAll(): Promise<Waybill[]> {
-    const supabase = createSupabaseClient();
-
-    const { data, error } = await supabase
-      .from("waybills")
-      .select(WAYBILL_SELECT)
-      .eq("company_id", COMPANY_ID)
-      .is("deleted_at", null)
-      .order("waybill_date", {
-        ascending: false,
-      })
-      .order("waybill_number", {
-        ascending: false,
-      });
-
-    if (error) {
-      console.error("WAYBILLS GET ALL:", error);
-
-      throw new Error(
-        getErrorMessage(error)
-      );
-    }
-
-    const waybills = (data ?? []).map(
-      normalizeWaybill
-    );
-
-    return Promise.all(
-      waybills.map(async (waybill) => ({
-        ...waybill,
-        loading:
-          await this.getLoading(waybill.id),
-      }))
-    );
-  },
-
-  async getById(
-    id: string
-  ): Promise<Waybill | null> {
-    const supabase = createSupabaseClient();
+    const supabase =
+      createSupabaseClient();
 
     const {
       data,
       error,
     } = await supabase
       .from("waybills")
-      .select(`
-        id,
-        company_id,
-        order_id,
-        waybill_number,
-        waybill_date,
-        status,
-        notes,
-        issued_at,
-        issued_by,
-        created_at,
-        updated_at,
-        deleted_at
-      `)
-      .eq("id", id)
-      .eq("company_id", COMPANY_ID)
-      .is("deleted_at", null)
+      .select(
+        WAYBILL_BASE_SELECT
+      )
+      .eq(
+        "company_id",
+        COMPANY_ID
+      )
+      .is(
+        "deleted_at",
+        null
+      )
+      .order(
+        "waybill_date",
+        {
+          ascending: false,
+        }
+      )
+      .order(
+        "waybill_number",
+        {
+          ascending: false,
+        }
+      );
+
+    if (error) {
+      logWaybillError(
+        "GET ALL",
+        error
+      );
+
+      throw new Error(
+        getErrorMessage(error)
+      );
+    }
+
+    const waybills =
+      (data ?? []).map(
+        normalizeWaybill
+      );
+
+    return Promise.all(
+      waybills.map(
+        hydrateWaybill
+      )
+    );
+  },
+
+  async getById(
+    id: string
+  ): Promise<Waybill | null> {
+    const supabase =
+      createSupabaseClient();
+
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("waybills")
+      .select(
+        WAYBILL_BASE_SELECT
+      )
+      .eq(
+        "id",
+        id
+      )
+      .eq(
+        "company_id",
+        COMPANY_ID
+      )
+      .is(
+        "deleted_at",
+        null
+      )
       .maybeSingle();
 
     if (error) {
-      console.error(
-        "WAYBILLS GET BY ID:",
+      logWaybillError(
+        "GET BY ID",
         error
       );
 
@@ -178,42 +405,51 @@ export const waybillsService = {
       return null;
     }
 
-    const waybill =
-      normalizeWaybill({
-        ...data,
-        items: [],
-      });
-
-    waybill.items =
-      await this.getItems(id);
-
-    waybill.loading =
-      await this.getLoading(id);
-
-    return waybill;
+    return hydrateWaybill(
+      normalizeWaybill(data)
+    );
   },
 
   async getByOrderId(
     orderId: string
   ): Promise<Waybill[]> {
-    const supabase = createSupabaseClient();
+    const supabase =
+      createSupabaseClient();
+
+    if (!orderId?.trim()) {
+      return [];
+    }
 
     const {
       data,
       error,
     } = await supabase
       .from("waybills")
-      .select(WAYBILL_SELECT)
-      .eq("company_id", COMPANY_ID)
-      .eq("order_id", orderId)
-      .is("deleted_at", null)
-      .order("waybill_number", {
-        ascending: false,
-      });
+      .select(
+        WAYBILL_BASE_SELECT
+      )
+      .eq(
+        "company_id",
+        COMPANY_ID
+      )
+      .eq(
+        "order_id",
+        orderId.trim()
+      )
+      .is(
+        "deleted_at",
+        null
+      )
+      .order(
+        "waybill_number",
+        {
+          ascending: false,
+        }
+      );
 
     if (error) {
-      console.error(
-        "WAYBILLS GET BY ORDER:",
+      logWaybillError(
+        "GET BY ORDER",
         error
       );
 
@@ -222,23 +458,39 @@ export const waybillsService = {
       );
     }
 
-    const waybills = (data ?? []).map(
-      normalizeWaybill
+    const waybills =
+      (data ?? []).map(
+        normalizeWaybill
+      );
+
+    console.log(
+      "WAYBILLS GET BY ORDER:",
+      orderId,
+      waybills.map(
+        (waybill) => ({
+          id: waybill.id,
+          order_id:
+            waybill.order_id,
+          status:
+            waybill.status,
+          waybill_number:
+            waybill.waybill_number,
+        })
+      )
     );
 
     return Promise.all(
-      waybills.map(async (waybill) => ({
-        ...waybill,
-        loading:
-          await this.getLoading(waybill.id),
-      }))
+      waybills.map(
+        hydrateWaybill
+      )
     );
   },
 
   async create(
     input: CreateWaybillInput
   ): Promise<Waybill> {
-    const supabase = createSupabaseClient();
+    const supabase =
+      createSupabaseClient();
 
     if (!input.order_id) {
       throw new Error(
@@ -260,30 +512,32 @@ export const waybillsService = {
       .select(`
         id,
         company_id,
-        status,
-        order_items!order_items_order_id_fkey (
-          id,
-          company_id,
-          product_id,
-          product_name_snapshot,
-          quantity,
-          weight_kg_snapshot,
-          deleted_at
-        )
+        status
       `)
-      .eq("id", input.order_id)
-      .eq("company_id", COMPANY_ID)
-      .is("deleted_at", null)
+      .eq(
+        "id",
+        input.order_id
+      )
+      .eq(
+        "company_id",
+        COMPANY_ID
+      )
+      .is(
+        "deleted_at",
+        null
+      )
       .maybeSingle();
 
     if (orderError) {
-      console.error(
-        "WAYBILL CREATE GET ORDER:",
+      logWaybillError(
+        "CREATE GET ORDER",
         orderError
       );
 
       throw new Error(
-        getErrorMessage(orderError)
+        getErrorMessage(
+          orderError
+        )
       );
     }
 
@@ -293,36 +547,102 @@ export const waybillsService = {
       );
     }
 
-    if (order.status !== "confirmed") {
+    if (
+      order.status !==
+      "confirmed"
+    ) {
       throw new Error(
         "فقط سفارش تأییدشده امکان صدور حواله دارد."
       );
     }
 
-    const orderItems = (
-      order.order_items ?? []
-    ).filter(
-      (item: {
-        deleted_at: string | null;
-      }) => item.deleted_at === null
-    );
+    const {
+      data: orderItems,
+      error:
+        orderItemsError,
+    } = await supabase
+      .from("order_items")
+      .select(`
+        id,
+        company_id,
+        product_id,
+        product_name_snapshot,
+        quantity,
+        weight_kg_snapshot,
+        deleted_at
+      `)
+      .eq(
+        "order_id",
+        input.order_id
+      )
+      .eq(
+        "company_id",
+        COMPANY_ID
+      )
+      .is(
+        "deleted_at",
+        null
+      )
+      .order(
+        "created_at",
+        {
+          ascending: true,
+        }
+      );
 
-    if (orderItems.length === 0) {
+    if (orderItemsError) {
+      logWaybillError(
+        "CREATE GET ORDER ITEMS",
+        orderItemsError
+      );
+
+      throw new Error(
+        getErrorMessage(
+          orderItemsError
+        )
+      );
+    }
+
+    const activeOrderItems =
+      (
+        orderItems ?? []
+      ) as Array<{
+        id: string;
+        company_id: string;
+        product_id: string;
+        product_name_snapshot:
+          | string
+          | null;
+        quantity: number;
+        weight_kg_snapshot: number;
+        deleted_at:
+          | string
+          | null;
+      }>;
+
+    if (
+      activeOrderItems.length ===
+      0
+    ) {
       throw new Error(
         "سفارش هیچ قلم فعالی برای صدور حواله ندارد."
       );
     }
 
-    const orderItemIds = orderItems.map(
-      (item: { id: string }) => item.id
-    );
+    const orderItemIds =
+      activeOrderItems.map(
+        (item) => item.id
+      );
 
     const {
       data: existingItems,
-      error: existingError,
+      error:
+        existingError,
     } = await supabase
       .from("waybill_items")
-      .select("order_item_id")
+      .select(
+        "order_item_id"
+      )
       .eq(
         "company_id",
         COMPANY_ID
@@ -337,13 +657,15 @@ export const waybillsService = {
       );
 
     if (existingError) {
-      console.error(
-        "WAYBILL CHECK EXISTING ITEMS:",
+      logWaybillError(
+        "CHECK EXISTING ITEMS",
         existingError
       );
 
       throw new Error(
-        getErrorMessage(existingError)
+        getErrorMessage(
+          existingError
+        )
       );
     }
 
@@ -362,73 +684,64 @@ export const waybillsService = {
     } = await supabase
       .from("waybills")
       .insert({
-        company_id: COMPANY_ID,
-        order_id: input.order_id,
+        company_id:
+          COMPANY_ID,
+        order_id:
+          input.order_id,
         waybill_date:
           input.waybill_date,
         status: "draft",
-        notes: input.notes ?? null,
+        notes:
+          input.notes ?? null,
       })
-      .select(`
-        id,
-        company_id,
-        order_id,
-        waybill_number,
-        waybill_date,
-        status,
-        notes,
-        issued_at,
-        issued_by,
-        created_at,
-        updated_at,
-        deleted_at
-      `)
+      .select(
+        WAYBILL_BASE_SELECT
+      )
       .single();
 
     if (waybillError) {
-      console.error(
-        "WAYBILL CREATE:",
+      logWaybillError(
+        "CREATE",
         waybillError
       );
 
       throw new Error(
-        getErrorMessage(waybillError)
+        getErrorMessage(
+          waybillError
+        )
       );
     }
 
     const items: CreateWaybillItemInput[] =
-      orderItems.map(
-        (item: {
-          id: string;
-          company_id: string;
-          product_id: string;
-          product_name_snapshot:
-            | string
-            | null;
-          quantity: number;
-          weight_kg_snapshot: number;
-        }) => ({
-          company_id: COMPANY_ID,
-          waybill_id: waybill.id,
-          order_item_id: item.id,
-          product_id: item.product_id,
+      activeOrderItems.map(
+        (item) => ({
+          company_id:
+            COMPANY_ID,
+          waybill_id:
+            waybill.id,
+          order_item_id:
+            item.id,
+          product_id:
+            item.product_id,
           product_name_snapshot:
             item.product_name_snapshot ??
             "",
-          quantity: item.quantity,
+          quantity:
+            item.quantity,
           weight_kg_snapshot:
             item.weight_kg_snapshot,
         })
       );
 
-    const { error: itemsError } =
-      await supabase
-        .from("waybill_items")
-        .insert(items);
+    const {
+      error: itemsError,
+    } = await supabase
+      .from("waybill_items")
+      .insert(items);
 
     if (itemsError) {
-      console.error(
-        "WAYBILL CREATE ITEMS:",
+      logWaybillError(
+        "CREATE ITEMS",
         itemsError
       );
 
@@ -448,13 +761,16 @@ export const waybillsService = {
         );
 
       throw new Error(
-        getErrorMessage(itemsError)
+        getErrorMessage(
+          itemsError
+        )
       );
     }
 
     const {
       data: authData,
-    } = await supabase.auth.getUser();
+    } =
+      await supabase.auth.getUser();
 
     const {
       error: issueError,
@@ -465,7 +781,8 @@ export const waybillsService = {
         issued_at:
           new Date().toISOString(),
         issued_by:
-          authData.user?.id ?? null,
+          authData.user?.id ??
+          null,
       })
       .eq(
         "id",
@@ -481,13 +798,15 @@ export const waybillsService = {
       );
 
     if (issueError) {
-      console.error(
-        "WAYBILL ISSUE:",
+      logWaybillError(
+        "ISSUE",
         issueError
       );
 
       throw new Error(
-        getErrorMessage(issueError)
+        getErrorMessage(
+          issueError
+        )
       );
     }
 
@@ -509,7 +828,8 @@ export const waybillsService = {
     id: string,
     input: UpdateWaybillInput
   ): Promise<Waybill> {
-    const supabase = createSupabaseClient();
+    const supabase =
+      createSupabaseClient();
 
     const updateData: Record<
       string,
@@ -525,15 +845,17 @@ export const waybillsService = {
     }
 
     if (
-      input.notes !== undefined
+      input.notes !==
+      undefined
     ) {
       updateData.notes =
         input.notes;
     }
 
     if (
-      Object.keys(updateData).length ===
-      0
+      Object.keys(
+        updateData
+      ).length === 0
     ) {
       const existing =
         await this.getById(id);
@@ -566,8 +888,8 @@ export const waybillsService = {
       );
 
     if (error) {
-      console.error(
-        "WAYBILL UPDATE:",
+      logWaybillError(
+        "UPDATE",
         error
       );
 
@@ -591,100 +913,17 @@ export const waybillsService = {
   async getItems(
     waybillId: string
   ): Promise<WaybillItem[]> {
-    const supabase =
-      createSupabaseClient();
-
-    const {
-      data,
-      error,
-    } = await supabase
-      .from("waybill_items")
-      .select(`
-        id,
-        company_id,
-        waybill_id,
-        order_item_id,
-        product_id,
-        product_name_snapshot,
-        quantity,
-        weight_kg_snapshot,
-        tonnage,
-        created_at,
-        updated_at,
-        deleted_at
-      `)
-      .eq(
-        "waybill_id",
-        waybillId
-      )
-      .eq(
-        "company_id",
-        COMPANY_ID
-      )
-      .is(
-        "deleted_at",
-        null
-      )
-      .order(
-        "created_at",
-        {
-          ascending: true,
-        }
-      );
-
-    if (error) {
-      console.error(
-        "WAYBILL GET ITEMS:",
-        error
-      );
-
-      throw new Error(
-        getErrorMessage(error)
-      );
-    }
-
-    return (data ??
-      []) as WaybillItem[];
+    return getWaybillItems(
+      waybillId
+    );
   },
 
   async getLoading(
     waybillId: string
   ): Promise<Loading | null> {
-    const supabase =
-      createSupabaseClient();
-
-    const {
-      data,
-      error,
-    } = await supabase
-      .from("loading")
-      .select(LOADING_SELECT)
-      .eq(
-        "waybill_id",
-        waybillId
-      )
-      .eq(
-        "company_id",
-        COMPANY_ID
-      )
-      .is(
-        "deleted_at",
-        null
-      )
-      .maybeSingle();
-
-    if (error) {
-      console.error(
-        "WAYBILL GET LOADING:",
-        error
-      );
-
-      throw new Error(
-        getErrorMessage(error)
-      );
-    }
-
-    return data as Loading | null;
+    return getWaybillLoading(
+      waybillId
+    );
   },
 
   async updateLoading(
@@ -708,15 +947,17 @@ export const waybillsService = {
     }
 
     if (
-      input.notes !== undefined
+      input.notes !==
+      undefined
     ) {
       updateData.notes =
         input.notes;
     }
 
     if (
-      Object.keys(updateData).length ===
-      0
+      Object.keys(
+        updateData
+      ).length === 0
     ) {
       const existing =
         await this.getLoading(
@@ -756,8 +997,8 @@ export const waybillsService = {
       .single();
 
     if (error) {
-      console.error(
-        "WAYBILL UPDATE LOADING:",
+      logWaybillError(
+        "UPDATE LOADING",
         error
       );
 
@@ -820,8 +1061,8 @@ export const waybillsService = {
       .single();
 
     if (error) {
-      console.error(
-        "WAYBILL CONFIRM LOADING:",
+      logWaybillError(
+        "CONFIRM LOADING",
         error
       );
 
@@ -833,6 +1074,50 @@ export const waybillsService = {
     if (!data) {
       throw new Error(
         "رکورد بارگیری قابل تأیید نیست."
+      );
+    }
+
+    /*
+     * وضعیت اصلی حواله نیز باید
+     * پس از تأیید بارگیری به
+     * loading_confirmed تبدیل شود.
+     *
+     * این بخش برای هماهنگی با
+     * waybills.status اجرا می‌شود.
+     */
+    const {
+      error: waybillUpdateError,
+    } = await supabase
+      .from("waybills")
+      .update({
+        status:
+          "loading_confirmed",
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq(
+        "id",
+        waybillId
+      )
+      .eq(
+        "company_id",
+        COMPANY_ID
+      )
+      .is(
+        "deleted_at",
+        null
+      );
+
+    if (waybillUpdateError) {
+      logWaybillError(
+        "UPDATE WAYBILL AFTER LOADING",
+        waybillUpdateError
+      );
+
+      throw new Error(
+        getErrorMessage(
+          waybillUpdateError
+        )
       );
     }
 
@@ -861,7 +1146,8 @@ export const waybillsService = {
     } = await supabase
       .from("loading")
       .update({
-        status: "cancelled",
+        status:
+          "cancelled",
       })
       .eq(
         "waybill_id",
@@ -881,8 +1167,8 @@ export const waybillsService = {
       );
 
     if (error) {
-      console.error(
-        "WAYBILL CANCEL LOADING:",
+      logWaybillError(
+        "CANCEL LOADING",
         error
       );
 
@@ -917,7 +1203,11 @@ export const waybillsService = {
     } = await supabase
       .from("waybills")
       .select(
-        "id, status, company_id"
+        `
+          id,
+          status,
+          company_id
+        `
       )
       .eq(
         "id",
@@ -935,7 +1225,9 @@ export const waybillsService = {
 
     if (getError) {
       throw new Error(
-        getErrorMessage(getError)
+        getErrorMessage(
+          getError
+        )
       );
     }
 
@@ -959,7 +1251,8 @@ export const waybillsService = {
     } = await supabase
       .from("waybills")
       .update({
-        status: "cancelled",
+        status:
+          "cancelled",
       })
       .eq(
         "id",
@@ -975,8 +1268,8 @@ export const waybillsService = {
       );
 
     if (error) {
-      console.error(
-        "WAYBILL CANCEL:",
+      logWaybillError(
+        "CANCEL",
         error
       );
 

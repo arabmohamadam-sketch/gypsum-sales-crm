@@ -1,4 +1,8 @@
 import { createSupabaseClient } from "@/src/lib/supabase";
+import {
+  jalaliToGregorian,
+  isValidJalaliDate,
+} from "@/src/lib/utils/jalali";
 
 const COMPANY_ID =
   "11111111-1111-1111-1111-111111111111";
@@ -79,7 +83,7 @@ interface OrderRow {
 
 interface WaybillRow {
   id: string;
-  customer_id: string | null;
+  order_id: string;
   status: string;
   waybill_date: string;
   deleted_at: string | null;
@@ -89,10 +93,7 @@ interface WaybillItemRow {
   id: string;
   waybill_id: string;
   quantity: number | string | null;
-  weight_kg_snapshot:
-    | number
-    | string
-    | null;
+  weight_kg_snapshot: number | string | null;
   tonnage: number | string | null;
   deleted_at: string | null;
 }
@@ -150,37 +151,173 @@ function logReportError(
   console.error(
     getErrorMessage(
       error,
-      "خطای نامشخص در گزارش‌ها"
+      "خطای نامشخص در گزارش‌ها."
     )
   );
+
+  if (
+    typeof error === "object" &&
+    error !== null
+  ) {
+    console.error("details:", error);
+  }
 
   console.error(
     "=================================================="
   );
 }
 
+/**
+ * تبدیل یک ورودی تاریخ/بازه ISO به تاریخ میلادی
+ * با فرمت YYYY-MM-DD
+ *
+ * این مقدار برای ستون‌های DATE دیتابیس استفاده می‌شود.
+ */
+function toDatabaseDate(
+  value: string
+): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(
+      "تاریخ گزارش معتبر نیست."
+    );
+  }
+
+  const year = date.getUTCFullYear();
+  const month = String(
+    date.getUTCMonth() + 1
+  ).padStart(2, "0");
+  const day = String(
+    date.getUTCDate()
+  ).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * برای جلوگیری از خطای timezone،
+ * تاریخ گزارش را مستقیماً از ISO
+ * به YYYY-MM-DD تبدیل نمی‌کنیم.
+ *
+ * در این پروژه صفحه گزارش تاریخ جلالی را
+ * به ISO بر اساس ساعت محلی می‌سازد.
+ *
+ * بنابراین یک روز حاشیه امن در دو طرف بازه
+ * گرفته می‌شود و سپس داده‌های واقعی بر اساس
+ * تاریخ میلادی انتخاب می‌شوند.
+ */
+function getSafeDateRange(
+  range: ReportDateRange
+): {
+  fromDate?: string;
+  toDate?: string;
+  fromDateTime?: string;
+  toDateTime?: string;
+} {
+  if (!range.from && !range.to) {
+    return {};
+  }
+
+  const from =
+    range.from
+      ? new Date(range.from)
+      : null;
+
+  const to =
+    range.to
+      ? new Date(range.to)
+      : null;
+
+  if (
+    (from &&
+      Number.isNaN(from.getTime())) ||
+    (to &&
+      Number.isNaN(to.getTime()))
+  ) {
+    throw new Error(
+      "بازه تاریخ گزارش معتبر نیست."
+    );
+  }
+
+  let fromDate =
+    from
+      ? toDatabaseDate(range.from!)
+      : undefined;
+
+  let toDate =
+    to
+      ? toDatabaseDate(range.to!)
+      : undefined;
+
+  /*
+   * چون ISO ساخته‌شده در مرورگر به UTC تبدیل می‌شود،
+   * یک روز قبل/بعد ممکن است ایجاد شود.
+   *
+   * برای بازه‌های DATE در دیتابیس، با تاریخ واقعی
+   * صفحه گزارش کار می‌کنیم.
+   */
+  if (
+    fromDate &&
+    toDate &&
+    fromDate > toDate
+  ) {
+    const actualFrom = new Date(
+      fromDate + "T00:00:00Z"
+    );
+
+    const actualTo = new Date(
+      toDate + "T00:00:00Z"
+    );
+
+    actualFrom.setUTCDate(
+      actualFrom.getUTCDate() - 1
+    );
+
+    actualTo.setUTCDate(
+      actualTo.getUTCDate() + 1
+    );
+
+    fromDate =
+      actualFrom
+        .toISOString()
+        .slice(0, 10);
+
+    toDate =
+      actualTo
+        .toISOString()
+        .slice(0, 10);
+  }
+
+  return {
+    fromDate,
+    toDate,
+    fromDateTime: range.from,
+    toDateTime: range.to,
+  };
+}
+
 function getWaybillItemTonnage(
   item: WaybillItemRow
 ): number {
-  const directTonnage =
-    Number(item.tonnage ?? 0);
+  const directTonnage = Number(
+    item.tonnage ?? 0
+  );
 
   if (
-    Number.isFinite(
-      directTonnage
-    ) &&
+    Number.isFinite(directTonnage) &&
     directTonnage > 0
   ) {
     return directTonnage;
   }
 
-  const quantity =
-    Number(item.quantity ?? 0);
+  const quantity = Number(
+    item.quantity ?? 0
+  );
 
-  const weight =
-    Number(
-      item.weight_kg_snapshot ?? 0
-    );
+  const weight = Number(
+    item.weight_kg_snapshot ?? 0
+  );
 
   if (
     !Number.isFinite(quantity) ||
@@ -190,8 +327,7 @@ function getWaybillItemTonnage(
   }
 
   return (
-    (quantity * weight) /
-    1000
+    (quantity * weight) / 1000
   );
 }
 
@@ -210,19 +346,33 @@ function normalizeCityName(
   > = {
     Garmsar: "گرمسار",
     garmsar: "گرمسار",
+    گرمسار: "گرمسار",
+
     Semnan: "سمنان",
     semnan: "سمنان",
+    سمنان: "سمنان",
+
     Varamin: "ورامین",
     varamin: "ورامین",
+    ورامین: "ورامین",
+
     Chalous: "چالوس",
     Chalus: "چالوس",
     chalous: "چالوس",
+    chalus: "چالوس",
+    چالوس: "چالوس",
+
     Kelardasht: "کلاردشت",
     kelardasht: "کلاردشت",
+    کلاردشت: "کلاردشت",
+
     Ramsar: "رامسر",
     ramsar: "رامسر",
+    رامسر: "رامسر",
+
     Tonekabon: "تنکابن",
     tonekabon: "تنکابن",
+    تنکابن: "تنکابن",
   };
 
   return normalized[value] ?? value;
@@ -244,11 +394,62 @@ function getCitySortIndex(
   const index =
     order.indexOf(cityName);
 
-  if (index === -1) {
-    return 999;
+  return index === -1
+    ? 999
+    : index;
+}
+
+/**
+ * تبدیل بازه گزارش به YYYY-MM-DD.
+ *
+ * صفحه گزارش از تاریخ جلالی استفاده می‌کند،
+ * اما مقدار range از ISO ساخته شده است.
+ *
+ * این تابع برای این پروژه دو نکته را رعایت می‌کند:
+ * 1. اگر ISO متعلق به شروع روز ایران باشد،
+ *    تاریخ واقعی محلی را پیدا می‌کند.
+ * 2. خروجی همیشه برای ستون DATE به فرم YYYY-MM-DD است.
+ */
+function getLocalDatabaseDate(
+  value: string
+): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(
+      "تاریخ گزارش معتبر نیست."
+    );
   }
 
-  return index;
+  const parts = new Intl.DateTimeFormat(
+    "en-CA",
+    {
+      timeZone: "Asia/Tehran",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }
+  ).formatToParts(date);
+
+  const year = parts.find(
+    (part) => part.type === "year"
+  )?.value;
+
+  const month = parts.find(
+    (part) => part.type === "month"
+  )?.value;
+
+  const day = parts.find(
+    (part) => part.type === "day"
+  )?.value;
+
+  if (!year || !month || !day) {
+    throw new Error(
+      "تبدیل تاریخ گزارش انجام نشد."
+    );
+  }
+
+  return `${year}-${month}-${day}`;
 }
 
 export const reportsService = {
@@ -258,10 +459,63 @@ export const reportsService = {
     const supabase =
       createSupabaseClient();
 
-    // ========================================================
-    // CUSTOMERS
-    // ========================================================
+    console.log(
+      "========== REPORT START =========="
+    );
 
+    console.log(
+      "REPORT RANGE:",
+      range
+    );
+
+    /*
+     * تاریخ واقعی ایران برای Query ستون‌های DATE
+     */
+    let fromDate:
+      | string
+      | undefined;
+
+    let toDate:
+      | string
+      | undefined;
+
+    if (range.from) {
+      fromDate =
+        getLocalDatabaseDate(
+          range.from
+        );
+    }
+
+    if (range.to) {
+      toDate =
+        getLocalDatabaseDate(
+          range.to
+        );
+    }
+
+    console.log(
+      "REPORT DATABASE RANGE:",
+      {
+        fromDate,
+        toDate,
+      }
+    );
+
+    if (
+      fromDate &&
+      toDate &&
+      fromDate > toDate
+    ) {
+      throw new Error(
+        "تاریخ شروع گزارش نمی‌تواند بعد از تاریخ پایان باشد."
+      );
+    }
+
+    /*
+     * ========================================================
+     * CUSTOMERS
+     * ========================================================
+     */
     const {
       data: customers,
       error: customersError,
@@ -295,7 +549,12 @@ export const reportsService = {
         customersError
       );
 
-      throw customersError;
+      throw new Error(
+        getErrorMessage(
+          customersError,
+          "خطا در دریافت مشتریان گزارش."
+        )
+      );
     }
 
     const customerRows =
@@ -317,10 +576,11 @@ export const reportsService = {
       );
     }
 
-    // ========================================================
-    // ORDERS
-    // ========================================================
-
+    /*
+     * ========================================================
+     * ORDERS
+     * ========================================================
+     */
     let ordersQuery = supabase
       .from("orders")
       .select(`
@@ -343,21 +603,30 @@ export const reportsService = {
         null
       );
 
-    if (range.from) {
+    if (fromDate) {
       ordersQuery =
         ordersQuery.gte(
           "order_date",
-          range.from
+          fromDate
         );
     }
 
-    if (range.to) {
+    if (toDate) {
       ordersQuery =
         ordersQuery.lte(
           "order_date",
-          range.to
+          toDate
         );
     }
+
+    ordersQuery =
+      ordersQuery
+        .order(
+          "order_date",
+          {
+            ascending: false,
+          }
+        );
 
     const {
       data: orders,
@@ -370,21 +639,48 @@ export const reportsService = {
         ordersError
       );
 
-      throw ordersError;
+      throw new Error(
+        getErrorMessage(
+          ordersError,
+          "خطا در دریافت سفارش‌های گزارش."
+        )
+      );
     }
 
     const orderRows =
-      (orders ?? []) as OrderRow[];
+      (orders ??
+        []) as OrderRow[];
 
-    // ========================================================
-    // WAYBILLS
-    // ========================================================
+    const ordersById =
+      new Map<
+        string,
+        OrderRow
+      >();
 
+    for (
+      const order of orderRows
+    ) {
+      ordersById.set(
+        order.id,
+        order
+      );
+    }
+
+    console.log(
+      "REPORT CONFIRMED ORDERS:",
+      orderRows.length
+    );
+
+    /*
+     * ========================================================
+     * WAYBILLS
+     * ========================================================
+     */
     let waybillsQuery = supabase
       .from("waybills")
       .select(`
         id,
-        customer_id,
+        order_id,
         status,
         waybill_date,
         deleted_at
@@ -398,21 +694,30 @@ export const reportsService = {
         null
       );
 
-    if (range.from) {
+    if (fromDate) {
       waybillsQuery =
         waybillsQuery.gte(
           "waybill_date",
-          range.from
+          fromDate
         );
     }
 
-    if (range.to) {
+    if (toDate) {
       waybillsQuery =
         waybillsQuery.lte(
           "waybill_date",
-          range.to
+          toDate
         );
     }
+
+    waybillsQuery =
+      waybillsQuery
+        .order(
+          "waybill_date",
+          {
+            ascending: false,
+          }
+        );
 
     const {
       data: waybills,
@@ -425,21 +730,117 @@ export const reportsService = {
         waybillsError
       );
 
-      throw waybillsError;
+      throw new Error(
+        getErrorMessage(
+          waybillsError,
+          "خطا در دریافت حواله‌های گزارش."
+        )
+      );
     }
 
     const waybillRows =
       (waybills ??
         []) as WaybillRow[];
 
-    // ========================================================
-    // WAYBILL ITEMS
-    // ========================================================
+    console.log(
+      "REPORT WAYBILLS:",
+      waybillRows.length
+    );
 
-    let waybillItemRows: WaybillItemRow[] =
-      [];
+    /*
+     * ========================================================
+     * ORDERS RELATED TO WAYBILLS
+     * ========================================================
+     *
+     * یک حواله باید بتواند شهر سفارش خودش را پیدا کند،
+     * حتی اگر سفارش خارج از Query فروش بازه باشد.
+     */
+    const missingOrderIds =
+      waybillRows
+        .map(
+          (waybill) =>
+            waybill.order_id
+        )
+        .filter(
+          (orderId) =>
+            !ordersById.has(orderId)
+        );
 
-    if (waybillRows.length > 0) {
+    if (
+      missingOrderIds.length > 0
+    ) {
+      const uniqueMissingOrderIds =
+        Array.from(
+          new Set(
+            missingOrderIds
+          )
+        );
+
+      const {
+        data:
+          relatedOrders,
+        error:
+          relatedOrdersError,
+      } = await supabase
+        .from("orders")
+        .select(`
+          id,
+          customer_id,
+          order_date,
+          total_tonnage,
+          status
+        `)
+        .eq(
+          "company_id",
+          COMPANY_ID
+        )
+        .is(
+          "deleted_at",
+          null
+        )
+        .in(
+          "id",
+          uniqueMissingOrderIds
+        );
+
+      if (relatedOrdersError) {
+        logReportError(
+          "RELATED ORDERS",
+          relatedOrdersError
+        );
+
+        throw new Error(
+          getErrorMessage(
+            relatedOrdersError,
+            "خطا در دریافت سفارش‌های مرتبط با حواله."
+          )
+        );
+      }
+
+      for (
+        const order of (
+          (relatedOrders ??
+            []) as OrderRow[]
+        )
+      ) {
+        ordersById.set(
+          order.id,
+          order
+        );
+      }
+    }
+
+    /*
+     * ========================================================
+     * WAYBILL ITEMS
+     * ========================================================
+     */
+    let waybillItemRows:
+      WaybillItemRow[] = [];
+
+    if (
+      waybillRows.length > 0
+    ) {
       const waybillIds =
         waybillRows.map(
           (waybill) =>
@@ -479,7 +880,12 @@ export const reportsService = {
           waybillItemsError
         );
 
-        throw waybillItemsError;
+        throw new Error(
+          getErrorMessage(
+            waybillItemsError,
+            "خطا در دریافت اقلام حواله."
+          )
+        );
       }
 
       waybillItemRows =
@@ -487,10 +893,11 @@ export const reportsService = {
           []) as WaybillItemRow[];
     }
 
-    // ========================================================
-    // CALLS
-    // ========================================================
-
+    /*
+     * ========================================================
+     * CALLS
+     * ========================================================
+     */
     let callsQuery = supabase
       .from("calls")
       .select(`
@@ -508,6 +915,10 @@ export const reportsService = {
         null
       );
 
+    /*
+     * اگر call_date timestamp باشد،
+     * همان ISO بازه مناسب است.
+     */
     if (range.from) {
       callsQuery =
         callsQuery.gte(
@@ -535,33 +946,41 @@ export const reportsService = {
         callsError
       );
 
-      throw callsError;
+      throw new Error(
+        getErrorMessage(
+          callsError,
+          "خطا در دریافت تماس‌ها."
+        )
+      );
     }
 
     const callRows =
-      (calls ?? []) as CallRow[];
+      (calls ??
+        []) as CallRow[];
 
-    // ========================================================
-    // FOLLOW UPS
-    // ========================================================
-
-    let followUpsQuery = supabase
-      .from("follow_ups")
-      .select(`
-        id,
-        customer_id,
-        scheduled_at,
-        status,
-        deleted_at
-      `)
-      .eq(
-        "company_id",
-        COMPANY_ID
-      )
-      .is(
-        "deleted_at",
-        null
-      );
+    /*
+     * ========================================================
+     * FOLLOW UPS
+     * ========================================================
+     */
+    let followUpsQuery =
+      supabase
+        .from("follow_ups")
+        .select(`
+          id,
+          customer_id,
+          scheduled_at,
+          status,
+          deleted_at
+        `)
+        .eq(
+          "company_id",
+          COMPANY_ID
+        )
+        .is(
+          "deleted_at",
+          null
+        );
 
     if (range.from) {
       followUpsQuery =
@@ -590,20 +1009,27 @@ export const reportsService = {
         followUpsError
       );
 
-      throw followUpsError;
+      throw new Error(
+        getErrorMessage(
+          followUpsError,
+          "خطا در دریافت پیگیری‌ها."
+        )
+      );
     }
 
     const followUpRows =
       (followUps ??
         []) as FollowUpRow[];
 
-    // ========================================================
-    // GENERAL CUSTOMER COUNT
-    // ========================================================
-
+    /*
+     * ========================================================
+     * ACTIVE CUSTOMER COUNT
+     * ========================================================
+     */
     const {
       count: customersCount,
-      error: customersCountError,
+      error:
+        customersCountError,
     } = await supabase
       .from("customers")
       .select(
@@ -632,13 +1058,19 @@ export const reportsService = {
         customersCountError
       );
 
-      throw customersCountError;
+      throw new Error(
+        getErrorMessage(
+          customersCountError,
+          "خطا در محاسبه تعداد مشتریان."
+        )
+      );
     }
 
-    // ========================================================
-    // SALES
-    // ========================================================
-
+    /*
+     * ========================================================
+     * SALES TOTALS
+     * ========================================================
+     */
     const ordersCount =
       orderRows.length;
 
@@ -650,16 +1082,16 @@ export const reportsService = {
         ) =>
           total +
           Number(
-            order.total_tonnage ??
-              0
+            order.total_tonnage ?? 0
           ),
         0
       );
 
-    // ========================================================
-    // WAYBILL TOTALS
-    // ========================================================
-
+    /*
+     * ========================================================
+     * WAYBILL TOTALS
+     * ========================================================
+     */
     const draftCount =
       waybillRows.filter(
         (waybill) =>
@@ -732,10 +1164,11 @@ export const reportsService = {
           0
         );
 
-    // ========================================================
-    // ACTIVITY TOTALS
-    // ========================================================
-
+    /*
+     * ========================================================
+     * ACTIVITY TOTALS
+     * ========================================================
+     */
     const callsCount =
       callRows.length;
 
@@ -763,10 +1196,11 @@ export const reportsService = {
           "cancelled"
       ).length;
 
-    // ========================================================
-    // CITY REPORT MAP
-    // ========================================================
-
+    /*
+     * ========================================================
+     * CITY REPORT MAP
+     * ========================================================
+     */
     const cityMap =
       new Map<
         string,
@@ -774,7 +1208,10 @@ export const reportsService = {
       >();
 
     function getCityKey(
-      customerId: string | null | undefined
+      customerId:
+        | string
+        | null
+        | undefined
     ): string {
       if (!customerId) {
         return "no-city";
@@ -821,17 +1258,18 @@ export const reportsService = {
             )
           : undefined;
 
-      const cityName =
-        normalizeCityName(
-          customer?.city?.name
-        );
-
-      const created: CityReport = {
+      const created:
+        CityReport = {
         cityId:
           customer?.city?.id ??
           customer?.city_id ??
           null,
-        cityName,
+
+        cityName:
+          normalizeCityName(
+            customer?.city?.name
+          ),
+
         customersCount: 0,
         ordersCount: 0,
         salesTonnage: 0,
@@ -852,18 +1290,16 @@ export const reportsService = {
       return created;
     }
 
-    // ========================================================
-    // CITY CUSTOMER COUNTS
-    // ========================================================
-
+    /*
+     * ========================================================
+     * CITY CUSTOMER COUNTS
+     * ========================================================
+     */
     for (
       const customer of customerRows
     ) {
-      const city =
-        customer.city;
-
       const key =
-        city?.id ??
+        customer.city?.id ??
         customer.city_id ??
         "no-city";
 
@@ -873,13 +1309,15 @@ export const reportsService = {
       if (!report) {
         report = {
           cityId:
-            city?.id ??
+            customer.city?.id ??
             customer.city_id ??
             null,
+
           cityName:
             normalizeCityName(
-              city?.name
+              customer.city?.name
             ),
+
           customersCount: 0,
           ordersCount: 0,
           salesTonnage: 0,
@@ -902,10 +1340,11 @@ export const reportsService = {
         1;
     }
 
-    // ========================================================
-    // CITY ORDERS
-    // ========================================================
-
+    /*
+     * ========================================================
+     * CITY ORDERS
+     * ========================================================
+     */
     for (
       const order of orderRows
     ) {
@@ -923,10 +1362,11 @@ export const reportsService = {
         );
     }
 
-    // ========================================================
-    // CITY CALLS
-    // ========================================================
-
+    /*
+     * ========================================================
+     * CITY CALLS
+     * ========================================================
+     */
     for (
       const call of callRows
     ) {
@@ -938,10 +1378,11 @@ export const reportsService = {
       report.callsCount += 1;
     }
 
-    // ========================================================
-    // CITY FOLLOW UPS
-    // ========================================================
-
+    /*
+     * ========================================================
+     * CITY FOLLOW UPS
+     * ========================================================
+     */
     for (
       const followUp of followUpRows
     ) {
@@ -970,19 +1411,30 @@ export const reportsService = {
       }
     }
 
-    // ========================================================
-    // CITY WAYBILLS
-    // ========================================================
-
+    /*
+     * ========================================================
+     * CITY WAYBILLS
+     * ========================================================
+     */
     for (
       const waybill of waybillRows
     ) {
-      const report =
-        getOrCreateCity(
-          waybill.customer_id
+      const order =
+        ordersById.get(
+          waybill.order_id
         );
 
-      report.waybillsCount += 1;
+      if (!order) {
+        continue;
+      }
+
+      const report =
+        getOrCreateCity(
+          order.customer_id
+        );
+
+      report.waybillsCount +=
+        1;
 
       if (
         waybill.status ===
@@ -998,44 +1450,84 @@ export const reportsService = {
       }
     }
 
-    // ========================================================
-    // CITY REPORT RESULT
-    // ========================================================
-
+    /*
+     * ========================================================
+     * CITY REPORT RESULT
+     * ========================================================
+     */
     const cityReports =
       Array.from(
         cityMap.values()
-      )
-        .sort(
-          (a, b) => {
-            const sortA =
-              getCitySortIndex(
-                a.cityName
-              );
+      ).sort(
+        (
+          a,
+          b
+        ) => {
+          const sortA =
+            getCitySortIndex(
+              a.cityName
+            );
 
-            const sortB =
-              getCitySortIndex(
-                b.cityName
-              );
+          const sortB =
+            getCitySortIndex(
+              b.cityName
+            );
 
-            if (
-              sortA !== sortB
-            ) {
-              return (
-                sortA - sortB
-              );
-            }
-
-            return a.cityName.localeCompare(
-              b.cityName,
-              "fa"
+          if (
+            sortA !== sortB
+          ) {
+            return (
+              sortA - sortB
             );
           }
-        );
 
-    // ========================================================
-    // RETURN
-    // ========================================================
+          if (
+            b.salesTonnage !==
+            a.salesTonnage
+          ) {
+            return (
+              b.salesTonnage -
+              a.salesTonnage
+            );
+          }
+
+          if (
+            b.loadingTonnage !==
+            a.loadingTonnage
+          ) {
+            return (
+              b.loadingTonnage -
+              a.loadingTonnage
+            );
+          }
+
+          return a.cityName.localeCompare(
+            b.cityName,
+            "fa"
+          );
+        }
+      );
+
+    console.log(
+      "REPORT FINAL:",
+      {
+        ordersCount,
+        totalTonnage,
+        waybillsCount:
+          waybillRows.length,
+        loadingConfirmedCount,
+        loadingTonnage,
+        callsCount,
+        followUpsCount,
+        customersCount,
+        cityReports:
+          cityReports.length,
+      }
+    );
+
+    console.log(
+      "========== REPORT END =========="
+    );
 
     return {
       sales: {

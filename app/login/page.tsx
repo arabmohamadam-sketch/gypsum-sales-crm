@@ -5,9 +5,13 @@ import {
   useEffect,
   useState,
 } from "react";
+
 import { useRouter } from "next/navigation";
 
 import { signIn } from "@/src/lib/auth/auth";
+import {
+  getSupabaseClient,
+} from "@/src/lib/supabase";
 import { useAuth } from "@/src/lib/auth/AuthProvider";
 
 export default function LoginPage() {
@@ -84,11 +88,41 @@ export default function LoginPage() {
         return;
       }
 
+      const supabase =
+        getSupabaseClient();
+
+      const {
+        data: sessionData,
+        error: sessionError,
+      } =
+        await supabase.auth.getSession();
+
+      console.log(
+        "LOGIN SESSION AFTER SIGN IN:",
+        sessionData.session
+      );
+
+      if (
+        sessionError ||
+        !sessionData.session
+      ) {
+        console.error(
+          "LOGIN SESSION ERROR:",
+          sessionError
+        );
+
+        setError(
+          "ورود انجام شد اما نشست کاربر ذخیره نشد. لطفاً دوباره تلاش کنید."
+        );
+
+        return;
+      }
+
       router.replace("/");
       router.refresh();
     } catch (err) {
       console.error(
-        "Login error:",
+        "LOGIN ERROR:",
         err
       );
 
@@ -108,6 +142,7 @@ export default function LoginPage() {
       >
         <div className="absolute inset-0">
           <div className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-amber-400/10 blur-3xl" />
+
           <div className="absolute -bottom-24 -left-24 h-80 w-80 rounded-full bg-cyan-400/10 blur-3xl" />
         </div>
 
@@ -129,7 +164,6 @@ export default function LoginPage() {
       dir="rtl"
       className="relative min-h-screen overflow-hidden bg-slate-950"
     >
-      {/* Background */}
       <div className="absolute inset-0">
         <div className="absolute right-[-8%] top-[-12%] h-[420px] w-[420px] rounded-full bg-amber-400/10 blur-3xl" />
 
@@ -140,14 +174,10 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.08),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(34,211,238,0.08),transparent_28%)]" />
       </div>
 
-      {/* Decorative grid */}
       <div className="absolute inset-0 opacity-[0.035] [background-image:linear-gradient(rgba(255,255,255,1)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,1)_1px,transparent_1px)] [background-size:42px_42px]" />
 
       <div className="relative mx-auto flex min-h-screen max-w-7xl items-center px-4 py-8 sm:px-6 lg:px-8">
-
         <div className="grid w-full overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.04] shadow-2xl shadow-black/30 backdrop-blur-xl lg:grid-cols-[1.05fr_0.95fr]">
-
-          {/* Brand Side */}
           <section className="relative hidden min-h-[720px] overflow-hidden lg:flex">
             <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900" />
 
@@ -156,8 +186,6 @@ export default function LoginPage() {
             <div className="absolute bottom-[-120px] left-[-120px] h-[420px] w-[420px] rounded-full bg-cyan-400/10 blur-3xl" />
 
             <div className="relative z-10 flex w-full flex-col justify-between p-10 xl:p-14">
-
-              {/* Logo */}
               <div>
                 <div className="flex items-center gap-4">
                   <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-2xl font-black text-slate-950 shadow-xl shadow-amber-500/20">
@@ -188,12 +216,11 @@ export default function LoginPage() {
                   </h1>
 
                   <p className="mt-6 max-w-lg text-base leading-8 text-slate-400">
-                    مدیریت مشتریان، سفارش‌ها، تماس‌ها و پیگیری‌های فروش در یک پنل یکپارچه و حرفه‌ای.
+                    مدیریت مشتریان، سفارش‌ها، حواله‌ها و پیگیری‌های فروش در یک پنل یکپارچه و حرفه‌ای.
                   </p>
                 </div>
               </div>
 
-              {/* Feature Cards */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur">
                   <div className="text-xl">
@@ -240,13 +267,10 @@ export default function LoginPage() {
             </div>
           </section>
 
-          {/* Login Side */}
           <section className="relative flex min-h-[680px] items-center justify-center bg-white px-5 py-8 sm:px-8 lg:min-h-[720px] xl:px-14">
             <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-l from-amber-400 via-amber-500 to-cyan-500 lg:hidden" />
 
             <div className="w-full max-w-md">
-
-              {/* Mobile Logo */}
               <div className="mb-8 text-center lg:hidden">
                 <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-xl font-black text-slate-950 shadow-lg shadow-amber-100">
                   گچ
@@ -261,7 +285,6 @@ export default function LoginPage() {
                 </p>
               </div>
 
-              {/* Heading */}
               <div className="mb-8">
                 <span className="inline-flex rounded-full bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700">
                   پنل فروش
@@ -276,14 +299,10 @@ export default function LoginPage() {
                 </p>
               </div>
 
-              {/* Form */}
               <form
-                onSubmit={
-                  handleSubmit
-                }
+                onSubmit={handleSubmit}
                 className="space-y-5"
               >
-                {/* Email */}
                 <div>
                   <label
                     htmlFor="email"
@@ -303,24 +322,19 @@ export default function LoginPage() {
                       type="email"
                       autoComplete="email"
                       value={email}
-                      onChange={(
-                        event
-                      ) =>
+                      onChange={(event) =>
                         setEmail(
                           event.target.value
                         )
                       }
                       placeholder="example@gmail.com"
-                      disabled={
-                        submitting
-                      }
+                      disabled={submitting}
                       dir="ltr"
                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pr-11 pl-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
                     />
                   </div>
                 </div>
 
-                {/* Password */}
                 <div>
                   <label
                     htmlFor="password"
@@ -344,17 +358,13 @@ export default function LoginPage() {
                       }
                       autoComplete="current-password"
                       value={password}
-                      onChange={(
-                        event
-                      ) =>
+                      onChange={(event) =>
                         setPassword(
                           event.target.value
                         )
                       }
                       placeholder="رمز عبور خود را وارد کنید"
-                      disabled={
-                        submitting
-                      }
+                      disabled={submitting}
                       dir="ltr"
                       className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pr-11 pl-12 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
                     />
@@ -367,9 +377,7 @@ export default function LoginPage() {
                             !current
                         )
                       }
-                      disabled={
-                        submitting
-                      }
+                      disabled={submitting}
                       className="absolute left-3 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-bold text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
                       aria-label={
                         showPassword
@@ -384,7 +392,6 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                {/* Error */}
                 {error && (
                   <div
                     role="alert"
@@ -410,12 +417,9 @@ export default function LoginPage() {
                   </div>
                 )}
 
-                {/* Submit */}
                 <button
                   type="submit"
-                  disabled={
-                    submitting
-                  }
+                  disabled={submitting}
                   className="group relative w-full overflow-hidden rounded-2xl bg-slate-950 px-4 py-4 text-sm font-black text-white shadow-xl shadow-slate-200 transition hover:-translate-y-0.5 hover:bg-slate-900 hover:shadow-2xl focus:outline-none focus:ring-4 focus:ring-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <span className="absolute inset-0 bg-gradient-to-l from-amber-400/20 via-transparent to-cyan-400/20 opacity-0 transition group-hover:opacity-100" />
@@ -438,7 +442,6 @@ export default function LoginPage() {
                 </button>
               </form>
 
-              {/* Footer */}
               <div className="mt-8 border-t border-slate-100 pt-6">
                 <div className="flex items-center justify-center gap-2 text-xs text-slate-400">
                   <span className="h-2 w-2 rounded-full bg-emerald-500" />
