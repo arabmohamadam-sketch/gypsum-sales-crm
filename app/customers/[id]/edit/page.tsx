@@ -8,7 +8,10 @@ import {
 } from "react";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import {
+  useParams,
+  useRouter,
+} from "next/navigation";
 
 import {
   ArrowLeft,
@@ -19,9 +22,17 @@ import {
   UserRound,
 } from "lucide-react";
 
-import { customersService } from "@/src/lib/services/customers";
-import { useCities } from "@/src/lib/hooks/useCities";
-import type { Customer } from "@/src/lib/types/customer";
+import {
+  customersService,
+} from "@/src/lib/services/customers";
+
+import {
+  useCities,
+} from "@/src/lib/hooks/useCities";
+
+import type {
+  Customer,
+} from "@/src/lib/types/customer";
 
 const customerTypes = [
   {
@@ -79,8 +90,11 @@ function InputField({
     <div>
       <label className="mb-2 block text-sm font-bold text-slate-700">
         {label}
+
         {required && (
-          <span className="mr-1 text-red-500">*</span>
+          <span className="mr-1 text-red-500">
+            *
+          </span>
         )}
       </label>
 
@@ -133,7 +147,9 @@ function ToggleCard({
   activeIconClass,
 }: {
   checked: boolean;
-  onChange: (checked: boolean) => void;
+  onChange: (
+    checked: boolean
+  ) => void;
   title: string;
   description: string;
   icon: ReactNode;
@@ -175,20 +191,26 @@ function ToggleCard({
           type="checkbox"
           checked={checked}
           onChange={(event) =>
-            onChange(event.target.checked)
+            onChange(
+              event.target.checked
+            )
           }
           className="sr-only"
         />
 
         <div
           className={`h-7 w-12 rounded-full transition ${
-            checked ? "bg-blue-600" : "bg-slate-200"
+            checked
+              ? "bg-blue-600"
+              : "bg-slate-200"
           }`}
         />
 
         <div
           className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-all ${
-            checked ? "right-1" : "right-6"
+            checked
+              ? "right-1"
+              : "right-6"
           }`}
         />
       </div>
@@ -204,25 +226,36 @@ function LoadingState() {
     >
       <div className="mx-auto max-w-5xl">
         <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+
           <div className="h-1.5 animate-pulse bg-slate-200" />
 
           <div className="p-6 md:p-8">
+
             <div className="flex items-center gap-4">
+
               <div className="h-16 w-16 animate-pulse rounded-2xl bg-slate-200" />
 
               <div className="flex-1">
                 <div className="h-7 w-52 animate-pulse rounded-lg bg-slate-200" />
+
                 <div className="mt-3 h-4 w-80 max-w-full animate-pulse rounded bg-slate-100" />
               </div>
             </div>
 
             <div className="mt-8 grid gap-5 md:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, index) => (
-                <div key={index}>
-                  <div className="h-4 w-28 animate-pulse rounded bg-slate-100" />
-                  <div className="mt-2 h-12 animate-pulse rounded-2xl bg-slate-100" />
-                </div>
-              ))}
+
+              {Array.from({
+                length: 6,
+              }).map(
+                (_, index) => (
+                  <div key={index}>
+                    <div className="h-4 w-28 animate-pulse rounded bg-slate-100" />
+
+                    <div className="mt-2 h-12 animate-pulse rounded-2xl bg-slate-100" />
+                  </div>
+                )
+              )}
+
             </div>
           </div>
         </div>
@@ -242,8 +275,10 @@ export default function EditCustomerPage() {
 
   const {
     data: cities,
+    regions,
     loading: citiesLoading,
     error: citiesError,
+    createCity,
   } = useCities();
 
   const [customer, setCustomer] =
@@ -272,12 +307,33 @@ export default function EditCustomerPage() {
       is_active: true,
     });
 
+  const [showNewCity, setShowNewCity] =
+    useState(false);
+
+  const [newCityName, setNewCityName] =
+    useState("");
+
+  const [newCityCode, setNewCityCode] =
+    useState("");
+
+  const [newCityRegionId, setNewCityRegionId] =
+    useState("");
+
+  const [creatingCity, setCreatingCity] =
+    useState(false);
+
+  const [cityCreateError, setCityCreateError] =
+    useState<string | null>(null);
+
   useEffect(() => {
     let mounted = true;
 
     async function loadCustomer() {
       if (!customerId) {
-        setError("شناسه مشتری معتبر نیست.");
+        setError(
+          "شناسه مشتری معتبر نیست."
+        );
+
         setLoading(false);
         return;
       }
@@ -298,12 +354,16 @@ export default function EditCustomerPage() {
         setCustomer(data);
 
         setForm({
-          name: data.name ?? "",
-          phone: data.phone ?? "",
+          name:
+            data.name ?? "",
+          phone:
+            data.phone ?? "",
           whatsapp_number:
-            data.whatsapp_number ?? "",
+            data.whatsapp_number ??
+            "",
           customer_type:
-            data.customer_type ?? "",
+            data.customer_type ??
+            "",
           city_id:
             data.city_id ?? "",
           is_vip:
@@ -340,7 +400,9 @@ export default function EditCustomerPage() {
     };
   }, [customerId]);
 
-  function updateField<K extends keyof FormData>(
+  function updateField<
+    K extends keyof FormData
+  >(
     field: K,
     value: FormData[K]
   ) {
@@ -351,6 +413,66 @@ export default function EditCustomerPage() {
 
     setError(null);
     setSuccess(null);
+  }
+
+  async function handleCreateCity() {
+    const name =
+      newCityName.trim();
+
+    const regionId =
+      newCityRegionId.trim();
+
+    if (!name) {
+      setCityCreateError(
+        "نام شهر را وارد کنید."
+      );
+      return;
+    }
+
+    if (!regionId) {
+      setCityCreateError(
+        "منطقه شهر را انتخاب کنید."
+      );
+      return;
+    }
+
+    try {
+      setCreatingCity(true);
+      setCityCreateError(null);
+
+      const city =
+        await createCity({
+          name,
+          code:
+            newCityCode.trim() ||
+            null,
+          region_id:
+            regionId,
+        });
+
+      updateField(
+        "city_id",
+        city.id
+      );
+
+      setNewCityName("");
+      setNewCityCode("");
+      setNewCityRegionId("");
+      setShowNewCity(false);
+    } catch (err) {
+      console.error(
+        "CREATE CITY ERROR:",
+        err
+      );
+
+      setCityCreateError(
+        err instanceof Error
+          ? err.message
+          : "خطا در ایجاد شهر."
+      );
+    } finally {
+      setCreatingCity(false);
+    }
   }
 
   async function handleSubmit(
@@ -425,6 +547,7 @@ export default function EditCustomerPage() {
         router.push(
           `/customers/${customer.id}`
         );
+
         router.refresh();
       }, 700);
     } catch (err) {
@@ -454,11 +577,15 @@ export default function EditCustomerPage() {
         className="min-h-screen bg-slate-50 px-4 py-6 md:px-6 md:py-8"
       >
         <div className="mx-auto max-w-5xl">
+
           <section className="overflow-hidden rounded-3xl border border-red-200 bg-white shadow-sm">
+
             <div className="h-1.5 bg-red-500" />
 
             <div className="p-7">
+
               <div className="flex items-start gap-4">
+
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-xl font-black text-red-600">
                   !
                 </div>
@@ -473,6 +600,7 @@ export default function EditCustomerPage() {
                       "اطلاعات مشتری موردنظر موجود نیست."}
                   </p>
                 </div>
+
               </div>
 
               <Link
@@ -482,8 +610,10 @@ export default function EditCustomerPage() {
                 <ArrowLeft size={16} />
                 بازگشت به مشتریان
               </Link>
+
             </div>
           </section>
+
         </div>
       </main>
     );
@@ -500,11 +630,13 @@ export default function EditCustomerPage() {
   const selectedCity =
     cities.find(
       (city) =>
-        city.id === form.city_id
+        city.id ===
+        form.city_id
     )?.name_fa ??
     cities.find(
       (city) =>
-        city.id === form.city_id
+        city.id ===
+        form.city_id
     )?.name ??
     "انتخاب نشده";
 
@@ -514,6 +646,7 @@ export default function EditCustomerPage() {
       className="min-h-screen bg-slate-50 px-4 py-6 md:px-6 md:py-8"
     >
       <div className="mx-auto max-w-5xl">
+
         <div className="mb-6">
           <Link
             href={`/customers/${customer.id}`}
@@ -525,6 +658,7 @@ export default function EditCustomerPage() {
         </div>
 
         <section className="relative mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+
           <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-blue-700 via-blue-500 to-cyan-400" />
 
           <div className="absolute -left-20 -top-24 h-64 w-64 rounded-full bg-blue-100/50 blur-3xl" />
@@ -532,14 +666,19 @@ export default function EditCustomerPage() {
           <div className="absolute -bottom-24 right-0 h-64 w-64 rounded-full bg-cyan-100/40 blur-3xl" />
 
           <div className="relative p-6 md:p-8">
+
             <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+
               <div className="flex min-w-0 items-start gap-4">
+
                 <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
                   <UserRound size={28} />
                 </div>
 
                 <div className="min-w-0">
+
                   <div className="flex flex-wrap items-center gap-2">
+
                     <h1 className="truncate text-2xl font-black tracking-tight text-slate-900 md:text-3xl">
                       ویرایش مشتری
                     </h1>
@@ -554,15 +693,18 @@ export default function EditCustomerPage() {
                         VIP
                       </span>
                     )}
+
                   </div>
 
                   <p className="mt-2 text-sm leading-6 text-slate-500 md:text-base">
                     اطلاعات مشتری را بررسی و بروزرسانی کنید.
                   </p>
+
                 </div>
               </div>
 
               <div className="rounded-2xl bg-slate-50 px-4 py-3">
+
                 <p className="text-xs font-medium text-slate-400">
                   مشتری فعلی
                 </p>
@@ -570,18 +712,27 @@ export default function EditCustomerPage() {
                 <p className="mt-1 max-w-[220px] truncate text-sm font-black text-slate-800">
                   {customer.name}
                 </p>
+
               </div>
+
             </div>
+
           </div>
+
         </section>
 
-        {(error || success || citiesError) && (
+        {(error ||
+          success ||
+          citiesError) && (
           <div className="mb-6 space-y-3">
+
             {error && (
               <div className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
+
                 <div className="h-1 bg-red-500" />
 
                 <div className="flex items-start gap-3 p-5">
+
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 font-black text-red-600">
                     !
                   </div>
@@ -595,15 +746,18 @@ export default function EditCustomerPage() {
                       {error}
                     </p>
                   </div>
+
                 </div>
               </div>
             )}
 
             {success && (
               <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
+
                 <div className="h-1 bg-emerald-500" />
 
                 <div className="flex items-start gap-3 p-5">
+
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
                     <CheckCircle2 size={20} />
                   </div>
@@ -617,15 +771,18 @@ export default function EditCustomerPage() {
                       {success}
                     </p>
                   </div>
+
                 </div>
               </div>
             )}
 
             {citiesError && (
               <div className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
+
                 <div className="h-1 bg-amber-500" />
 
                 <div className="flex items-start gap-3 p-5">
+
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 font-black text-amber-600">
                     !
                   </div>
@@ -639,9 +796,11 @@ export default function EditCustomerPage() {
                       {citiesError}
                     </p>
                   </div>
+
                 </div>
               </div>
             )}
+
           </div>
         )}
 
@@ -649,7 +808,9 @@ export default function EditCustomerPage() {
           onSubmit={handleSubmit}
           className="space-y-6"
         >
+
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
+
             <SectionHeader
               icon={<UserRound size={20} />}
               title="اطلاعات اصلی"
@@ -657,6 +818,7 @@ export default function EditCustomerPage() {
             />
 
             <div className="grid gap-5 md:grid-cols-3">
+
               <InputField
                 label="نام مشتری"
                 required
@@ -714,40 +876,178 @@ export default function EditCustomerPage() {
                 label="شهر"
                 required
               >
-                <select
-                  value={form.city_id}
-                  onChange={(event) =>
-                    updateField(
-                      "city_id",
-                      event.target.value
-                    )
-                  }
-                  disabled={citiesLoading}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <option value="">
-                    {citiesLoading
-                      ? "در حال دریافت شهرها..."
-                      : "انتخاب شهر"}
-                  </option>
+                <div className="space-y-3">
 
-                  {cities.map(
-                    (city) => (
-                      <option
-                        key={city.id}
-                        value={city.id}
-                      >
-                        {city.name_fa ??
-                          city.name}
-                      </option>
-                    )
+                  <select
+                    value={
+                      form.city_id
+                    }
+                    onChange={(event) =>
+                      updateField(
+                        "city_id",
+                        event.target.value
+                      )
+                    }
+                    disabled={
+                      citiesLoading
+                    }
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <option value="">
+                      {citiesLoading
+                        ? "در حال دریافت شهرها..."
+                        : "انتخاب شهر"}
+                    </option>
+
+                    {cities.map(
+                      (city) => (
+                        <option
+                          key={city.id}
+                          value={city.id}
+                        >
+                          {city.name_fa ??
+                            city.name}
+                        </option>
+                      )
+                    )}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNewCity(
+                        (current) =>
+                          !current
+                      );
+
+                      setCityCreateError(
+                        null
+                      );
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl bg-blue-50 px-4 py-2.5 text-xs font-black text-blue-700 transition hover:bg-blue-100"
+                  >
+                    <span className="text-base">
+                      +
+                    </span>
+
+                    افزودن شهر جدید
+                  </button>
+
+                  {showNewCity && (
+                    <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+
+                      <p className="text-sm font-black text-blue-900">
+                        افزودن شهر جدید
+                      </p>
+
+                      <div className="mt-3 space-y-3">
+
+                        <input
+                          type="text"
+                          value={
+                            newCityName
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setNewCityName(
+                              event.target.value
+                            )
+                          }
+                          placeholder="نام شهر، مثلاً قم"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+                        />
+
+                        <select
+                          value={
+                            newCityRegionId
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setNewCityRegionId(
+                              event.target.value
+                            )
+                          }
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+                        >
+                          <option value="">
+                            انتخاب منطقه
+                          </option>
+
+                          {regions.map(
+                            (region) => (
+                              <option
+                                key={
+                                  region.id
+                                }
+                                value={
+                                  region.id
+                                }
+                              >
+                                {region.name ===
+                                "Region 1"
+                                  ? "منطقه ۱"
+                                  : region.name ===
+                                      "Region 2"
+                                    ? "منطقه ۲"
+                                    : region.name}
+                              </option>
+                            )
+                          )}
+                        </select>
+
+                        <input
+                          type="text"
+                          value={
+                            newCityCode
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setNewCityCode(
+                              event.target.value
+                            )
+                          }
+                          placeholder="کد شهر — اختیاری"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+                        />
+
+                        {cityCreateError && (
+                          <p className="text-xs font-bold text-red-600">
+                            {cityCreateError}
+                          </p>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleCreateCity()
+                          }
+                          disabled={
+                            creatingCity ||
+                            regions.length ===
+                              0
+                          }
+                          className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {creatingCity
+                            ? "در حال ثبت شهر..."
+                            : "ثبت شهر و انتخاب"}
+                        </button>
+
+                      </div>
+                    </div>
                   )}
-                </select>
+
+                </div>
               </InputField>
+
             </div>
           </section>
 
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
+
             <SectionHeader
               icon={<Phone size={20} />}
               title="اطلاعات تماس"
@@ -755,11 +1055,13 @@ export default function EditCustomerPage() {
             />
 
             <div className="grid gap-5 md:grid-cols-2">
+
               <InputField
                 label="شماره تماس"
                 hint="شماره اصلی مشتری"
               >
                 <div className="relative">
+
                   <Phone
                     size={17}
                     className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -778,6 +1080,7 @@ export default function EditCustomerPage() {
                     dir="ltr"
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-4 pr-11 text-left text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
                   />
+
                 </div>
               </InputField>
 
@@ -786,6 +1089,7 @@ export default function EditCustomerPage() {
                 hint="در صورت متفاوت بودن با شماره تماس"
               >
                 <div className="relative">
+
                   <Phone
                     size={17}
                     className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -806,12 +1110,15 @@ export default function EditCustomerPage() {
                     dir="ltr"
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-4 pr-11 text-left text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
                   />
+
                 </div>
               </InputField>
+
             </div>
           </section>
 
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
+
             <SectionHeader
               icon={<Star size={20} />}
               title="وضعیت مشتری"
@@ -819,8 +1126,11 @@ export default function EditCustomerPage() {
             />
 
             <div className="grid gap-4 md:grid-cols-2">
+
               <ToggleCard
-                checked={form.is_vip}
+                checked={
+                  form.is_vip
+                }
                 onChange={(checked) =>
                   updateField(
                     "is_vip",
@@ -829,13 +1139,17 @@ export default function EditCustomerPage() {
                 }
                 title="مشتری VIP"
                 description="این مشتری در گروه مشتریان مهم قرار گیرد."
-                icon={<Star size={21} />}
+                icon={
+                  <Star size={21} />
+                }
                 activeClass="border-amber-200 bg-amber-50"
                 activeIconClass="text-amber-500"
               />
 
               <ToggleCard
-                checked={form.is_active}
+                checked={
+                  form.is_active
+                }
                 onChange={(checked) =>
                   updateField(
                     "is_active",
@@ -845,21 +1159,27 @@ export default function EditCustomerPage() {
                 title="مشتری فعال"
                 description="مشتری در فهرست مشتریان فعال قرار گیرد."
                 icon={
-                  <CheckCircle2 size={21} />
+                  <CheckCircle2
+                    size={21}
+                  />
                 }
                 activeClass="border-emerald-200 bg-emerald-50"
                 activeIconClass="text-emerald-600"
               />
+
             </div>
           </section>
 
           <section className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-900 shadow-sm">
+
             <div className="relative p-6 md:p-7">
+
               <div className="absolute -left-16 -top-20 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl" />
 
               <div className="absolute -bottom-20 right-0 h-48 w-48 rounded-full bg-cyan-400/10 blur-3xl" />
 
               <div className="relative flex items-center justify-between gap-4">
+
                 <div>
                   <p className="text-xs font-bold text-slate-400">
                     پیش‌نمایش اطلاعات جدید
@@ -876,6 +1196,7 @@ export default function EditCustomerPage() {
               </div>
 
               <div className="relative mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
                 <PreviewItem
                   label="نام مشتری"
                   value={
@@ -886,20 +1207,26 @@ export default function EditCustomerPage() {
 
                 <PreviewItem
                   label="نوع مشتری"
-                  value={selectedType}
+                  value={
+                    selectedType
+                  }
                 />
 
                 <PreviewItem
                   label="شهر"
-                  value={selectedCity}
+                  value={
+                    selectedCity
+                  }
                 />
 
                 <div className="rounded-2xl bg-white/5 p-4">
+
                   <p className="text-xs text-slate-400">
                     وضعیت
                   </p>
 
                   <div className="mt-2 flex flex-wrap gap-2">
+
                     <span
                       className={`rounded-full px-3 py-1 text-xs font-bold ${
                         form.is_active
@@ -917,14 +1244,18 @@ export default function EditCustomerPage() {
                         VIP
                       </span>
                     )}
+
                   </div>
                 </div>
+
               </div>
             </div>
           </section>
 
           <div className="sticky bottom-4 z-20">
+
             <div className="flex flex-col-reverse gap-3 rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-xl shadow-slate-200/50 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+
               <Link
                 href={`/customers/${customer.id}`}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
@@ -944,17 +1275,21 @@ export default function EditCustomerPage() {
                 {saving ? (
                   <>
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+
                     در حال ذخیره...
                   </>
                 ) : (
                   <>
                     <Save size={17} />
+
                     ذخیره تغییرات
                   </>
                 )}
               </button>
+
             </div>
           </div>
+
         </form>
       </div>
     </main>
@@ -970,6 +1305,7 @@ function PreviewItem({
 }) {
   return (
     <div className="rounded-2xl bg-white/5 p-4">
+
       <p className="text-xs text-slate-400">
         {label}
       </p>
@@ -977,6 +1313,7 @@ function PreviewItem({
       <p className="mt-2 truncate font-bold text-white">
         {value}
       </p>
+
     </div>
   );
 }
