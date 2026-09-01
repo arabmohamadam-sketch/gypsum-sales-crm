@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   ArrowLeft,
@@ -12,6 +12,7 @@ import {
   Package,
   RefreshCw,
   Trash2,
+  Truck,
   UserRound,
   XCircle,
 } from "lucide-react";
@@ -23,6 +24,7 @@ import {
 
 import {
   formatJalaliDate,
+  getTodayJalali,
   gregorianToJalali,
   isValidJalaliDate,
   jalaliToGregorianDate,
@@ -31,6 +33,14 @@ import {
 import {
   useOrders,
 } from "@/src/lib/hooks/useOrders";
+
+import {
+  waybillsService,
+} from "@/src/lib/services/waybills";
+
+import type {
+  Waybill,
+} from "@/src/lib/types/waybill";
 
 import type {
   OrderWithRelations,
@@ -131,8 +141,7 @@ function getSourceLabel(
     string
   > = {
     manual: "ثبت دستی",
-    mobile_app:
-      "اپلیکیشن موبایل",
+    mobile_app: "اپلیکیشن موبایل",
     whatsapp: "واتساپ",
     sms: "پیامک",
     pwa: "PWA",
@@ -188,6 +197,67 @@ function getCustomerTypeLabel(
     labels[value] ??
     value
   );
+}
+
+function getWaybillStatusLabel(
+  status: string
+): string {
+  switch (status) {
+    case "draft":
+      return "پیش‌نویس";
+
+    case "issued":
+      return "صادر شده";
+
+    case "loading_confirmed":
+      return "بارگیری تأیید شده";
+
+    case "cancelled":
+      return "لغو شده";
+
+    default:
+      return status;
+  }
+}
+
+function getWaybillStatusClass(
+  status: string
+): string {
+  switch (status) {
+    case "issued":
+      return "bg-blue-50 text-blue-700 ring-1 ring-blue-100";
+
+    case "loading_confirmed":
+      return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100";
+
+    case "cancelled":
+      return "bg-red-50 text-red-700 ring-1 ring-red-100";
+
+    case "draft":
+    default:
+      return "bg-amber-50 text-amber-700 ring-1 ring-amber-100";
+  }
+}
+
+function getLoadingStatusLabel(
+  status:
+    | string
+    | null
+    | undefined
+): string {
+  switch (status) {
+    case "confirmed":
+      return "بارگیری تأیید شده";
+
+    case "cancelled":
+      return "بارگیری لغو شده";
+
+    case "pending":
+      return "در انتظار بارگیری";
+
+    default:
+      return "ثبت نشده";
+  }
 }
 
 function InfoCard({
@@ -454,6 +524,15 @@ export default function OrderDetailsPage() {
   const [deleting, setDeleting] =
     useState(false);
 
+  const [waybillLoading, setWaybillLoading] =
+    useState(false);
+
+  const [waybillCreating, setWaybillCreating] =
+    useState(false);
+
+  const [waybills, setWaybills] =
+    useState<Waybill[]>([]);
+
   const [message, setMessage] =
     useState("");
 
@@ -528,8 +607,10 @@ export default function OrderDetailsPage() {
         "";
 
   const orderItems =
-    (order?.items ??
-      []).filter(
+    (
+      order?.items ??
+      []
+    ).filter(
       (item) =>
         !item.deleted_at
     );
@@ -543,6 +624,146 @@ export default function OrderDetailsPage() {
         ),
       0
     );
+
+  const canIssueWaybill =
+    Boolean(
+      order &&
+        order.status ===
+          "confirmed" &&
+        orderItems.length >
+          0 &&
+        waybills.length === 0
+    );
+
+  async function loadOrderWaybills() {
+    if (!orderId) {
+      return;
+    }
+
+    setWaybillLoading(
+      true
+    );
+
+    try {
+      const result =
+        await waybillsService.getByOrderId(
+          orderId
+        );
+
+      setWaybills(
+        result
+      );
+    } catch (err) {
+      console.error(
+        "ORDER WAYBILLS LOAD:",
+        err
+      );
+
+      setWaybills([]);
+    } finally {
+      setWaybillLoading(
+        false
+      );
+    }
+  }
+
+  useEffect(() => {
+    void loadOrderWaybills();
+  }, [orderId]);
+
+  async function handleIssueWaybill() {
+    if (!order) {
+      return;
+    }
+
+    if (order.status !== "confirmed") {
+      setFormError(
+        "فقط سفارش‌های تأییدشده امکان صدور حواله دارند."
+      );
+      return;
+    }
+
+    if (orderItems.length === 0) {
+      setFormError(
+        "این سفارش هیچ قلم فعال کالایی برای صدور حواله ندارد."
+      );
+      return;
+    }
+
+    if (waybills.length > 0) {
+      setFormError(
+        "برای این سفارش قبلاً حواله فعال صادر شده است."
+      );
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        "آیا از صدور حواله برای این سفارش مطمئن هستید؟"
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setWaybillCreating(
+      true
+    );
+    setMessage("");
+    setFormError("");
+
+    try {
+      const today =
+        getTodayJalali();
+
+      const waybill =
+        await waybillsService.create(
+          {
+            order_id:
+              order.id,
+            waybill_date:
+              jalaliToGregorianDate(
+                today
+              ),
+            notes:
+              displayNotes.trim() ||
+              null,
+          }
+        );
+
+      setMessage(
+        `حواله شماره ${formatNumber(
+          Number(
+            waybill.waybill_number
+          )
+        )} با موفقیت صادر شد.`
+      );
+
+      await loadOrderWaybills();
+
+      window.setTimeout(
+        () => {
+          setMessage("");
+        },
+        4000
+      );
+    } catch (err) {
+      console.error(
+        "ORDER ISSUE WAYBILL:",
+        err
+      );
+
+      setFormError(
+        err instanceof Error
+          ? err.message
+          : "خطا در صدور حواله."
+      );
+    } finally {
+      setWaybillCreating(
+        false
+      );
+    }
+  }
 
   async function handleSave() {
     if (!order) {
@@ -595,10 +816,8 @@ export default function OrderDetailsPage() {
         {
           order_date:
             gregorianDate,
-
           status:
             displayStatus,
-
           notes:
             displayNotes.trim() ||
             null,
@@ -618,6 +837,8 @@ export default function OrderDetailsPage() {
       setMessage(
         "اطلاعات سفارش با موفقیت ذخیره شد."
       );
+
+      await loadOrderWaybills();
 
       window.setTimeout(
         () => {
@@ -848,11 +1069,49 @@ export default function OrderDetailsPage() {
                 مشاهده مشتری
               </Link>
 
+              {waybills.length > 0 && (
+                <Link
+                  href={`/waybills/${waybills[0].id}`}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-700"
+                >
+                  <Truck size={16} />
+                  مشاهده حواله
+                </Link>
+              )}
+
+              {canIssueWaybill && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void handleIssueWaybill()
+                  }
+                  disabled={
+                    waybillCreating ||
+                    waybillLoading
+                  }
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {waybillCreating ? (
+                    <RefreshCw
+                      size={16}
+                      className="animate-spin"
+                    />
+                  ) : (
+                    <Truck size={16} />
+                  )}
+
+                  {waybillCreating
+                    ? "در حال صدور حواله..."
+                    : "صدور حواله"}
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={() =>
-                  void refresh()
-                }
+                onClick={() => {
+                  void refresh();
+                  void loadOrderWaybills();
+                }}
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
               >
                 <RefreshCw size={16} />
@@ -940,8 +1199,7 @@ export default function OrderDetailsPage() {
                   {order.customer?.customer_type && (
                     <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
                       {getCustomerTypeLabel(
-                        order.customer
-                          .customer_type
+                        order.customer.customer_type
                       )}
                     </span>
                   )}
@@ -1088,8 +1346,7 @@ export default function OrderDetailsPage() {
           </div>
         </div>
 
-        {orderItems.length ===
-        0 ? (
+        {orderItems.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
               <Package size={24} />
@@ -1173,6 +1430,189 @@ export default function OrderDetailsPage() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+      </section>
+
+      {/* Waybills */}
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <SectionTitle
+            eyebrow="ارسال و بارگیری"
+            title="وضعیت حواله"
+            description="حواله‌های مرتبط با این سفارش و وضعیت بارگیری آنها"
+          />
+
+          {waybills.length > 0 && (
+            <span className="inline-flex w-fit items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700">
+              <Truck size={14} />
+              {formatNumber(
+                waybills.length
+              )}{" "}
+              حواله
+            </span>
+          )}
+        </div>
+
+        {waybillLoading ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
+            <RefreshCw
+              size={22}
+              className="mx-auto animate-spin text-blue-600"
+            />
+
+            <p className="mt-3 text-sm font-bold text-slate-600">
+              در حال دریافت وضعیت حواله...
+            </p>
+          </div>
+        ) : waybills.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
+              <Truck size={24} />
+            </div>
+
+            <h3 className="mt-4 font-black text-slate-800">
+              هنوز حواله‌ای برای این سفارش وجود ندارد
+            </h3>
+
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              پس از صدور حواله، وضعیت ارسال و بارگیری آن در این بخش نمایش داده می‌شود.
+            </p>
+
+            {order.status ===
+              "confirmed" &&
+              orderItems.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void handleIssueWaybill()
+                  }
+                  disabled={
+                    waybillCreating
+                  }
+                  className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {waybillCreating ? (
+                    <RefreshCw
+                      size={17}
+                      className="animate-spin"
+                    />
+                  ) : (
+                    <Truck size={17} />
+                  )}
+
+                  {waybillCreating
+                    ? "در حال صدور حواله..."
+                    : "صدور حواله"}
+                </button>
+              )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {waybills.map(
+              (waybill) => {
+                const loadingStatus =
+                  waybill.loading?.status ??
+                  null;
+
+                return (
+                  <div
+                    key={
+                      waybill.id
+                    }
+                    className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5"
+                  >
+                    <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm">
+                          <Truck
+                            size={21}
+                          />
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-lg font-black text-slate-900">
+                              حواله شماره{" "}
+                              {formatNumber(
+                                Number(
+                                  waybill.waybill_number
+                                )
+                              )}
+                            </h3>
+
+                            <span
+                              className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-bold ${getWaybillStatusClass(
+                                waybill.status
+                              )}`}
+                            >
+                              {getWaybillStatusLabel(
+                                waybill.status
+                              )}
+                            </span>
+                          </div>
+
+                          <p className="mt-2 text-sm text-slate-500">
+                            تاریخ حواله:
+                            {" "}
+                            <span className="font-black text-slate-700">
+                              {formatJalaliDate(
+                                waybill.waybill_date
+                              )}
+                            </span>
+                          </p>
+
+                          <p className="mt-1 text-sm text-slate-500">
+                            وضعیت بارگیری:
+                            {" "}
+                            <span className="font-black text-slate-700">
+                              {getLoadingStatusLabel(
+                                loadingStatus
+                              )}
+                            </span>
+                          </p>
+
+                          {waybill.loading?.loading_date && (
+                            <p className="mt-1 text-sm text-slate-500">
+                              تاریخ بارگیری:
+                              {" "}
+                              <span className="font-black text-slate-700">
+                                {formatJalaliDate(
+                                  waybill.loading.loading_date
+                                )}
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Link
+                          href={`/waybills/${waybill.id}`}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-600"
+                        >
+                          جزئیات حواله
+                          <ArrowLeft
+                            size={16}
+                          />
+                        </Link>
+
+                        <Link
+                          href={`/orders/${order.id}`}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                        >
+                          سفارش
+                          <Package
+                            size={15}
+                          />
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+            )}
           </div>
         )}
       </section>
@@ -1268,8 +1708,7 @@ export default function OrderDetailsPage() {
                     event
                   ) =>
                     setJalaliMonth(
-                      event.target
-                        .value
+                      event.target.value
                     )
                   }
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-black text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
@@ -1321,8 +1760,7 @@ export default function OrderDetailsPage() {
                     event
                   ) =>
                     setJalaliDay(
-                      event.target
-                        .value
+                      event.target.value
                     )
                   }
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-black text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
@@ -1491,8 +1929,7 @@ export default function OrderDetailsPage() {
               event
             ) =>
               setNotes(
-                event.target
-                  .value
+                event.target.value
               )
             }
             rows={5}

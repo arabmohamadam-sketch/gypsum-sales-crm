@@ -34,9 +34,11 @@ import {
 } from "next/navigation";
 
 import {
-  toGregorian,
-  toJalaali,
-} from "jalaali-js";
+  JalaliDate,
+  getTodayJalali,
+  jalaliToGregorianDate,
+  isValidJalaliDate,
+} from "@/src/lib/utils/jalali";
 
 import { customersService } from "@/src/lib/services/customers";
 
@@ -56,11 +58,7 @@ import type { Customer } from "@/src/lib/types/customer";
 const COMPANY_ID =
   "11111111-1111-1111-1111-111111111111";
 
-type JalaliDate = {
-  year: number;
-  month: number;
-  day: number;
-};
+
 
 type OrderStatus =
   | "draft"
@@ -114,94 +112,7 @@ function createInitialOrderItem(): OrderItemForm {
   };
 }
 
-function getTodayJalali(): JalaliDate {
-  const now = new Date();
 
-  const jalali = toJalaali(
-    now.getFullYear(),
-    now.getMonth() + 1,
-    now.getDate()
-  );
-
-  return {
-    year: jalali.jy,
-    month: jalali.jm,
-    day: jalali.jd,
-  };
-}
-
-function jalaliToGregorianDate(
-  date: JalaliDate
-): string {
-  const gregorian = toGregorian(
-    date.year,
-    date.month,
-    date.day
-  );
-
-  const result = new Date(
-    gregorian.gy,
-    gregorian.gm - 1,
-    gregorian.gd,
-    0,
-    0,
-    0,
-    0
-  );
-
-  if (Number.isNaN(result.getTime())) {
-    throw new Error(
-      "تاریخ واردشده معتبر نیست."
-    );
-  }
-
-  return result.toISOString();
-}
-
-function isValidJalaliDate(
-  date: JalaliDate
-): boolean {
-  try {
-    if (
-      !Number.isInteger(date.year) ||
-      !Number.isInteger(date.month) ||
-      !Number.isInteger(date.day)
-    ) {
-      return false;
-    }
-
-    if (
-      date.year < 1300 ||
-      date.year > 1500 ||
-      date.month < 1 ||
-      date.month > 12 ||
-      date.day < 1 ||
-      date.day > 31
-    ) {
-      return false;
-    }
-
-    const gregorian = toGregorian(
-      date.year,
-      date.month,
-      date.day
-    );
-
-    const back = toJalaali(
-      gregorian.gy,
-      gregorian.gm,
-      gregorian.gd
-    );
-
-    return (
-      back.jy === date.year &&
-      back.jm === date.month &&
-      back.jd === date.day
-    );
-  } catch {
-    return false;
-  }
-}
 
 function formatNumber(
   value: number

@@ -45,9 +45,8 @@ const menus: MenuItem[] = [
   },
   {
     title: "حواله‌ها",
-    href: "#",
+    href: "/waybills",
     icon: Truck,
-    comingSoon: true,
   },
   {
     title: "فعالیت‌ها",

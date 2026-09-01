@@ -44,3 +44,6 @@ next-env.d.ts
 gypsum-sales-crm.zip
 gypsum-sales-crm.rar
 src.zip
+
+# Supabase local temporary files
+supabase/.temp/

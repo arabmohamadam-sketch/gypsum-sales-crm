@@ -1,7 +1,7 @@
 import {
   toGregorian,
   toJalaali,
-  isValidJalaaliDate,
+  isValidJalaaliDate as isValidJalaaliDateLib,
 } from "jalaali-js";
 
 export interface JalaliDate {
@@ -15,6 +15,9 @@ const ENGLISH_DIGITS = "0123456789";
 
 /**
  * تبدیل اعداد انگلیسی به فارسی
+ *
+ * مثال:
+ * 1405 → ۱۴۰۵
  */
 export function toPersianDigits(
   value: string | number
@@ -27,6 +30,9 @@ export function toPersianDigits(
 
 /**
  * تبدیل اعداد فارسی به انگلیسی
+ *
+ * مثال:
+ * ۱۴۰۵ → 1405
  */
 export function toEnglishDigits(
   value: string
@@ -34,12 +40,23 @@ export function toEnglishDigits(
   return value.replace(
     /[۰-۹]/g,
     (digit) =>
-      String(PERSIAN_DIGITS.indexOf(digit))
+      ENGLISH_DIGITS[
+        PERSIAN_DIGITS.indexOf(digit)
+      ]
   );
 }
 
 /**
  * تبدیل تاریخ میلادی به جلالی
+ *
+ * ورودی:
+ * - string
+ * - Date
+ * - null
+ * - undefined
+ *
+ * خروجی:
+ * JalaliDate | null
  */
 export function gregorianToJalali(
   value: string | Date | null | undefined
@@ -65,6 +82,29 @@ export function gregorianToJalali(
     date.getFullYear(),
     date.getMonth() + 1,
     date.getDate()
+  );
+
+  return {
+    year: jy,
+    month: jm,
+    day: jd,
+  };
+}
+
+/**
+ * دریافت تاریخ امروز به تقویم جلالی
+ */
+export function getTodayJalali(): JalaliDate {
+  const now = new Date();
+
+  const {
+    jy,
+    jm,
+    jd,
+  } = toJalaali(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    now.getDate()
   );
 
   return {
@@ -148,6 +188,13 @@ export function formatJalaliDateTime(
 
 /**
  * بررسی معتبر بودن تاریخ جلالی
+ *
+ * مثال:
+ * isValidJalaliDate({
+ *   year: 1405,
+ *   month: 6,
+ *   day: 9
+ * })
  */
 export function isValidJalaliDate(
   date: JalaliDate
@@ -171,7 +218,7 @@ export function isValidJalaliDate(
     return false;
   }
 
-  return isValidJalaaliDate(
+  return isValidJalaaliDateLib(
     date.year,
     date.month,
     date.day
@@ -179,20 +226,26 @@ export function isValidJalaliDate(
 }
 
 /**
- * تبدیل تاریخ جلالی به میلادی
+ * تبدیل تاریخ جلالی به تاریخ میلادی
+ *
+ * ورودی:
+ * سال، ماه، روز
+ *
+ * مثال:
+ * jalaliToGregorian(1405, 6, 9)
  */
 export function jalaliToGregorian(
   year: number,
   month: number,
   day: number
 ) {
-  if (
-    !isValidJalaaliDate(
-      year,
-      month,
-      day
-    )
-  ) {
+  const jalaliDate: JalaliDate = {
+    year,
+    month,
+    day,
+  };
+
+  if (!isValidJalaliDate(jalaliDate)) {
     throw new Error(
       "تاریخ جلالی نامعتبر است."
     );
@@ -209,7 +262,7 @@ export function jalaliToGregorian(
  * تبدیل تاریخ جلالی به رشته تاریخ میلادی
  *
  * مثال:
- * 2026-08-27
+ * 2026-08-31
  */
 export function jalaliToGregorianDate(
   date: JalaliDate
@@ -221,7 +274,9 @@ export function jalaliToGregorianDate(
       date.day
     );
 
-  const pad = (value: number) =>
+  const pad = (
+    value: number
+  ) =>
     String(value).padStart(2, "0");
 
   return `${result.gy}-${pad(
