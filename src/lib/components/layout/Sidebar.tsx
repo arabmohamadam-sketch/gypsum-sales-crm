@@ -61,9 +61,8 @@ const menus: MenuItem[] = [
   },
   {
     title: "گزارش‌ها",
-    href: "#",
+    href: "/reports",
     icon: BarChart3,
-    comingSoon: true,
   },
   {
     title: "هوش مصنوعی",
@@ -230,10 +229,11 @@ export default function Sidebar() {
                   );
                 }
 
-                const active = isMenuActive(
-                  pathname,
-                  item.href
-                );
+                const active =
+                  isMenuActive(
+                    pathname,
+                    item.href
+                  );
 
                 return (
                   <Link
@@ -273,8 +273,12 @@ export default function Sidebar() {
 
             {/* Activities shortcuts */}
 
-            {(pathname.startsWith("/activities") ||
-              pathname.startsWith("/customers/")) && (
+            {(pathname.startsWith(
+              "/activities"
+            ) ||
+              pathname.startsWith(
+                "/customers/"
+              )) && (
               <div className="mt-5 rounded-2xl border border-white/5 bg-white/[0.03] p-3">
                 <p className="px-2 pb-2 text-[10px] font-bold text-slate-500">
                   دسترسی سریع فعالیت‌ها
@@ -358,7 +362,8 @@ export default function Sidebar() {
               const active =
                 item.href === "/"
                   ? pathname === "/"
-                  : pathname === item.href ||
+                  : pathname ===
+                      item.href ||
                     pathname.startsWith(
                       `${item.href}/`
                     );

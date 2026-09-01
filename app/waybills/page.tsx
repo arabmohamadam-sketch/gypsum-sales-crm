@@ -90,7 +90,22 @@ function getStatusIcon(status: string) {
 
 function getOrderTonnage(waybill: Waybill): number {
   return (waybill.items ?? []).reduce(
-    (sum, item) => sum + Number(item.tonnage ?? 0),
+    (sum, item) => {
+      const tonnage = Number(item.tonnage ?? 0);
+
+      if (tonnage > 0) {
+        return sum + tonnage;
+      }
+
+      return (
+        sum +
+        (
+          Number(item.quantity ?? 0) *
+          Number(item.weight_kg_snapshot ?? 0)
+        ) /
+          1000
+      );
+    },
     0
   );
 }

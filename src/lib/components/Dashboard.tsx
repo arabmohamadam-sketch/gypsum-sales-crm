@@ -10,16 +10,22 @@ import {
   CheckCircle2,
   ChevronLeft,
   Clock3,
+  FileText,
   Phone,
   Plus,
   RefreshCw,
   Sparkles,
   Target,
   TrendingUp,
+  Truck,
   Users,
+  XCircle,
 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
 import { useDashboard } from "@/src/lib/hooks/useDashboard";
+import { waybillsService } from "@/src/lib/services/waybills";
+import type { Waybill } from "@/src/lib/types/waybill";
 import { formatJalaliDateTime } from "@/src/lib/utils/jalali";
 
 function formatNumber(value: number): string {
@@ -44,13 +50,27 @@ function formatDate(value: string | null): string {
   }
 }
 
+function getTodayGregorianDate(): string {
+  const now = new Date();
+
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 function getCustomerTypeLabel(type: string): string {
   const labels: Record<string, string> = {
     building_material_store: "مصالح‌فروشی",
+    building_material_stores: "مصالح‌فروشی",
     contractor: "پیمانکار",
+    contractor_company: "پیمانکار",
     employer: "کارفرما",
+    employers: "کارفرما",
     plaster_worker: "گچ‌کار",
     plasterer: "گچ‌کار",
+    plasterer_company: "گچ‌کار",
     distributor: "توزیع‌کننده",
     retailer: "خرده‌فروشی",
   };
@@ -72,6 +92,7 @@ function getCityName(name?: string | null): string {
     varamin: "ورامین",
     Chalous: "چالوس",
     Chalus: "چالوس",
+    chalous: "چالوس",
     Kelardasht: "کلاردشت",
     kelardasht: "کلاردشت",
     Ramsar: "رامسر",
@@ -93,6 +114,23 @@ function getInactivityLabel(days: number): string {
   }
 
   return `${formatNumber(days)} روز`;
+}
+
+function getWaybillTonnage(waybill: Waybill): number {
+  return (waybill.items ?? []).reduce((sum, item) => {
+    const directTonnage = Number(item.tonnage ?? 0);
+
+    if (directTonnage > 0) {
+      return sum + directTonnage;
+    }
+
+    return (
+      sum +
+      (Number(item.quantity ?? 0) *
+        Number(item.weight_kg_snapshot ?? 0)) /
+        1000
+    );
+  }, 0);
 }
 
 function StatCard({
@@ -237,6 +275,59 @@ export default function Dashboard() {
     refresh,
   } = useDashboard();
 
+  const [waybills, setWaybills] = useState<Waybill[]>([]);
+  const [waybillsLoading, setWaybillsLoading] =
+    useState(true);
+  const [waybillsError, setWaybillsError] =
+    useState<string | null>(null);
+  const [refreshingAll, setRefreshingAll] =
+    useState(false);
+
+  const loadWaybills = useCallback(
+    async () => {
+      try {
+        setWaybillsLoading(true);
+        setWaybillsError(null);
+
+        const result =
+          await waybillsService.getAll();
+
+        setWaybills(result);
+      } catch (err) {
+        console.error(
+          "DASHBOARD WAYBILLS LOAD ERROR:",
+          err
+        );
+
+        setWaybillsError(
+          err instanceof Error
+            ? err.message
+            : "خطا در دریافت اطلاعات حواله‌ها."
+        );
+      } finally {
+        setWaybillsLoading(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    void loadWaybills();
+  }, [loadWaybills]);
+
+  async function handleRefreshAll() {
+    try {
+      setRefreshingAll(true);
+
+      await Promise.all([
+        refresh(),
+        loadWaybills(),
+      ]);
+    } finally {
+      setRefreshingAll(false);
+    }
+  }
+
   if (loading) {
     return (
       <main
@@ -248,7 +339,9 @@ export default function Dashboard() {
 
           <div className="p-6 md:p-8">
             <div className="h-6 w-36 animate-pulse rounded-full bg-slate-200" />
+
             <div className="mt-5 h-10 w-80 max-w-full animate-pulse rounded-xl bg-slate-200" />
+
             <div className="mt-3 h-5 w-[520px] max-w-full animate-pulse rounded-xl bg-slate-100" />
 
             <div className="mt-8 flex flex-wrap gap-3">
@@ -259,9 +352,19 @@ export default function Dashboard() {
         </section>
 
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, index) => (
-            <SkeletonCard key={index} />
-          ))}
+          {Array.from({ length: 5 }).map(
+            (_, index) => (
+              <SkeletonCard key={index} />
+            )
+          )}
+        </section>
+
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          {Array.from({ length: 5 }).map(
+            (_, index) => (
+              <SkeletonCard key={index} />
+            )
+          )}
         </section>
 
         <section className="grid gap-6 xl:grid-cols-2">
@@ -297,10 +400,20 @@ export default function Dashboard() {
 
             <button
               type="button"
-              onClick={() => void refresh()}
-              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-red-700"
+              onClick={() =>
+                void handleRefreshAll()
+              }
+              disabled={refreshingAll}
+              className="mt-6 inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <RefreshCw size={17} />
+              <RefreshCw
+                size={17}
+                className={
+                  refreshingAll
+                    ? "animate-spin"
+                    : ""
+                }
+              />
               تلاش مجدد
             </button>
           </div>
@@ -314,6 +427,106 @@ export default function Dashboard() {
     recentActivities,
     recommendedCustomers,
   } = data;
+
+  const todayKey =
+    getTodayGregorianDate();
+
+  const waybillsCount =
+    waybills.length;
+
+  const issuedWaybillsCount =
+    waybills.filter(
+      (waybill) =>
+        waybill.status === "issued"
+    ).length;
+
+  const loadingConfirmedWaybillsCount =
+    waybills.filter(
+      (waybill) =>
+        waybill.status ===
+        "loading_confirmed"
+    ).length;
+
+  const cancelledWaybillsCount =
+    waybills.filter(
+      (waybill) =>
+        waybill.status ===
+        "cancelled"
+    ).length;
+
+  const draftWaybillsCount =
+    waybills.filter(
+      (waybill) =>
+        waybill.status === "draft"
+    ).length;
+
+  const pendingLoadingCount =
+    waybills.filter(
+      (waybill) =>
+        waybill.status === "issued" &&
+        waybill.loading?.status === "pending"
+    ).length;
+
+  const loadingConfirmedTonnage =
+    waybills
+      .filter(
+        (waybill) =>
+          waybill.status ===
+          "loading_confirmed"
+      )
+      .reduce(
+        (total, waybill) =>
+          total +
+          getWaybillTonnage(waybill),
+        0
+      );
+
+  /*
+   * ============================================================
+   * TODAY OPERATIONAL KPIs
+   * ============================================================
+   */
+
+  const todayWaybills =
+    waybills.filter(
+      (waybill) =>
+        waybill.waybill_date ===
+        todayKey
+    );
+
+  const todayWaybillsCount =
+    todayWaybills.length;
+
+  const todayIssuedWaybillsCount =
+    todayWaybills.filter(
+      (waybill) =>
+        waybill.status === "issued"
+    ).length;
+
+  const todayLoadingConfirmedWaybills =
+    todayWaybills.filter(
+      (waybill) =>
+        waybill.status ===
+        "loading_confirmed"
+    );
+
+  const todayLoadingConfirmedCount =
+    todayLoadingConfirmedWaybills.length;
+
+  const todayCancelledWaybillsCount =
+    todayWaybills.filter(
+      (waybill) =>
+        waybill.status ===
+        "cancelled"
+    ).length;
+
+  const todayLoadingTonnage =
+    todayLoadingConfirmedWaybills.reduce(
+      (total, waybill) =>
+        total +
+        getWaybillTonnage(waybill),
+      0
+    );
 
   return (
     <main
@@ -353,8 +566,8 @@ export default function Dashboard() {
                 </h1>
 
                 <p className="mt-2 text-sm leading-7 text-slate-500 md:text-base">
-                  مدیریت مشتریان، سفارش‌ها، تماس‌ها و
-                  پیگیری‌های فروش در یک نگاه
+                  مدیریت مشتریان، سفارش‌ها، تماس‌ها،
+                  پیگیری‌ها و عملیات حواله در یک نگاه
                 </p>
               </div>
             </div>
@@ -363,10 +576,20 @@ export default function Dashboard() {
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={() => void refresh()}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
+              onClick={() =>
+                void handleRefreshAll()
+              }
+              disabled={refreshingAll}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <RefreshCw size={17} />
+              <RefreshCw
+                size={17}
+                className={
+                  refreshingAll
+                    ? "animate-spin"
+                    : ""
+                }
+              />
               به‌روزرسانی
             </button>
 
@@ -382,30 +605,36 @@ export default function Dashboard() {
       </section>
 
       {/* ===================================================== */}
-      {/* KPI */}
+      {/* SALES KPI */}
       {/* ===================================================== */}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           title="تعداد مشتریان"
-          value={formatNumber(stats.customersCount)}
-          description="مشتری فعال"
+          value={formatNumber(
+            stats.customersCount
+          )}
+          description="مشتریان فعال"
           icon={<Users size={22} />}
           iconClass="bg-blue-50 text-blue-700"
         />
 
         <StatCard
           title="تعداد سفارش‌ها"
-          value={formatNumber(stats.ordersCount)}
-          description="سفارش ثبت‌شده"
+          value={formatNumber(
+            stats.ordersCount
+          )}
+          description="سفارش‌های تأییدشده"
           icon={<Box size={22} />}
           iconClass="bg-violet-50 text-violet-700"
         />
 
         <StatCard
           title="تناژ فروش"
-          value={formatTonnage(stats.totalTonnage)}
-          description="مجموع فروش"
+          value={formatTonnage(
+            stats.totalTonnage
+          )}
+          description="مجموع فروش ثبت‌شده"
           icon={<TrendingUp size={22} />}
           iconClass="bg-emerald-50 text-emerald-700"
           valueClass="text-emerald-700"
@@ -413,7 +642,9 @@ export default function Dashboard() {
 
         <StatCard
           title="تماس‌های امروز"
-          value={formatNumber(stats.todayCallsCount)}
+          value={formatNumber(
+            stats.todayCallsCount
+          )}
           description="تماس ثبت‌شده امروز"
           icon={<Phone size={22} />}
           iconClass="bg-sky-50 text-sky-700"
@@ -425,11 +656,308 @@ export default function Dashboard() {
           value={formatNumber(
             stats.todayFollowUpsCount
           )}
-          description="پیگیری در انتظار"
+          description="پیگیری‌های در انتظار امروز"
           icon={<Bell size={22} />}
           iconClass="bg-amber-50 text-amber-700"
           valueClass="text-amber-700"
         />
+      </section>
+
+      {/* ===================================================== */}
+      {/* TODAY OPERATIONAL KPI */}
+      {/* ===================================================== */}
+
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="p-6 md:p-7">
+          <SectionHeader
+            title="عملیات امروز"
+            description="وضعیت واقعی حواله‌ها و بارگیری‌های مربوط به امروز"
+            href="/waybills"
+            hrefLabel="مدیریت حواله‌ها"
+            icon={<Truck size={19} />}
+          />
+
+          {waybillsError ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+                  <XCircle size={18} />
+                </div>
+
+                <div>
+                  <p className="font-black text-red-800">
+                    خطا در دریافت اطلاعات عملیات
+                  </p>
+
+                  <p className="mt-1 text-sm leading-6 text-red-600">
+                    {waybillsError}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                <StatCard
+                  title="حواله‌های امروز"
+                  value={
+                    waybillsLoading
+                      ? "..."
+                      : formatNumber(
+                          todayWaybillsCount
+                        )
+                  }
+                  description="حواله صادرشده یا ثبت‌شده امروز"
+                  icon={
+                    <FileText size={22} />
+                  }
+                  iconClass="bg-slate-100 text-slate-700"
+                />
+
+                <StatCard
+                  title="در انتظار بارگیری"
+                  value={
+                    waybillsLoading
+                      ? "..."
+                      : formatNumber(
+                          pendingLoadingCount
+                        )
+                  }
+                  description="حواله صادر شده و هنوز بارگیری نشده"
+                  icon={
+                    <Clock3 size={22} />
+                  }
+                  iconClass="bg-amber-50 text-amber-700"
+                  valueClass="text-amber-700"
+                />
+
+                <StatCard
+                  title="حواله صادرشده امروز"
+                  value={
+                    waybillsLoading
+                      ? "..."
+                      : formatNumber(
+                          todayIssuedWaybillsCount
+                        )
+                  }
+                  description="وضعیت صادرشده"
+                  icon={<Truck size={22} />}
+                  iconClass="bg-blue-50 text-blue-700"
+                  valueClass="text-blue-700"
+                />
+
+                <StatCard
+                  title="بارگیری تأییدشده امروز"
+                  value={
+                    waybillsLoading
+                      ? "..."
+                      : formatNumber(
+                          todayLoadingConfirmedCount
+                        )
+                  }
+                  description="بارگیری نهایی امروز"
+                  icon={
+                    <CheckCircle2 size={22} />
+                  }
+                  iconClass="bg-emerald-50 text-emerald-700"
+                  valueClass="text-emerald-700"
+                />
+
+                <StatCard
+                  title="تناژ بارگیری امروز"
+                  value={
+                    waybillsLoading
+                      ? "..."
+                      : formatTonnage(
+                          todayLoadingTonnage
+                        )
+                  }
+                  description="تناژ نهایی بارگیری‌شده امروز"
+                  icon={
+                    <TrendingUp size={22} />
+                  }
+                  iconClass="bg-violet-50 text-violet-700"
+                  valueClass="text-violet-700"
+                />
+              </div>
+
+              {!waybillsLoading && (
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl bg-slate-50 p-4">
+                    <p className="text-xs font-bold text-slate-400">
+                      کل حواله‌های فعال
+                    </p>
+
+                    <p className="mt-2 text-2xl font-black text-slate-900">
+                      {formatNumber(
+                        waybillsCount -
+                          cancelledWaybillsCount
+                      )}
+                    </p>
+
+                    <p className="mt-1 text-xs text-slate-500">
+                      بدون احتساب حواله‌های لغوشده
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-red-50 p-4">
+                    <p className="text-xs font-bold text-red-500">
+                      لغوشده امروز
+                    </p>
+
+                    <p className="mt-2 text-2xl font-black text-red-700">
+                      {formatNumber(
+                        todayCancelledWaybillsCount
+                      )}
+                    </p>
+
+                    <p className="mt-1 text-xs text-red-500">
+                      حواله‌های لغوشده در امروز
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl bg-blue-50 p-4">
+                    <p className="text-xs font-bold text-blue-500">
+                      تاریخ مبنای عملیات
+                    </p>
+
+                    <p className="mt-2 text-base font-black text-blue-800">
+                      {formatDate(
+                        `${todayKey}T00:00:00`
+                      )}
+                    </p>
+
+                    <p className="mt-1 text-xs text-blue-500">
+                      بر اساس تاریخ روز جاری سیستم
+                    </p>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </section>
+
+      {/* ===================================================== */}
+      {/* WAYBILL OVERALL STATUS */}
+      {/* ===================================================== */}
+
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="p-6 md:p-7">
+          <SectionHeader
+            title="وضعیت کلی حواله‌ها"
+            description="نمایش وضعیت فعلی چرخه صدور تا بارگیری"
+            href="/waybills"
+            hrefLabel="فهرست کامل حواله‌ها"
+            icon={<FileText size={19} />}
+          />
+
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <OverviewItem
+              title="کل حواله‌ها"
+              value={
+                waybillsLoading
+                  ? "..."
+                  : formatNumber(
+                      waybillsCount
+                    )
+              }
+              description="همه حواله‌های فعال"
+              icon={
+                <FileText size={20} />
+              }
+              iconClass="bg-slate-100 text-slate-700"
+            />
+
+            <OverviewItem
+              title="پیش‌نویس"
+              value={
+                waybillsLoading
+                  ? "..."
+                  : formatNumber(
+                      draftWaybillsCount
+                    )
+              }
+              description="هنوز صادر نشده"
+              icon={<FileText size={20} />}
+              iconClass="bg-amber-50 text-amber-700"
+            />
+
+            <OverviewItem
+              title="صادرشده"
+              value={
+                waybillsLoading
+                  ? "..."
+                  : formatNumber(
+                      issuedWaybillsCount
+                    )
+              }
+              description="در انتظار بارگیری"
+              icon={<Truck size={20} />}
+              iconClass="bg-blue-50 text-blue-700"
+            />
+
+            <OverviewItem
+              title="بارگیری تأییدشده"
+              value={
+                waybillsLoading
+                  ? "..."
+                  : formatNumber(
+                      loadingConfirmedWaybillsCount
+                    )
+              }
+              description="بارگیری نهایی"
+              icon={
+                <CheckCircle2 size={20} />
+              }
+              iconClass="bg-emerald-50 text-emerald-700"
+            />
+
+            <OverviewItem
+              title="لغوشده"
+              value={
+                waybillsLoading
+                  ? "..."
+                  : formatNumber(
+                      cancelledWaybillsCount
+                    )
+              }
+              description="حواله‌های لغوشده"
+              icon={<XCircle size={20} />}
+              iconClass="bg-red-50 text-red-700"
+            />
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <OverviewItem
+              title="تناژ بارگیری‌شده"
+              value={
+                waybillsLoading
+                  ? "..."
+                  : formatTonnage(
+                      loadingConfirmedTonnage
+                    )
+              }
+              description="مجموع تناژ حواله‌های بارگیری‌شده"
+              icon={<Truck size={20} />}
+              iconClass="bg-violet-50 text-violet-700"
+            />
+
+            <OverviewItem
+              title="حواله آماده بارگیری"
+              value={
+                waybillsLoading
+                  ? "..."
+                  : formatNumber(
+                      pendingLoadingCount
+                    )
+              }
+              description="وضعیت صادرشده با بارگیری در انتظار"
+              icon={<Clock3 size={20} />}
+              iconClass="bg-amber-50 text-amber-700"
+            />
+          </div>
+        </div>
       </section>
 
       {/* ===================================================== */}
@@ -439,11 +967,11 @@ export default function Dashboard() {
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
         <SectionHeader
           title="دسترسی سریع"
-          description="پرکاربردترین عملیات فروش"
+          description="پرکاربردترین عملیات فروش و مدیریت مشتری"
           icon={<Target size={19} />}
         />
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
           <QuickAction
             href="/orders/new"
             title="ثبت سفارش"
@@ -462,25 +990,33 @@ export default function Dashboard() {
           />
 
           <QuickAction
+            href="/waybills"
+            title="حواله‌ها"
+            description="مدیریت ارسال و بارگیری"
+            icon={<Truck size={20} />}
+            className="bg-blue-50 text-blue-700"
+          />
+
+          <QuickAction
             href="/customers"
             title="مشتریان"
-            description="جستجو و مدیریت"
+            description="جستجو و مدیریت مشتریان"
             icon={<Users size={20} />}
-            className="bg-blue-50 text-blue-700"
+            className="bg-sky-50 text-sky-700"
           />
 
           <QuickAction
             href="/activities/calls/new"
             title="ثبت تماس"
-            description="تماس با مشتری"
+            description="ثبت تماس با مشتری"
             icon={<Phone size={20} />}
-            className="bg-sky-50 text-sky-700"
+            className="bg-cyan-50 text-cyan-700"
           />
 
           <QuickAction
             href="/activities/follow-ups/new"
             title="ثبت پیگیری"
-            description="پیگیری جدید"
+            description="ایجاد پیگیری جدید"
             icon={<CalendarClock size={20} />}
             className="bg-emerald-50 text-emerald-700"
           />
@@ -500,7 +1036,6 @@ export default function Dashboard() {
       {/* ===================================================== */}
 
       <section className="grid gap-6 xl:grid-cols-2">
-        {/* Recent Activities */}
         <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="p-6 md:p-7">
             <SectionHeader
@@ -515,69 +1050,74 @@ export default function Dashboard() {
               <EmptyState
                 icon={<Activity size={24} />}
                 title="هنوز فعالیتی ثبت نشده است"
-                description="با ثبت تماس یا پیگیری، فعالیت‌ها در این بخش نمایش داده می‌شوند."
+                description="با ثبت تماس یا پیگیری، فعالیت مشتریان در این بخش نمایش داده می‌شود."
               />
             ) : (
               <div className="space-y-3">
-                {recentActivities.map((activity) => (
-                  <Link
-                    key={activity.customer_id}
-                    href={`/customers/${activity.customer_id}`}
-                    className="group block rounded-2xl border border-slate-100 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-100 hover:bg-blue-50/30 hover:shadow-sm"
-                  >
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-black text-slate-700 transition group-hover:bg-blue-100 group-hover:text-blue-700">
-                          {activity.customer_name?.charAt(
-                            0
-                          ) || "م"}
+                {recentActivities.map(
+                  (activity) => (
+                    <Link
+                      key={
+                        activity.customer_id
+                      }
+                      href={`/customers/${activity.customer_id}`}
+                      className="group block rounded-2xl border border-slate-100 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-100 hover:bg-blue-50/30 hover:shadow-sm"
+                    >
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-black text-slate-700 transition group-hover:bg-blue-100 group-hover:text-blue-700">
+                            {activity.customer_name?.charAt(
+                              0
+                            ) || "م"}
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="truncate font-black text-slate-800">
+                              {
+                                activity.customer_name
+                              }
+                            </p>
+
+                            <p className="mt-1 text-xs text-slate-500">
+                              آخرین فعالیت:{" "}
+                              {formatDate(
+                                activity.last_activity_at
+                              )}
+                            </p>
+                          </div>
                         </div>
 
-                        <div className="min-w-0">
-                          <p className="truncate font-black text-slate-800">
-                            {activity.customer_name}
-                          </p>
-
-                          <p className="mt-1 text-xs text-slate-500">
-                            آخرین فعالیت:{" "}
-                            {formatDate(
-                              activity.last_activity_at
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <span className="rounded-full bg-blue-50 px-2.5 py-1 font-bold text-blue-700">
+                            سفارش{" "}
+                            {formatNumber(
+                              activity.order_count
                             )}
-                          </p>
+                          </span>
+
+                          <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-bold text-emerald-700">
+                            تماس{" "}
+                            {formatNumber(
+                              activity.call_count
+                            )}
+                          </span>
+
+                          <span className="rounded-full bg-violet-50 px-2.5 py-1 font-bold text-violet-700">
+                            پیگیری{" "}
+                            {formatNumber(
+                              activity.follow_up_count
+                            )}
+                          </span>
                         </div>
                       </div>
-
-                      <div className="flex flex-wrap gap-2 text-xs">
-                        <span className="rounded-full bg-blue-50 px-2.5 py-1 font-bold text-blue-700">
-                          سفارش{" "}
-                          {formatNumber(
-                            activity.order_count
-                          )}
-                        </span>
-
-                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-bold text-emerald-700">
-                          تماس{" "}
-                          {formatNumber(
-                            activity.call_count
-                          )}
-                        </span>
-
-                        <span className="rounded-full bg-violet-50 px-2.5 py-1 font-bold text-violet-700">
-                          پیگیری{" "}
-                          {formatNumber(
-                            activity.follow_up_count
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
+                    </Link>
+                  )
+                )}
               </div>
             )}
           </div>
         </div>
 
-        {/* Recommended */}
         <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="p-6 md:p-7">
             <SectionHeader
@@ -590,7 +1130,9 @@ export default function Dashboard() {
 
             {recommendedCustomers.length === 0 ? (
               <EmptyState
-                icon={<CheckCircle2 size={24} />}
+                icon={
+                  <CheckCircle2 size={24} />
+                }
                 title="موردی برای پیگیری فوری وجود ندارد"
                 description="در حال حاضر مشتری پیشنهادی برای تماس ندارید."
               />
@@ -608,7 +1150,9 @@ export default function Dashboard() {
                           className="flex min-w-0 items-start gap-3"
                         >
                           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-sm font-black text-white">
-                            {formatNumber(index + 1)}
+                            {formatNumber(
+                              index + 1
+                            )}
                           </div>
 
                           <div className="min-w-0 flex-1">
@@ -619,7 +1163,7 @@ export default function Dashboard() {
 
                               {customer.is_vip && (
                                 <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-700">
-                                  ★ VIP
+                                  VIP
                                 </span>
                               )}
                             </div>
@@ -659,7 +1203,7 @@ export default function Dashboard() {
 
                           <ChevronLeft
                             size={18}
-                            className="mt-1 shrink-0 text-slate-300 transition group-hover:text-slate-500"
+                            className="mt-1 shrink-0 text-slate-300"
                           />
                         </Link>
 
@@ -754,7 +1298,7 @@ export default function Dashboard() {
                   </p>
 
                   <p className="mt-2 text-xs text-slate-500">
-                    پیگیری در انتظار
+                    پیگیری‌های در انتظار امروز
                   </p>
                 </div>
 
@@ -779,7 +1323,7 @@ export default function Dashboard() {
       <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="p-6 md:p-7">
           <SectionHeader
-            title="نمای کلی فروش"
+            title="نمای کلی فروش و عملیات"
             description="شاخص‌های اصلی فعلی CRM"
             icon={<TrendingUp size={19} />}
           />
@@ -796,23 +1340,73 @@ export default function Dashboard() {
             />
 
             <OverviewItem
-              title="سفارش‌های ثبت‌شده"
+              title="سفارش‌های تأییدشده"
               value={formatNumber(
                 stats.ordersCount
               )}
-              description="سفارش در سیستم"
+              description="سفارش ثبت‌شده"
               icon={<Box size={20} />}
               iconClass="bg-violet-50 text-violet-700"
             />
 
             <OverviewItem
-              title="مجموع تناژ"
+              title="تناژ فروش"
               value={formatTonnage(
                 stats.totalTonnage
               )}
-              description="تناژ فروش ثبت‌شده"
-              icon={<TrendingUp size={20} />}
+              description="مجموع تناژ فروش"
+              icon={
+                <TrendingUp size={20} />
+              }
               iconClass="bg-emerald-50 text-emerald-700"
+            />
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <OverviewItem
+              title="حواله‌های امروز"
+              value={
+                waybillsLoading
+                  ? "..."
+                  : formatNumber(
+                      todayWaybillsCount
+                    )
+              }
+              description="حواله ثبت‌شده امروز"
+              icon={
+                <FileText size={20} />
+              }
+              iconClass="bg-slate-100 text-slate-700"
+            />
+
+            <OverviewItem
+              title="بارگیری امروز"
+              value={
+                waybillsLoading
+                  ? "..."
+                  : formatNumber(
+                      todayLoadingConfirmedCount
+                    )
+              }
+              description="بارگیری تأییدشده"
+              icon={
+                <CheckCircle2 size={20} />
+              }
+              iconClass="bg-emerald-50 text-emerald-700"
+            />
+
+            <OverviewItem
+              title="تناژ بارگیری امروز"
+              value={
+                waybillsLoading
+                  ? "..."
+                  : formatTonnage(
+                      todayLoadingTonnage
+                    )
+              }
+              description="تناژ نهایی امروز"
+              icon={<Truck size={20} />}
+              iconClass="bg-blue-50 text-blue-700"
             />
           </div>
         </div>

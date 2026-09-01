@@ -1,6 +1,7 @@
 import { createSupabaseClient } from "@/src/lib/supabase";
 
-const COMPANY_ID = "11111111-1111-1111-1111-111111111111";
+const COMPANY_ID =
+  "11111111-1111-1111-1111-111111111111";
 
 export interface DashboardStats {
   customersCount: number;
@@ -8,6 +9,12 @@ export interface DashboardStats {
   totalTonnage: number;
   todayCallsCount: number;
   todayFollowUpsCount: number;
+
+  waybillsCount: number;
+  issuedWaybillsCount: number;
+  loadingConfirmedWaybillsCount: number;
+  cancelledWaybillsCount: number;
+  loadingConfirmedTonnage: number;
 }
 
 export interface RecentActivity {
@@ -76,6 +83,21 @@ interface FollowUpRow {
   status: string;
 }
 
+interface WaybillRow {
+  id: string;
+  status: string;
+  deleted_at: string | null;
+}
+
+interface WaybillItemRow {
+  id: string;
+  waybill_id: string;
+  quantity: number | string | null;
+  weight_kg_snapshot: number | string | null;
+  tonnage: number | string | null;
+  deleted_at: string | null;
+}
+
 function getTodayStart(): string {
   const now = new Date();
 
@@ -88,6 +110,18 @@ function getTodayStart(): string {
   return start.toISOString();
 }
 
+function getTomorrowStart(): string {
+  const now = new Date();
+
+  const tomorrow = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 1
+  );
+
+  return tomorrow.toISOString();
+}
+
 function calculateInactivityDays(
   lastActivity: string | null
 ): number {
@@ -95,21 +129,29 @@ function calculateInactivityDays(
     return 9999;
   }
 
-  const activityDate = new Date(lastActivity);
+  const activityDate = new Date(
+    lastActivity
+  );
 
-  if (Number.isNaN(activityDate.getTime())) {
+  if (
+    Number.isNaN(
+      activityDate.getTime()
+    )
+  ) {
     return 9999;
   }
 
   const now = new Date();
 
   const difference =
-    now.getTime() - activityDate.getTime();
+    now.getTime() -
+    activityDate.getTime();
 
   return Math.max(
     0,
     Math.floor(
-      difference / (1000 * 60 * 60 * 24)
+      difference /
+        (1000 * 60 * 60 * 24)
     )
   );
 }
@@ -124,10 +166,14 @@ function getErrorMessage(
     "message" in error
   ) {
     const message = (
-      error as { message?: unknown }
+      error as {
+        message?: unknown;
+      }
     ).message;
 
-    if (typeof message === "string") {
+    if (
+      typeof message === "string"
+    ) {
       return message;
     }
   }
@@ -159,24 +205,65 @@ function logSupabaseError(
   );
 }
 
+function getWaybillItemTonnage(
+  item: WaybillItemRow
+): number {
+  const directTonnage =
+    Number(item.tonnage ?? 0);
+
+  if (
+    Number.isFinite(
+      directTonnage
+    ) &&
+    directTonnage > 0
+  ) {
+    return directTonnage;
+  }
+
+  const quantity =
+    Number(item.quantity ?? 0);
+
+  const weightKg =
+    Number(
+      item.weight_kg_snapshot ?? 0
+    );
+
+  if (
+    !Number.isFinite(quantity) ||
+    !Number.isFinite(weightKg)
+  ) {
+    return 0;
+  }
+
+  return (
+    (quantity * weightKg) /
+    1000
+  );
+}
+
 export const dashboardService = {
   async getDashboardData(): Promise<DashboardData> {
-    const supabase = createSupabaseClient();
+    const supabase =
+      createSupabaseClient();
 
-    const todayStart = getTodayStart();
-    const todayStartDate = new Date(todayStart);
+    const todayStart =
+      getTodayStart();
 
-    // ========================================================
-    // CUSTOMERS
-    // ========================================================
+    const tomorrowStart =
+      getTomorrowStart();
+
+    const todayStartDate =
+      new Date(todayStart);
+
+    const tomorrowStartDate =
+      new Date(tomorrowStart);
 
     const {
       data: customers,
       error: customersError,
     } = await supabase
       .from("customers")
-      .select(
-        `
+      .select(`
         id,
         name,
         phone,
@@ -189,11 +276,19 @@ export const dashboardService = {
           id,
           name
         )
-      `
+      `)
+      .eq(
+        "company_id",
+        COMPANY_ID
       )
-      .eq("company_id", COMPANY_ID)
-      .is("deleted_at", null)
-      .eq("is_active", true);
+      .is(
+        "deleted_at",
+        null
+      )
+      .eq(
+        "is_active",
+        true
+      );
 
     if (customersError) {
       logSupabaseError(
@@ -207,29 +302,35 @@ export const dashboardService = {
     const customerRows =
       (customers ?? []) as unknown as CustomerRow[];
 
-    // ========================================================
-    // ORDERS
-    // ========================================================
-
     const {
       data: orders,
       error: ordersError,
     } = await supabase
       .from("orders")
-      .select(
-        `
+      .select(`
         id,
         customer_id,
         order_date,
         total_tonnage
-      `
+      `)
+      .eq(
+        "company_id",
+        COMPANY_ID
       )
-      .eq("company_id", COMPANY_ID)
-      .eq("status", "confirmed")
-      .is("deleted_at", null)
-      .order("order_date", {
-        ascending: false,
-      });
+      .eq(
+        "status",
+        "confirmed"
+      )
+      .is(
+        "deleted_at",
+        null
+      )
+      .order(
+        "order_date",
+        {
+          ascending: false,
+        }
+      );
 
     if (ordersError) {
       logSupabaseError(
@@ -243,27 +344,30 @@ export const dashboardService = {
     const orderRows =
       (orders ?? []) as OrderRow[];
 
-    // ========================================================
-    // CALLS
-    // ========================================================
-
     const {
       data: calls,
       error: callsError,
     } = await supabase
       .from("calls")
-      .select(
-        `
+      .select(`
         id,
         customer_id,
         call_date
-      `
+      `)
+      .eq(
+        "company_id",
+        COMPANY_ID
       )
-      .eq("company_id", COMPANY_ID)
-      .is("deleted_at", null)
-      .order("call_date", {
-        ascending: false,
-      });
+      .is(
+        "deleted_at",
+        null
+      )
+      .order(
+        "call_date",
+        {
+          ascending: false,
+        }
+      );
 
     if (callsError) {
       logSupabaseError(
@@ -277,28 +381,31 @@ export const dashboardService = {
     const callRows =
       (calls ?? []) as CallRow[];
 
-    // ========================================================
-    // FOLLOW UPS
-    // ========================================================
-
     const {
       data: followUps,
       error: followUpsError,
     } = await supabase
       .from("follow_ups")
-      .select(
-        `
+      .select(`
         id,
         customer_id,
         scheduled_at,
         status
-      `
+      `)
+      .eq(
+        "company_id",
+        COMPANY_ID
       )
-      .eq("company_id", COMPANY_ID)
-      .is("deleted_at", null)
-      .order("scheduled_at", {
-        ascending: false,
-      });
+      .is(
+        "deleted_at",
+        null
+      )
+      .order(
+        "scheduled_at",
+        {
+          ascending: false,
+        }
+      );
 
     if (followUpsError) {
       logSupabaseError(
@@ -312,15 +419,181 @@ export const dashboardService = {
     const followUpRows =
       (followUps ?? []) as FollowUpRow[];
 
-    // ========================================================
-    // STATISTICS
-    // ========================================================
+    // ==============================
+    // WAYBILLS
+    // ==============================
+
+    const {
+      data: waybills,
+      error: waybillsError,
+    } = await supabase
+      .from("waybills")
+      .select(`
+        id,
+        status,
+        deleted_at
+      `)
+      .eq(
+        "company_id",
+        COMPANY_ID
+      )
+      .is(
+        "deleted_at",
+        null
+      );
+
+    if (waybillsError) {
+      logSupabaseError(
+        "WAYBILLS",
+        waybillsError
+      );
+
+      throw waybillsError;
+    }
+
+    const waybillRows =
+      (waybills ?? []) as WaybillRow[];
+
+    // ==============================
+    // WAYBILL ITEMS
+    // مستقل از relation
+    // ==============================
+
+    let waybillItemRows:
+      WaybillItemRow[] = [];
+
+    if (
+      waybillRows.length > 0
+    ) {
+      const waybillIds =
+        waybillRows.map(
+          (waybill) =>
+            waybill.id
+        );
+
+      const {
+        data: waybillItems,
+        error:
+          waybillItemsError,
+      } = await supabase
+        .from("waybill_items")
+        .select(`
+          id,
+          waybill_id,
+          quantity,
+          weight_kg_snapshot,
+          tonnage,
+          deleted_at
+        `)
+        .eq(
+          "company_id",
+          COMPANY_ID
+        )
+        .in(
+          "waybill_id",
+          waybillIds
+        )
+        .is(
+          "deleted_at",
+          null
+        );
+
+      if (waybillItemsError) {
+        logSupabaseError(
+          "WAYBILL ITEMS",
+          waybillItemsError
+        );
+
+        throw waybillItemsError;
+      }
+
+      waybillItemRows =
+        (waybillItems ??
+          []) as WaybillItemRow[];
+    }
+
+    // ==============================
+    // WAYBILL KPI
+    // ==============================
+
+    const waybillsCount =
+      waybillRows.length;
+
+    const issuedWaybillsCount =
+      waybillRows.filter(
+        (waybill) =>
+          waybill.status ===
+          "issued"
+      ).length;
+
+    const loadingConfirmedWaybillsCount =
+      waybillRows.filter(
+        (waybill) =>
+          waybill.status ===
+          "loading_confirmed"
+      ).length;
+
+    const cancelledWaybillsCount =
+      waybillRows.filter(
+        (waybill) =>
+          waybill.status ===
+          "cancelled"
+      ).length;
+
+    const waybillTonnageByWaybill =
+      new Map<string, number>();
+
+    for (
+      const item of waybillItemRows
+    ) {
+      const current =
+        waybillTonnageByWaybill.get(
+          item.waybill_id
+        ) ?? 0;
+
+      waybillTonnageByWaybill.set(
+        item.waybill_id,
+        current +
+          getWaybillItemTonnage(
+            item
+          )
+      );
+    }
+
+    const loadingConfirmedTonnage =
+      waybillRows
+        .filter(
+          (waybill) =>
+            waybill.status ===
+            "loading_confirmed"
+        )
+        .reduce(
+          (
+            total,
+            waybill
+          ) =>
+            total +
+            (waybillTonnageByWaybill.get(
+              waybill.id
+            ) ?? 0),
+          0
+        );
+
+    // ==============================
+    // SALES STATISTICS
+    // ==============================
 
     const totalTonnage =
       orderRows.reduce(
-        (total, order) =>
+        (
+          total,
+          order
+        ) =>
           total +
-          Number(order.total_tonnage ?? 0),
+          Number(
+            order.total_tonnage ??
+              0
+          ),
         0
       );
 
@@ -331,23 +604,31 @@ export const dashboardService = {
       customerRows.length;
 
     const todayCallsCount =
-      callRows.filter((call) => {
-        const callDate =
-          new Date(call.call_date);
+      callRows.filter(
+        (call) => {
+          const callDate =
+            new Date(
+              call.call_date
+            );
 
-        return (
-          !Number.isNaN(
-            callDate.getTime()
-          ) &&
-          callDate >= todayStartDate
-        );
-      }).length;
+          return (
+            !Number.isNaN(
+              callDate.getTime()
+            ) &&
+            callDate >=
+              todayStartDate &&
+            callDate <
+              tomorrowStartDate
+          );
+        }
+      ).length;
 
     const todayFollowUpsCount =
       followUpRows.filter(
         (followUp) => {
           if (
-            followUp.status === "completed"
+            followUp.status !==
+            "pending"
           ) {
             return false;
           }
@@ -362,14 +643,16 @@ export const dashboardService = {
               scheduledDate.getTime()
             ) &&
             scheduledDate >=
-              todayStartDate
+              todayStartDate &&
+            scheduledDate <
+              tomorrowStartDate
           );
         }
       ).length;
 
-    // ========================================================
+    // ==============================
     // CUSTOMER ACTIVITY
-    // ========================================================
+    // ==============================
 
     const customerActivity =
       new Map<
@@ -383,11 +666,14 @@ export const dashboardService = {
         }
       >();
 
-    for (const customer of customerRows) {
+    for (
+      const customer of customerRows
+    ) {
       customerActivity.set(
         customer.id,
         {
-          last_activity_at: null,
+          last_activity_at:
+            null,
           order_count: 0,
           call_count: 0,
           follow_up_count: 0,
@@ -395,8 +681,9 @@ export const dashboardService = {
       );
     }
 
-    // Orders
-    for (const order of orderRows) {
+    for (
+      const order of orderRows
+    ) {
       const current =
         customerActivity.get(
           order.customer_id
@@ -418,8 +705,9 @@ export const dashboardService = {
       }
     }
 
-    // Calls
-    for (const call of callRows) {
+    for (
+      const call of callRows
+    ) {
       const current =
         customerActivity.get(
           call.customer_id
@@ -441,8 +729,9 @@ export const dashboardService = {
       }
     }
 
-    // Follow Ups
-    for (const followUp of followUpRows) {
+    for (
+      const followUp of followUpRows
+    ) {
       const current =
         customerActivity.get(
           followUp.customer_id
@@ -454,6 +743,28 @@ export const dashboardService = {
 
       current.follow_up_count += 1;
 
+      const scheduledDate =
+        new Date(
+          followUp.scheduled_at
+        );
+
+      if (
+        Number.isNaN(
+          scheduledDate.getTime()
+        )
+      ) {
+        continue;
+      }
+
+      const now =
+        new Date();
+
+      if (
+        scheduledDate > now
+      ) {
+        continue;
+      }
+
       if (
         !current.last_activity_at ||
         followUp.scheduled_at >
@@ -464,62 +775,76 @@ export const dashboardService = {
       }
     }
 
-    // ========================================================
+    // ==============================
     // RECENT ACTIVITIES
-    // ========================================================
+    // ==============================
 
     const recentActivities =
       customerRows
-        .map((customer) => {
-          const activity =
-            customerActivity.get(
-              customer.id
-            );
+        .map(
+          (customer) => {
+            const activity =
+              customerActivity.get(
+                customer.id
+              );
 
-          return {
-            customer_id:
-              customer.id,
-            customer_name:
-              customer.name,
-            last_activity_at:
-              activity?.last_activity_at ??
-              null,
-            order_count:
-              activity?.order_count ?? 0,
-            call_count:
-              activity?.call_count ?? 0,
-            follow_up_count:
-              activity?.follow_up_count ?? 0,
-          };
-        })
+            return {
+              customer_id:
+                customer.id,
+              customer_name:
+                customer.name,
+              last_activity_at:
+                activity?.last_activity_at ??
+                null,
+              order_count:
+                activity?.order_count ??
+                0,
+              call_count:
+                activity?.call_count ??
+                0,
+              follow_up_count:
+                activity?.follow_up_count ??
+                0,
+            };
+          }
+        )
         .filter(
           (item) =>
             item.last_activity_at !==
             null
         )
-        .sort((a, b) => {
-          const dateA =
-            new Date(
-              a.last_activity_at!
-            ).getTime();
+        .sort(
+          (a, b) => {
+            const dateA =
+              new Date(
+                a.last_activity_at!
+              ).getTime();
 
-          const dateB =
-            new Date(
-              b.last_activity_at!
-            ).getTime();
+            const dateB =
+              new Date(
+                b.last_activity_at!
+              ).getTime();
 
-          return dateB - dateA;
-        })
+            return (
+              dateB - dateA
+            );
+          }
+        )
         .slice(0, 10);
 
-    // ========================================================
+    // ==============================
     // LIFETIME TONNAGE
-    // ========================================================
+    // ==============================
 
     const tonnageByCustomer =
-      new Map<string, number>();
+      new Map<
+        string,
+        number
+      >();
 
-    for (const order of orderRows) {
+    for (
+      const order of orderRows
+    ) {
       const current =
         tonnageByCustomer.get(
           order.customer_id
@@ -529,31 +854,35 @@ export const dashboardService = {
         order.customer_id,
         current +
           Number(
-            order.total_tonnage ?? 0
+            order.total_tonnage ??
+              0
           )
       );
     }
 
-    // ========================================================
-    // CUSTOMERS CALLED TODAY
-    //
-    // مهم:
-    // این فیلتر قبل از VIP sorting انجام می‌شود.
-    // بنابراین VIP هم بعد از تماس امروز حذف می‌شود.
-    // ========================================================
+    // ==============================
+    // CALLED TODAY
+    // ==============================
 
     const calledTodayCustomerIds =
       new Set<string>();
 
-    for (const call of callRows) {
+    for (
+      const call of callRows
+    ) {
       const callDate =
-        new Date(call.call_date);
+        new Date(
+          call.call_date
+        );
 
       if (
         !Number.isNaN(
           callDate.getTime()
         ) &&
-        callDate >= todayStartDate
+        callDate >=
+          todayStartDate &&
+        callDate <
+          tomorrowStartDate
       ) {
         calledTodayCustomerIds.add(
           call.customer_id
@@ -561,9 +890,9 @@ export const dashboardService = {
       }
     }
 
-    // ========================================================
+    // ==============================
     // RECOMMENDED CUSTOMERS
-    // ========================================================
+    // ==============================
 
     const recommendedCustomers =
       customerRows
@@ -573,74 +902,73 @@ export const dashboardService = {
               customer.id
             )
         )
-        .map((customer) => {
-          const activity =
-            customerActivity.get(
-              customer.id
-            );
+        .map(
+          (customer) => {
+            const activity =
+              customerActivity.get(
+                customer.id
+              );
 
-          const lastActivity =
-            activity?.last_activity_at ??
-            null;
+            const lastActivity =
+              activity?.last_activity_at ??
+              null;
 
-          const inactivityDays =
-            calculateInactivityDays(
-              lastActivity
-            );
+            const inactivityDays =
+              calculateInactivityDays(
+                lastActivity
+              );
 
-          const lifetimeTonnage =
-            tonnageByCustomer.get(
-              customer.id
-            ) ?? 0;
+            const lifetimeTonnage =
+              tonnageByCustomer.get(
+                customer.id
+              ) ?? 0;
 
-          return {
-            id: customer.id,
-            name: customer.name,
-            phone: customer.phone,
-            customer_type:
-              customer.customer_type,
-            is_vip:
-              customer.is_vip ??
-              false,
-            city: customer.city,
-            inactivity_days:
-              inactivityDays,
-            lifetime_tonnage:
-              lifetimeTonnage,
-          };
-        })
-        .sort((a, b) => {
-          // VIP first
-          if (
-            a.is_vip !== b.is_vip
-          ) {
-            return a.is_vip
-              ? -1
-              : 1;
+            return {
+              id: customer.id,
+              name: customer.name,
+              phone: customer.phone,
+              customer_type:
+                customer.customer_type,
+              is_vip:
+                customer.is_vip ??
+                false,
+              city:
+                customer.city,
+              inactivity_days:
+                inactivityDays,
+              lifetime_tonnage:
+                lifetimeTonnage,
+            };
           }
+        )
+        .sort(
+          (a, b) => {
+            if (
+              a.is_vip !==
+              b.is_vip
+            ) {
+              return a.is_vip
+                ? -1
+                : 1;
+            }
 
-          // More inactive first
-          if (
-            a.inactivity_days !==
-            b.inactivity_days
-          ) {
+            if (
+              a.inactivity_days !==
+              b.inactivity_days
+            ) {
+              return (
+                b.inactivity_days -
+                a.inactivity_days
+              );
+            }
+
             return (
-              b.inactivity_days -
-              a.inactivity_days
+              b.lifetime_tonnage -
+              a.lifetime_tonnage
             );
           }
-
-          // Higher lifetime tonnage first
-          return (
-            b.lifetime_tonnage -
-            a.lifetime_tonnage
-          );
-        })
+        )
         .slice(0, 5);
-
-    // ========================================================
-    // RETURN
-    // ========================================================
 
     return {
       stats: {
@@ -649,10 +977,14 @@ export const dashboardService = {
         totalTonnage,
         todayCallsCount,
         todayFollowUpsCount,
+        waybillsCount,
+        issuedWaybillsCount,
+        loadingConfirmedWaybillsCount,
+        cancelledWaybillsCount,
+        loadingConfirmedTonnage,
       },
 
       recentActivities,
-
       recommendedCustomers,
     };
   },
