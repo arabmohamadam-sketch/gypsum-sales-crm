@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+
 import {
   ArrowLeft,
   Bell,
@@ -16,8 +18,11 @@ import {
   Phone,
   ShoppingCart,
   Star,
+  Trash2,
   UserRound,
+  X,
 } from "lucide-react";
+
 import {
   useEffect,
   useMemo,
@@ -25,12 +30,14 @@ import {
 } from "react";
 
 import { activitiesService } from "@/src/lib/services/activities";
+
 import type {
   CallWithRelations,
   FollowUpWithRelations,
 } from "@/src/lib/services/activities";
 
 import { customersService } from "@/src/lib/services/customers";
+
 import type { Customer } from "@/src/lib/types/customer";
 
 import {
@@ -57,17 +64,23 @@ const customerTypeLabels: Record<string, string> = {
 const cityNames: Record<string, string> = {
   Garmsar: "گرمسار",
   garmsar: "گرمسار",
+
   Semnan: "سمنان",
   semnan: "سمنان",
+
   Varamin: "ورامین",
   varamin: "ورامین",
+
   Chalous: "چالوس",
   Chalus: "چالوس",
   chalous: "چالوس",
+
   Kelardasht: "کلاردشت",
   kelardasht: "کلاردشت",
+
   Ramsar: "رامسر",
   ramsar: "رامسر",
+
   Tonekabon: "تنکابن",
   tonekabon: "تنکابن",
 };
@@ -170,12 +183,16 @@ function normalizeWhatsappNumber(
     ""
   );
 
-  if (normalized.startsWith("+98")) {
+  if (
+    normalized.startsWith("+98")
+  ) {
     normalized =
       normalized.substring(1);
   }
 
-  if (normalized.startsWith("0098")) {
+  if (
+    normalized.startsWith("0098")
+  ) {
     normalized =
       normalized.substring(2);
   }
@@ -207,7 +224,9 @@ function getOrderStatusLabel(
     cancelled: "لغو شده",
   };
 
-  return labels[status] ?? status;
+  return (
+    labels[status] ?? status
+  );
 }
 
 function getOrderStatusClass(
@@ -244,11 +263,16 @@ function getOrderSourceLabel(
     return "—";
   }
 
-  return labels[source] ?? source;
+  return (
+    labels[source] ?? source
+  );
 }
 
 function getCallDirectionLabel(
-  direction: string | null | undefined
+  direction:
+    | string
+    | null
+    | undefined
 ): string {
   const labels: Record<
     string,
@@ -269,7 +293,10 @@ function getCallDirectionLabel(
 }
 
 function getCallOutcomeLabel(
-  outcome: string | null | undefined
+  outcome:
+    | string
+    | null
+    | undefined
 ): string {
   const labels: Record<
     string,
@@ -298,7 +325,10 @@ function getCallOutcomeLabel(
 }
 
 function formatDuration(
-  seconds: number | null | undefined
+  seconds:
+    | number
+    | null
+    | undefined
 ): string {
   const totalSeconds =
     Number(seconds ?? 0);
@@ -341,7 +371,10 @@ function formatDuration(
 }
 
 function getPriorityClass(
-  priority: string | null | undefined
+  priority:
+    | string
+    | null
+    | undefined
 ): string {
   switch (priority) {
     case "high":
@@ -362,7 +395,10 @@ function getPriorityClass(
 }
 
 function getFollowUpPriorityLabel(
-  priority: string | null | undefined
+  priority:
+    | string
+    | null
+    | undefined
 ): string {
   const labels: Record<
     string,
@@ -385,7 +421,10 @@ function getFollowUpPriorityLabel(
 }
 
 function getStatusClass(
-  status: string | null | undefined
+  status:
+    | string
+    | null
+    | undefined
 ): string {
   switch (status) {
     case "pending":
@@ -406,7 +445,10 @@ function getStatusClass(
 }
 
 function getFollowUpStatusLabel(
-  status: string | null | undefined
+  status:
+    | string
+    | null
+    | undefined
 ): string {
   const labels: Record<
     string,
@@ -478,6 +520,8 @@ function calculateInactivityDays(
 export default function CustomerPage({
   customerId,
 }: CustomerPageProps) {
+  const router = useRouter();
+
   const [customer, setCustomer] =
     useState<Customer | null>(
       null
@@ -526,6 +570,23 @@ export default function CustomerPage({
   const [
     ordersError,
     setOrdersError,
+  ] = useState<string | null>(
+    null
+  );
+
+  const [
+    showDeleteModal,
+    setShowDeleteModal,
+  ] = useState(false);
+
+  const [
+    deleting,
+    setDeleting,
+  ] = useState(false);
+
+  const [
+    deleteError,
+    setDeleteError,
   ] = useState<string | null>(
     null
   );
@@ -671,6 +732,7 @@ export default function CustomerPage({
         }
 
         setCalls(customerCalls);
+
         setFollowUps(
           customerFollowUps
         );
@@ -745,9 +807,10 @@ export default function CustomerPage({
         new Set<string>();
 
       for (const order of confirmedOrders) {
-        const date = new Date(
-          order.order_date
-        );
+        const date =
+          new Date(
+            order.order_date
+          );
 
         if (
           !Number.isNaN(
@@ -839,6 +902,37 @@ export default function CustomerPage({
       ]
     );
 
+  async function handleDeleteCustomer() {
+    if (!customer) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      setDeleteError(null);
+
+      await customersService.delete(
+        customer.id
+      );
+
+      router.push("/customers");
+      router.refresh();
+    } catch (err) {
+      console.error(
+        "DELETE CUSTOMER ERROR:",
+        err
+      );
+
+      setDeleteError(
+        err instanceof Error
+          ? err.message
+          : "حذف مشتری انجام نشد."
+      );
+
+      setDeleting(false);
+    }
+  }
+
   if (loading) {
     return (
       <div
@@ -854,6 +948,7 @@ export default function CustomerPage({
 
               <div className="flex-1">
                 <div className="h-7 w-48 animate-pulse rounded-lg bg-slate-200" />
+
                 <div className="mt-3 h-4 w-72 max-w-full animate-pulse rounded bg-slate-100" />
               </div>
             </div>
@@ -861,12 +956,14 @@ export default function CustomerPage({
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               {Array.from({
                 length: 4,
-              }).map((_, index) => (
-                <div
-                  key={index}
-                  className="h-28 animate-pulse rounded-2xl bg-slate-100"
-                />
-              ))}
+              }).map(
+                (_, index) => (
+                  <div
+                    key={index}
+                    className="h-28 animate-pulse rounded-2xl bg-slate-100"
+                  />
+                )
+              )}
             </div>
           </div>
         </div>
@@ -955,806 +1052,939 @@ export default function CustomerPage({
           };
 
   return (
-    <div
-      dir="rtl"
-      className="mx-auto max-w-7xl space-y-6"
-    >
-      {/* Back */}
-      <Link
-        href="/customers"
-        className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 transition hover:text-blue-600"
+    <>
+      <div
+        dir="rtl"
+        className="mx-auto max-w-7xl space-y-6"
       >
-        <ArrowLeft size={16} />
-        بازگشت به فهرست مشتریان
-      </Link>
+        <Link
+          href="/customers"
+          className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 transition hover:text-blue-600"
+        >
+          <ArrowLeft size={16} />
+          بازگشت به فهرست مشتریان
+        </Link>
 
-      {/* Customer Hero */}
-      <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="absolute inset-x-0 top-0 h-2 bg-gradient-to-l from-blue-600 via-cyan-500 to-emerald-500" />
+        <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="absolute inset-x-0 top-0 h-2 bg-gradient-to-l from-blue-600 via-cyan-500 to-emerald-500" />
 
-        <div className="absolute -left-24 -top-28 h-72 w-72 rounded-full bg-blue-100/40 blur-3xl" />
-        <div className="absolute -bottom-32 right-0 h-72 w-72 rounded-full bg-emerald-100/30 blur-3xl" />
+          <div className="absolute -left-24 -top-28 h-72 w-72 rounded-full bg-blue-100/40 blur-3xl" />
 
-        <div className="relative p-5 sm:p-7 lg:p-8">
-          <div className="flex flex-col gap-7 xl:flex-row xl:items-start xl:justify-between">
-            <div className="flex min-w-0 items-start gap-4">
-              <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-2xl font-black text-white shadow-xl shadow-blue-100 sm:h-20 sm:w-20 sm:text-3xl">
-                {customer.name?.charAt(
-                  0
-                ) || "م"}
+          <div className="absolute -bottom-32 right-0 h-72 w-72 rounded-full bg-emerald-100/30 blur-3xl" />
 
-                {customer.is_vip && (
-                  <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-amber-400 text-xs text-white shadow-sm">
-                    ★
-                  </span>
-                )}
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="truncate text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
-                    {customer.name ||
-                      "بدون نام"}
-                  </h1>
+          <div className="relative p-5 sm:p-7 lg:p-8">
+            <div className="flex flex-col gap-7 xl:flex-row xl:items-start xl:justify-between">
+              <div className="flex min-w-0 items-start gap-4">
+                <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-2xl font-black text-white shadow-xl shadow-blue-100 sm:h-20 sm:w-20 sm:text-3xl">
+                  {customer.name?.charAt(
+                    0
+                  ) || "م"}
 
                   {customer.is_vip && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-700 ring-1 ring-amber-200">
-                      <Star size={12} />
-                      VIP
+                    <span className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-amber-400 text-xs text-white shadow-sm">
+                      ★
                     </span>
                   )}
+                </div>
 
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-black ${
-                      customer.is_active
-                        ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
-                        : "bg-slate-100 text-slate-600 ring-1 ring-slate-200"
-                    }`}
-                  >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="truncate text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">
+                      {customer.name ||
+                        "بدون نام"}
+                    </h1>
+
+                    {customer.is_vip && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-700 ring-1 ring-amber-200">
+                        <Star size={12} />
+                        VIP
+                      </span>
+                    )}
+
                     <span
-                      className={`h-1.5 w-1.5 rounded-full ${
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-black ${
                         customer.is_active
-                          ? "bg-emerald-500"
-                          : "bg-slate-400"
+                          ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
+                          : "bg-slate-100 text-slate-600 ring-1 ring-slate-200"
                       }`}
-                    />
-
-                    {customer.is_active
-                      ? "فعال"
-                      : "غیرفعال"}
-                  </span>
-                </div>
-
-                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
-                  <span className="inline-flex items-center gap-1.5 font-bold text-slate-700">
-                    <UserRound size={15} />
-                    {customerType}
-                  </span>
-
-                  {cityName !== "—" && (
-                    <span className="inline-flex items-center gap-1.5">
-                      <MapPin size={15} />
-                      {cityName}
-                    </span>
-                  )}
-
-                  {phone && (
-                    <span
-                      dir="ltr"
-                      className="inline-flex items-center gap-1.5"
                     >
-                      <Phone size={15} />
-                      {phone}
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          customer.is_active
+                            ? "bg-emerald-500"
+                            : "bg-slate-400"
+                        }`}
+                      />
+
+                      {customer.is_active
+                        ? "فعال"
+                        : "غیرفعال"}
                     </span>
-                  )}
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
+                    <span className="inline-flex items-center gap-1.5 font-bold text-slate-700">
+                      <UserRound size={15} />
+                      {customerType}
+                    </span>
+
+                    {cityName !==
+                      "—" && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <MapPin size={15} />
+                        {cityName}
+                      </span>
+                    )}
+
+                    {phone && (
+                      <span
+                        dir="ltr"
+                        className="inline-flex items-center gap-1.5"
+                      >
+                        <Phone size={15} />
+                        {phone}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="mt-3 text-xs text-slate-400">
+                    کد مشتری:{" "}
+                    <span className="font-bold text-slate-600">
+                      {customerCode}
+                    </span>
+                  </p>
                 </div>
-
-                <p className="mt-3 text-xs text-slate-400">
-                  کد مشتری:{" "}
-                  <span className="font-bold text-slate-600">
-                    {customerCode}
-                  </span>
-                </p>
               </div>
-            </div>
 
-            {/* Actions */}
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-              {phone && (
-                <a
-                  href={`tel:${phone}`}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md"
-                >
-                  <Phone size={16} />
-                  تماس
-                </a>
-              )}
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+                {phone && (
+                  <a
+                    href={`tel:${phone}`}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md"
+                  >
+                    <Phone size={16} />
+                    تماس
+                  </a>
+                )}
 
-              {whatsappUrl && (
-                <a
-                  href={whatsappUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black text-white shadow-sm transition hover:bg-emerald-700 hover:shadow-md"
+                {whatsappUrl && (
+                  <a
+                    href={whatsappUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black text-white shadow-sm transition hover:bg-emerald-700 hover:shadow-md"
+                  >
+                    <MessageCircle
+                      size={16}
+                    />
+                    واتساپ
+                  </a>
+                )}
+
+                <Link
+                  href={`/orders/new?customerId=${customer.id}`}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-xs font-black text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md"
                 >
-                  <MessageCircle
+                  <ShoppingCart
                     size={16}
                   />
-                  واتساپ
-                </a>
-              )}
+                  ثبت سفارش
+                </Link>
 
+                <Link
+                  href={`/activities/calls/new?customerId=${customer.id}`}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-50 px-4 py-3 text-xs font-black text-blue-700 ring-1 ring-blue-100 transition hover:bg-blue-100"
+                >
+                  <Phone size={16} />
+                  ثبت تماس
+                </Link>
+
+                <Link
+                  href={`/activities/follow-ups/new?customerId=${customer.id}`}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-xs font-black text-emerald-700 ring-1 ring-emerald-100 transition hover:bg-emerald-100"
+                >
+                  <Bell size={16} />
+                  ثبت پیگیری
+                </Link>
+
+                <Link
+                  href={`/customers/${customer.id}/edit`}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+                >
+                  <Pencil size={15} />
+                  ویرایش
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteError(
+                      null
+                    );
+                    setShowDeleteModal(
+                      true
+                    );
+                  }}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-xs font-black text-red-700 ring-1 ring-red-100 transition hover:bg-red-100"
+                >
+                  <Trash2 size={15} />
+                  حذف مشتری
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            title="تناژ کل"
+            value={formatTonnage(
+              totalOrderTonnage
+            )}
+            suffix="تن"
+            icon={
+              <Package size={21} />
+            }
+            iconClass="bg-blue-50 text-blue-700"
+          />
+
+          <StatCard
+            title="میانگین ماهانه"
+            value={formatTonnage(
+              averageMonthlyTonnage
+            )}
+            suffix="تن در ماه"
+            icon={
+              <CalendarDays
+                size={21}
+              />
+            }
+            iconClass="bg-cyan-50 text-cyan-700"
+          />
+
+          <StatCard
+            title="تعداد سفارش"
+            value={formatNumber(
+              orders.length
+            )}
+            suffix="سفارش"
+            icon={
+              <ShoppingCart
+                size={21}
+              />
+            }
+            iconClass="bg-emerald-50 text-emerald-700"
+          />
+
+          <StatCard
+            title="عدم فعالیت"
+            value={formatNumber(
+              inactivityDays
+            )}
+            suffix="روز"
+            icon={
+              <Clock3 size={21} />
+            }
+            iconClass={
+              inactivityTone.box
+            }
+            valueClass={
+              inactivityTone.text
+            }
+          />
+        </section>
+
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <SectionHeader
+            icon={
+              <UserRound size={19} />
+            }
+            iconClass="bg-slate-100 text-slate-700"
+            title="اطلاعات مشتری"
+            description="مشخصات پایه و اطلاعات ارتباطی مشتری"
+            badge={
+              customer.is_vip
+                ? "مشتری VIP"
+                : undefined
+            }
+          />
+
+          <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4">
+            <Info
+              label="نام مشتری"
+              value={
+                customer.name ||
+                "—"
+              }
+            />
+
+            <Info
+              label="شهر"
+              value={cityName}
+            />
+
+            <Info
+              label="نوع مشتری"
+              value={
+                customerType
+              }
+            />
+
+            <Info
+              label="کد مشتری"
+              value={customerCode}
+            />
+
+            <Info
+              label="شماره تماس"
+              value={
+                customer.phone ||
+                "—"
+              }
+            />
+
+            <Info
+              label="شماره واتساپ"
+              value={
+                customer.whatsapp_number ??
+                customer.phone ??
+                "—"
+              }
+            />
+
+            <Info
+              label="وضعیت مشتری"
+              value={
+                customer.is_active
+                  ? "فعال"
+                  : "غیرفعال"
+              }
+            />
+
+            <Info
+              label="وضعیت VIP"
+              value={
+                customer.is_vip
+                  ? "بله"
+                  : "خیر"
+              }
+            />
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <SectionHeader
+            icon={
+              <Clock3 size={19} />
+            }
+            iconClass="bg-indigo-50 text-indigo-700"
+            title="آخرین فعالیت‌ها"
+            description="آخرین تعاملات ثبت‌شده برای این مشتری"
+          />
+
+          <div className="grid gap-4 p-5 lg:grid-cols-3">
+            <ActivityCard
+              title="آخرین سفارش"
+              date={formatDate(
+                latestOrder?.order_date
+              )}
+              detail={
+                latestOrder
+                  ? `${formatTonnage(
+                      latestOrder.total_tonnage
+                    )} تن`
+                  : "هنوز سفارشی ثبت نشده"
+              }
+              icon={
+                <Package size={20} />
+              }
+              theme="blue"
+            />
+
+            <ActivityCard
+              title="آخرین تماس"
+              date={formatDate(
+                latestCall?.call_date
+              )}
+              detail={
+                latestCall
+                  ? getCallOutcomeLabel(
+                      latestCall.outcome
+                    )
+                  : "هنوز تماسی ثبت نشده"
+              }
+              icon={
+                <Phone size={20} />
+              }
+              theme="emerald"
+            />
+
+            <ActivityCard
+              title="آخرین پیگیری"
+              date={formatDate(
+                latestFollowUp?.scheduled_at
+              )}
+              detail={
+                latestFollowUp?.subject ??
+                "هنوز پیگیری‌ای ثبت نشده"
+              }
+              icon={
+                <Bell size={20} />
+              }
+              theme="amber"
+            />
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <SectionHeader
+            icon={
+              <ShoppingCart
+                size={19}
+              />
+            }
+            iconClass="bg-blue-50 text-blue-700"
+            title="سوابق سفارش‌ها"
+            description={`${formatNumber(
+              orders.length
+            )} سفارش ثبت شده`}
+            action={
               <Link
                 href={`/orders/new?customerId=${customer.id}`}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-xs font-black text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md"
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800"
               >
                 <ShoppingCart
-                  size={16}
+                  size={15}
                 />
                 ثبت سفارش
               </Link>
+            }
+          />
 
+          {ordersLoading ? (
+            <LoadingBlock text="در حال دریافت سوابق سفارش..." />
+          ) : ordersError ? (
+            <ErrorBlock
+              message={
+                ordersError
+              }
+            />
+          ) : orders.length === 0 ? (
+            <EmptyBlock
+              icon={
+                <Package size={25} />
+              }
+              title="هنوز سفارشی برای این مشتری ثبت نشده است"
+              actionHref={`/orders/new?customerId=${customer.id}`}
+              actionText="ثبت اولین سفارش"
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-right text-sm">
+                <thead className="border-b border-slate-100 bg-slate-50/70">
+                  <tr>
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      تاریخ سفارش
+                    </th>
+
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      تناژ
+                    </th>
+
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      وضعیت
+                    </th>
+
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      مسئول فروش
+                    </th>
+
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      منبع
+                    </th>
+
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      عملیات
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {orders.map(
+                    (order) => (
+                      <tr
+                        key={
+                          order.id
+                        }
+                        className="transition hover:bg-slate-50/80"
+                      >
+                        <td className="whitespace-nowrap px-5 py-4 text-slate-700">
+                          {formatDate(
+                            order.order_date
+                          )}
+                        </td>
+
+                        <td className="whitespace-nowrap px-5 py-4 font-black text-slate-900">
+                          {formatTonnage(
+                            order.total_tonnage
+                          )}{" "}
+                          <span className="text-xs text-slate-400">
+                            تن
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1.5 text-xs font-bold ${getOrderStatusClass(
+                              order.status
+                            )}`}
+                          >
+                            {getOrderStatusLabel(
+                              order.status
+                            )}
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-4 text-slate-700">
+                          {order
+                            .sales_user
+                            ?.full_name ??
+                            "—"}
+                        </td>
+
+                        <td className="px-5 py-4 text-slate-600">
+                          {getOrderSourceLabel(
+                            order.source
+                          )}
+                        </td>
+
+                        <td className="whitespace-nowrap px-5 py-4">
+                          <Link
+                            href={`/orders/${order.id}`}
+                            className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-blue-600 hover:text-white"
+                          >
+                            مشاهده
+                            <ChevronLeft
+                              size={14}
+                            />
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {activitiesError && (
+          <ErrorBlock
+            message={
+              activitiesError
+            }
+            title="خطا در دریافت سوابق فعالیت"
+          />
+        )}
+
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <SectionHeader
+            icon={
+              <Phone size={19} />
+            }
+            iconClass="bg-blue-50 text-blue-700"
+            title="سوابق تماس‌ها"
+            description={`${formatNumber(
+              calls.length
+            )} تماس ثبت شده`}
+            action={
               <Link
                 href={`/activities/calls/new?customerId=${customer.id}`}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-50 px-4 py-3 text-xs font-black text-blue-700 ring-1 ring-blue-100 transition hover:bg-blue-100"
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white transition hover:bg-blue-700"
               >
-                <Phone size={16} />
+                <Phone size={15} />
                 ثبت تماس
               </Link>
+            }
+          />
 
+          {activitiesLoading ? (
+            <LoadingBlock text="در حال دریافت سوابق تماس..." />
+          ) : calls.length === 0 ? (
+            <EmptyBlock
+              icon={
+                <Phone size={25} />
+              }
+              title="هنوز تماسی برای این مشتری ثبت نشده است"
+              actionHref={`/activities/calls/new?customerId=${customer.id}`}
+              actionText="ثبت اولین تماس"
+              actionClass="bg-blue-600 hover:bg-blue-700"
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-right text-sm">
+                <thead className="border-b border-slate-100 bg-slate-50/70">
+                  <tr>
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      تاریخ
+                    </th>
+
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      مسئول
+                    </th>
+
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      جهت
+                    </th>
+
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      نتیجه
+                    </th>
+
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      مدت
+                    </th>
+
+                    <th className="px-5 py-4 font-black text-slate-600">
+                      توضیحات
+                    </th>
+
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      عملیات
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {calls.map(
+                    (call) => (
+                      <tr
+                        key={
+                          call.id
+                        }
+                        className="transition hover:bg-slate-50/80"
+                      >
+                        <td className="whitespace-nowrap px-5 py-4 text-slate-700">
+                          {formatDate(
+                            call.call_date
+                          )}
+                        </td>
+
+                        <td className="px-5 py-4 font-medium text-slate-700">
+                          {call.user
+                            ?.full_name ??
+                            "—"}
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span className="inline-flex rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 ring-1 ring-blue-100">
+                            {getCallDirectionLabel(
+                              call.direction
+                            )}
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 ring-1 ring-emerald-100">
+                            {getCallOutcomeLabel(
+                              call.outcome
+                            )}
+                          </span>
+                        </td>
+
+                        <td className="whitespace-nowrap px-5 py-4 text-slate-700">
+                          {formatDuration(
+                            call.duration_seconds
+                          )}
+                        </td>
+
+                        <td className="max-w-sm px-5 py-4 text-slate-600">
+                          <div className="line-clamp-2">
+                            {call.notes ??
+                              "—"}
+                          </div>
+                        </td>
+
+                        <td className="whitespace-nowrap px-5 py-4">
+                          <Link
+                            href={`/activities/calls/${call.id}/edit`}
+                            className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-blue-600 hover:text-white"
+                          >
+                            ویرایش
+                            <Pencil
+                              size={13}
+                            />
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <SectionHeader
+            icon={
+              <Bell size={19} />
+            }
+            iconClass="bg-emerald-50 text-emerald-700"
+            title="سوابق پیگیری‌ها"
+            description={`${formatNumber(
+              followUps.length
+            )} پیگیری ثبت شده`}
+            action={
               <Link
                 href={`/activities/follow-ups/new?customerId=${customer.id}`}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-xs font-black text-emerald-700 ring-1 ring-emerald-100 transition hover:bg-emerald-100"
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white transition hover:bg-emerald-700"
               >
-                <Bell size={16} />
+                <Bell size={15} />
                 ثبت پیگیری
               </Link>
+            }
+          />
 
-              <Link
-                href={`/customers/${customer.id}/edit`}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+          {activitiesLoading ? (
+            <LoadingBlock text="در حال دریافت سوابق پیگیری..." />
+          ) : followUps.length === 0 ? (
+            <EmptyBlock
+              icon={
+                <Bell size={25} />
+              }
+              title="هنوز پیگیری‌ای برای این مشتری ثبت نشده است"
+              actionHref={`/activities/follow-ups/new?customerId=${customer.id}`}
+              actionText="ثبت اولین پیگیری"
+              actionClass="bg-emerald-600 hover:bg-emerald-700"
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-right text-sm">
+                <thead className="border-b border-slate-100 bg-slate-50/70">
+                  <tr>
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      موضوع
+                    </th>
+
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      مسئول
+                    </th>
+
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      زمان پیگیری
+                    </th>
+
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      اولویت
+                    </th>
+
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      وضعیت
+                    </th>
+
+                    <th className="px-5 py-4 font-black text-slate-600">
+                      توضیحات
+                    </th>
+
+                    <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
+                      عملیات
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {followUps.map(
+                    (followUp) => (
+                      <tr
+                        key={
+                          followUp.id
+                        }
+                        className="transition hover:bg-slate-50/80"
+                      >
+                        <td className="px-5 py-4">
+                          <div className="font-black text-slate-800">
+                            {followUp.subject ??
+                              "بدون موضوع"}
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4 text-slate-700">
+                          {followUp.user
+                            ?.full_name ??
+                            "—"}
+                        </td>
+
+                        <td className="whitespace-nowrap px-5 py-4 text-slate-700">
+                          {formatDate(
+                            followUp.scheduled_at
+                          )}
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1.5 text-xs font-bold ${getPriorityClass(
+                              followUp.priority
+                            )}`}
+                          >
+                            {getFollowUpPriorityLabel(
+                              followUp.priority
+                            )}
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex rounded-full px-3 py-1.5 text-xs font-bold ${getStatusClass(
+                              followUp.status
+                            )}`}
+                          >
+                            {getFollowUpStatusLabel(
+                              followUp.status
+                            )}
+                          </span>
+                        </td>
+
+                        <td className="max-w-sm px-5 py-4 text-slate-600">
+                          <div className="line-clamp-2">
+                            {followUp.notes ??
+                              "—"}
+                          </div>
+                        </td>
+
+                        <td className="whitespace-nowrap px-5 py-4">
+                          <Link
+                            href={`/activities/follow-ups/${followUp.id}/edit`}
+                            className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-emerald-600 hover:text-white"
+                          >
+                            ویرایش
+                            <Pencil
+                              size={13}
+                            />
+                          </Link>
+                        </td>
+                      </tr>
+                    )
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-customer-title"
+            className="w-full max-w-md overflow-hidden rounded-3xl border border-red-100 bg-white shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+                  <Trash2 size={22} />
+                </div>
+
+                <div>
+                  <h2
+                    id="delete-customer-title"
+                    className="text-lg font-black text-slate-900"
+                  >
+                    حذف مشتری
+                  </h2>
+
+                  <p className="mt-1 text-sm leading-6 text-slate-500">
+                    مشتری از فهرست مشتریان فعال حذف خواهد شد.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!deleting) {
+                    setShowDeleteModal(
+                      false
+                    );
+                  }
+                }}
+                disabled={deleting}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="بستن"
               >
-                <Pencil size={15} />
-                ویرایش
-              </Link>
+                <X size={17} />
+              </button>
+            </div>
+
+            <div className="p-5">
+              <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
+                <p className="text-sm leading-7 text-red-800">
+                  آیا از حذف مشتری{" "}
+                  <span className="font-black">
+                    {customer.name}
+                  </span>{" "}
+                  مطمئن هستید؟
+                </p>
+
+                <p className="mt-2 text-xs leading-6 text-red-600">
+                  سوابق مشتری حذف دائمی نمی‌شود و به‌صورت حذف نرم در دیتابیس نگهداری خواهد شد.
+                </p>
+              </div>
+
+              {deleteError && (
+                <div className="mt-4 rounded-2xl border border-red-200 bg-white p-4">
+                  <p className="text-sm font-bold text-red-800">
+                    خطا در حذف مشتری
+                  </p>
+
+                  <p className="mt-1 text-xs leading-6 text-red-600">
+                    {deleteError}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 p-5 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() =>
+                  setShowDeleteModal(
+                    false
+                  )
+                }
+                disabled={deleting}
+                className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                انصراف
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  void handleDeleteCustomer()
+                }
+                disabled={deleting}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deleting ? (
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                    در حال حذف...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={16} />
+                    بله، حذف مشتری
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
-      </section>
-
-      {/* Stats */}
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="تناژ کل"
-          value={formatTonnage(
-            totalOrderTonnage
-          )}
-          suffix="تن"
-          icon={<Package size={21} />}
-          iconClass="bg-blue-50 text-blue-700"
-        />
-
-        <StatCard
-          title="میانگین ماهانه"
-          value={formatTonnage(
-            averageMonthlyTonnage
-          )}
-          suffix="تن در ماه"
-          icon={
-            <CalendarDays
-              size={21}
-            />
-          }
-          iconClass="bg-cyan-50 text-cyan-700"
-        />
-
-        <StatCard
-          title="تعداد سفارش"
-          value={formatNumber(
-            orders.length
-          )}
-          suffix="سفارش"
-          icon={
-            <ShoppingCart
-              size={21}
-            />
-          }
-          iconClass="bg-emerald-50 text-emerald-700"
-        />
-
-        <StatCard
-          title="عدم فعالیت"
-          value={formatNumber(
-            inactivityDays
-          )}
-          suffix="روز"
-          icon={
-            <Clock3 size={21} />
-          }
-          iconClass={inactivityTone.box}
-          valueClass={
-            inactivityTone.text
-          }
-        />
-      </section>
-
-      {/* Customer Information */}
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <SectionHeader
-          icon={
-            <UserRound size={19} />
-          }
-          iconClass="bg-slate-100 text-slate-700"
-          title="اطلاعات مشتری"
-          description="مشخصات پایه و اطلاعات ارتباطی مشتری"
-          badge={
-            customer.is_vip
-              ? "مشتری VIP"
-              : undefined
-          }
-        />
-
-        <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4">
-          <Info
-            label="نام مشتری"
-            value={
-              customer.name ||
-              "—"
-            }
-          />
-
-          <Info
-            label="شهر"
-            value={cityName}
-          />
-
-          <Info
-            label="نوع مشتری"
-            value={customerType}
-          />
-
-          <Info
-            label="کد مشتری"
-            value={customerCode}
-          />
-
-          <Info
-            label="شماره تماس"
-            value={
-              customer.phone ||
-              "—"
-            }
-          />
-
-          <Info
-            label="شماره واتساپ"
-            value={
-              customer.whatsapp_number ??
-              customer.phone ??
-              "—"
-            }
-          />
-
-          <Info
-            label="وضعیت مشتری"
-            value={
-              customer.is_active
-                ? "فعال"
-                : "غیرفعال"
-            }
-          />
-
-          <Info
-            label="وضعیت VIP"
-            value={
-              customer.is_vip
-                ? "بله"
-                : "خیر"
-            }
-          />
-        </div>
-      </section>
-
-      {/* Latest Activities */}
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <SectionHeader
-          icon={
-            <Clock3 size={19} />
-          }
-          iconClass="bg-indigo-50 text-indigo-700"
-          title="آخرین فعالیت‌ها"
-          description="آخرین تعاملات ثبت‌شده برای این مشتری"
-        />
-
-        <div className="grid gap-4 p-5 lg:grid-cols-3">
-          <ActivityCard
-            title="آخرین سفارش"
-            date={formatDate(
-              latestOrder?.order_date
-            )}
-            detail={
-              latestOrder
-                ? `${formatTonnage(
-                    latestOrder.total_tonnage
-                  )} تن`
-                : "هنوز سفارشی ثبت نشده"
-            }
-            icon={
-              <Package size={20} />
-            }
-            theme="blue"
-          />
-
-          <ActivityCard
-            title="آخرین تماس"
-            date={formatDate(
-              latestCall?.call_date
-            )}
-            detail={
-              latestCall
-                ? getCallOutcomeLabel(
-                    latestCall.outcome
-                  )
-                : "هنوز تماسی ثبت نشده"
-            }
-            icon={
-              <Phone size={20} />
-            }
-            theme="emerald"
-          />
-
-          <ActivityCard
-            title="آخرین پیگیری"
-            date={formatDate(
-              latestFollowUp?.scheduled_at
-            )}
-            detail={
-              latestFollowUp?.subject ??
-              "هنوز پیگیری‌ای ثبت نشده"
-            }
-            icon={
-              <Bell size={20} />
-            }
-            theme="amber"
-          />
-        </div>
-      </section>
-
-      {/* Orders */}
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <SectionHeader
-          icon={
-            <ShoppingCart
-              size={19}
-            />
-          }
-          iconClass="bg-blue-50 text-blue-700"
-          title="سوابق سفارش‌ها"
-          description={`${formatNumber(
-            orders.length
-          )} سفارش ثبت شده`}
-          action={
-            <Link
-              href={`/orders/new?customerId=${customer.id}`}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800"
-            >
-              <ShoppingCart
-                size={15}
-              />
-              ثبت سفارش
-            </Link>
-          }
-        />
-
-        {ordersLoading ? (
-          <LoadingBlock text="در حال دریافت سوابق سفارش..." />
-        ) : ordersError ? (
-          <ErrorBlock
-            message={
-              ordersError
-            }
-          />
-        ) : orders.length === 0 ? (
-          <EmptyBlock
-            icon={
-              <Package size={25} />
-            }
-            title="هنوز سفارشی برای این مشتری ثبت نشده است"
-            actionHref={`/orders/new?customerId=${customer.id}`}
-            actionText="ثبت اولین سفارش"
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-right text-sm">
-              <thead className="border-b border-slate-100 bg-slate-50/70">
-                <tr>
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    تاریخ سفارش
-                  </th>
-
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    تناژ
-                  </th>
-
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    وضعیت
-                  </th>
-
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    مسئول فروش
-                  </th>
-
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    منبع
-                  </th>
-
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    عملیات
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-100">
-                {orders.map(
-                  (order) => (
-                    <tr
-                      key={order.id}
-                      className="transition hover:bg-slate-50/80"
-                    >
-                      <td className="whitespace-nowrap px-5 py-4 text-slate-700">
-                        {formatDate(
-                          order.order_date
-                        )}
-                      </td>
-
-                      <td className="whitespace-nowrap px-5 py-4 font-black text-slate-900">
-                        {formatTonnage(
-                          order.total_tonnage
-                        )}{" "}
-                        <span className="text-xs text-slate-400">
-                          تن
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1.5 text-xs font-bold ${getOrderStatusClass(
-                            order.status
-                          )}`}
-                        >
-                          {getOrderStatusLabel(
-                            order.status
-                          )}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4 text-slate-700">
-                        {order.sales_user
-                          ?.full_name ??
-                          "—"}
-                      </td>
-
-                      <td className="px-5 py-4 text-slate-600">
-                        {getOrderSourceLabel(
-                          order.source
-                        )}
-                      </td>
-
-                      <td className="whitespace-nowrap px-5 py-4">
-                        <Link
-                          href={`/orders/${order.id}`}
-                          className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-blue-600 hover:text-white"
-                        >
-                          مشاهده
-                          <ChevronLeft
-                            size={14}
-                          />
-                        </Link>
-                      </td>
-                    </tr>
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      {/* Activity Error */}
-      {activitiesError && (
-        <ErrorBlock
-          message={
-            activitiesError
-          }
-          title="خطا در دریافت سوابق فعالیت"
-        />
       )}
-
-      {/* Calls */}
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <SectionHeader
-          icon={
-            <Phone size={19} />
-          }
-          iconClass="bg-blue-50 text-blue-700"
-          title="سوابق تماس‌ها"
-          description={`${formatNumber(
-            calls.length
-          )} تماس ثبت شده`}
-          action={
-            <Link
-              href={`/activities/calls/new?customerId=${customer.id}`}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white transition hover:bg-blue-700"
-            >
-              <Phone size={15} />
-              ثبت تماس
-            </Link>
-          }
-        />
-
-        {activitiesLoading ? (
-          <LoadingBlock text="در حال دریافت سوابق تماس..." />
-        ) : calls.length === 0 ? (
-          <EmptyBlock
-            icon={
-              <Phone size={25} />
-            }
-            title="هنوز تماسی برای این مشتری ثبت نشده است"
-            actionHref={`/activities/calls/new?customerId=${customer.id}`}
-            actionText="ثبت اولین تماس"
-            actionClass="bg-blue-600 hover:bg-blue-700"
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-right text-sm">
-              <thead className="border-b border-slate-100 bg-slate-50/70">
-                <tr>
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    تاریخ
-                  </th>
-
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    مسئول
-                  </th>
-
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    جهت
-                  </th>
-
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    نتیجه
-                  </th>
-
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    مدت
-                  </th>
-
-                  <th className="px-5 py-4 font-black text-slate-600">
-                    توضیحات
-                  </th>
-
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    عملیات
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-100">
-                {calls.map(
-                  (call) => (
-                    <tr
-                      key={call.id}
-                      className="transition hover:bg-slate-50/80"
-                    >
-                      <td className="whitespace-nowrap px-5 py-4 text-slate-700">
-                        {formatDate(
-                          call.call_date
-                        )}
-                      </td>
-
-                      <td className="px-5 py-4 font-medium text-slate-700">
-                        {call.user
-                          ?.full_name ??
-                          "—"}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span className="inline-flex rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 ring-1 ring-blue-100">
-                          {getCallDirectionLabel(
-                            call.direction
-                          )}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 ring-1 ring-emerald-100">
-                          {getCallOutcomeLabel(
-                            call.outcome
-                          )}
-                        </span>
-                      </td>
-
-                      <td className="whitespace-nowrap px-5 py-4 text-slate-700">
-                        {formatDuration(
-                          call.duration_seconds
-                        )}
-                      </td>
-
-                      <td className="max-w-sm px-5 py-4 text-slate-600">
-                        <div className="line-clamp-2">
-                          {call.notes ??
-                            "—"}
-                        </div>
-                      </td>
-
-                      <td className="whitespace-nowrap px-5 py-4">
-                        <Link
-                          href={`/activities/calls/${call.id}/edit`}
-                          className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-blue-600 hover:text-white"
-                        >
-                          ویرایش
-                          <Pencil
-                            size={13}
-                          />
-                        </Link>
-                      </td>
-                    </tr>
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      {/* Follow Ups */}
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <SectionHeader
-          icon={
-            <Bell size={19} />
-          }
-          iconClass="bg-emerald-50 text-emerald-700"
-          title="سوابق پیگیری‌ها"
-          description={`${formatNumber(
-            followUps.length
-          )} پیگیری ثبت شده`}
-          action={
-            <Link
-              href={`/activities/follow-ups/new?customerId=${customer.id}`}
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white transition hover:bg-emerald-700"
-            >
-              <Bell size={15} />
-              ثبت پیگیری
-            </Link>
-          }
-        />
-
-        {activitiesLoading ? (
-          <LoadingBlock text="در حال دریافت سوابق پیگیری..." />
-        ) : followUps.length === 0 ? (
-          <EmptyBlock
-            icon={
-              <Bell size={25} />
-            }
-            title="هنوز پیگیری‌ای برای این مشتری ثبت نشده است"
-            actionHref={`/activities/follow-ups/new?customerId=${customer.id}`}
-            actionText="ثبت اولین پیگیری"
-            actionClass="bg-emerald-600 hover:bg-emerald-700"
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-right text-sm">
-              <thead className="border-b border-slate-100 bg-slate-50/70">
-                <tr>
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    موضوع
-                  </th>
-
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    مسئول
-                  </th>
-
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    زمان پیگیری
-                  </th>
-
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    اولویت
-                  </th>
-
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    وضعیت
-                  </th>
-
-                  <th className="px-5 py-4 font-black text-slate-600">
-                    توضیحات
-                  </th>
-
-                  <th className="whitespace-nowrap px-5 py-4 font-black text-slate-600">
-                    عملیات
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-100">
-                {followUps.map(
-                  (followUp) => (
-                    <tr
-                      key={
-                        followUp.id
-                      }
-                      className="transition hover:bg-slate-50/80"
-                    >
-                      <td className="px-5 py-4">
-                        <div className="font-black text-slate-800">
-                          {followUp.subject ??
-                            "بدون موضوع"}
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4 text-slate-700">
-                        {followUp.user
-                          ?.full_name ??
-                          "—"}
-                      </td>
-
-                      <td className="whitespace-nowrap px-5 py-4 text-slate-700">
-                        {formatDate(
-                          followUp.scheduled_at
-                        )}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1.5 text-xs font-bold ${getPriorityClass(
-                            followUp.priority
-                          )}`}
-                        >
-                          {getFollowUpPriorityLabel(
-                            followUp.priority
-                          )}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1.5 text-xs font-bold ${getStatusClass(
-                            followUp.status
-                          )}`}
-                        >
-                          {getFollowUpStatusLabel(
-                            followUp.status
-                          )}
-                        </span>
-                      </td>
-
-                      <td className="max-w-sm px-5 py-4 text-slate-600">
-                        <div className="line-clamp-2">
-                          {followUp.notes ??
-                            "—"}
-                        </div>
-                      </td>
-
-                      <td className="whitespace-nowrap px-5 py-4">
-                        <Link
-                          href={`/activities/follow-ups/${followUp.id}/edit`}
-                          className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-emerald-600 hover:text-white"
-                        >
-                          ویرایش
-                          <Pencil
-                            size={13}
-                          />
-                        </Link>
-                      </td>
-                    </tr>
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    </div>
+    </>
   );
 }
 
@@ -1895,12 +2125,14 @@ function ActivityCard({
       icon: "bg-white text-blue-700",
       title: "text-blue-900",
     },
+
     emerald: {
       wrapper:
         "border-emerald-100 bg-gradient-to-br from-emerald-50 to-white",
       icon: "bg-white text-emerald-700",
       title: "text-emerald-900",
     },
+
     amber: {
       wrapper:
         "border-amber-100 bg-gradient-to-br from-amber-50 to-white",
