@@ -123,9 +123,7 @@ export function useActivities(): UseActivitiesResult {
   // ==========================================================
 
   const [followUps, setFollowUps] =
-    useState<FollowUpWithRelations[]>(
-      []
-    );
+    useState<FollowUpWithRelations[]>([]);
 
   const [
     followUpsLoading,
@@ -188,14 +186,6 @@ export function useActivities(): UseActivitiesResult {
 
           return data;
         } catch (error) {
-          const message =
-            getErrorMessage(
-              error,
-              "خطا در دریافت تماس‌های مشتری."
-            );
-
-          setCallsError(message);
-
           console.error(
             "useActivities.loadCallsByCustomer:",
             error
@@ -239,12 +229,12 @@ export function useActivities(): UseActivitiesResult {
             "خطا در ثبت تماس."
           );
 
-        setCallsError(message);
-
         console.error(
           "useActivities.createCall:",
           error
         );
+
+        setCallsError(message);
 
         throw error;
       }
@@ -286,12 +276,12 @@ export function useActivities(): UseActivitiesResult {
             "خطا در ویرایش تماس."
           );
 
-        setCallsError(message);
-
         console.error(
           "useActivities.updateCall:",
           error
         );
+
+        setCallsError(message);
 
         throw error;
       }
@@ -326,12 +316,12 @@ export function useActivities(): UseActivitiesResult {
             "خطا در حذف تماس."
           );
 
-        setCallsError(message);
-
         console.error(
           "useActivities.deleteCall:",
           error
         );
+
+        setCallsError(message);
 
         throw error;
       }
@@ -347,6 +337,8 @@ export function useActivities(): UseActivitiesResult {
     useCallback(
       async (): Promise<void> => {
         setFollowUpsLoading(true);
+
+        // فقط خطای واقعی دریافت لیست را پاک می‌کنیم.
         setFollowUpsError(null);
 
         try {
@@ -393,14 +385,6 @@ export function useActivities(): UseActivitiesResult {
 
           return data;
         } catch (error) {
-          const message =
-            getErrorMessage(
-              error,
-              "خطا در دریافت پیگیری‌های مشتری."
-            );
-
-          setFollowUpsError(message);
-
           console.error(
             "useActivities.loadFollowUpsByCustomer:",
             error
@@ -421,8 +405,6 @@ export function useActivities(): UseActivitiesResult {
       async (
         input: CreateFollowUpInput
       ): Promise<FollowUpWithRelations> => {
-        setFollowUpsError(null);
-
         try {
           const created =
             await activitiesService.createFollowUp(
@@ -439,14 +421,9 @@ export function useActivities(): UseActivitiesResult {
 
           return created;
         } catch (error) {
-          const message =
-            getErrorMessage(
-              error,
-              "خطا در ثبت پیگیری."
-            );
-
-          setFollowUpsError(message);
-
+          // مهم:
+          // خطای ثبت را در followUpsError قرار نمی‌دهیم،
+          // چون followUpsError مخصوص خطای دریافت لیست است.
           console.error(
             "useActivities.createFollowUp:",
             error
@@ -468,8 +445,6 @@ export function useActivities(): UseActivitiesResult {
         id: string,
         input: UpdateFollowUpInput
       ): Promise<FollowUpWithRelations> => {
-        setFollowUpsError(null);
-
         try {
           const updated =
             await activitiesService.updateFollowUp(
@@ -487,14 +462,7 @@ export function useActivities(): UseActivitiesResult {
 
           return updated;
         } catch (error) {
-          const message =
-            getErrorMessage(
-              error,
-              "خطا در ویرایش پیگیری."
-            );
-
-          setFollowUpsError(message);
-
+          // خطای ویرایش نباید با خطای دریافت لیست قاطی شود.
           console.error(
             "useActivities.updateFollowUp:",
             error
@@ -515,8 +483,6 @@ export function useActivities(): UseActivitiesResult {
       async (
         id: string
       ): Promise<FollowUpWithRelations> => {
-        setFollowUpsError(null);
-
         try {
           const completed =
             await activitiesService.completeFollowUp(
@@ -533,14 +499,9 @@ export function useActivities(): UseActivitiesResult {
 
           return completed;
         } catch (error) {
-          const message =
-            getErrorMessage(
-              error,
-              "خطا در تکمیل پیگیری."
-            );
-
-          setFollowUpsError(message);
-
+          // بسیار مهم:
+          // اگر تکمیل پیگیری به علت Constraint دیتابیس شکست خورد،
+          // نباید صفحه با عنوان «خطا در دریافت پیگیری‌ها» نمایش دهد.
           console.error(
             "useActivities.completeFollowUp:",
             error
@@ -561,8 +522,6 @@ export function useActivities(): UseActivitiesResult {
       async (
         id: string
       ): Promise<void> => {
-        setFollowUpsError(null);
-
         try {
           await activitiesService.softDeleteFollowUp(
             id
@@ -574,14 +533,7 @@ export function useActivities(): UseActivitiesResult {
             )
           );
         } catch (error) {
-          const message =
-            getErrorMessage(
-              error,
-              "خطا در حذف پیگیری."
-            );
-
-          setFollowUpsError(message);
-
+          // خطای حذف هم نباید به عنوان خطای دریافت لیست ثبت شود.
           console.error(
             "useActivities.deleteFollowUp:",
             error

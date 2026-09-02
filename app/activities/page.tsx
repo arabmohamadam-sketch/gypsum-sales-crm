@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useActivities } from "@/src/lib/hooks/useActivities";
 import { formatJalaliDateTime } from "@/src/lib/utils/jalali";
@@ -11,6 +11,7 @@ const statusLabels: Record<string, string> = {
   completed: "تکمیل شده",
   cancelled: "لغو شده",
   overdue: "عقب‌افتاده",
+  not_due: "سررسید نشده",
 };
 
 const priorityLabels: Record<string, string> = {
@@ -19,6 +20,16 @@ const priorityLabels: Record<string, string> = {
   high: "زیاد",
   urgent: "فوری",
 };
+
+type DisplayStatus =
+  | "pending"
+  | "completed"
+  | "cancelled"
+  | "overdue"
+  | "not_due";
+
+type StatusFilter = "all" | DisplayStatus;
+type PriorityFilter = "all" | "low" | "medium" | "high" | "urgent";
 
 function toPersianDigits(value: string | number): string {
   return String(value).replace(
@@ -43,13 +54,16 @@ function getPriorityLabel(value?: string | null): string {
   return priorityLabels[value] ?? value;
 }
 
-function getStatusClass(value?: string | null): string {
+function getStatusClass(value: DisplayStatus): string {
   switch (value) {
     case "completed":
       return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100";
 
     case "pending":
       return "bg-blue-50 text-blue-700 ring-1 ring-blue-100";
+
+    case "not_due":
+      return "bg-amber-50 text-amber-700 ring-1 ring-amber-100";
 
     case "overdue":
       return "bg-red-50 text-red-700 ring-1 ring-red-100";
@@ -98,6 +112,66 @@ function getErrorMessage(error: unknown): string {
   return "خطایی در انجام عملیات رخ داد.";
 }
 
+function isFutureScheduled(scheduledAt?: string | null, now = Date.now()) {
+  if (!scheduledAt) {
+    return false;
+  }
+
+  const scheduledTime = new Date(scheduledAt).getTime();
+
+  if (Number.isNaN(scheduledTime)) {
+    return false;
+  }
+
+  return scheduledTime > now;
+}
+
+function isOverdueFollowUp(
+  status?: string | null,
+  scheduledAt?: string | null,
+  now = Date.now()
+) {
+  if (status === "overdue") {
+    return true;
+  }
+
+  if (status !== "pending" || !scheduledAt) {
+    return false;
+  }
+
+  const scheduledTime = new Date(scheduledAt).getTime();
+
+  if (Number.isNaN(scheduledTime)) {
+    return false;
+  }
+
+  return scheduledTime <= now;
+}
+
+function getDisplayStatus(
+  status?: string | null,
+  scheduledAt?: string | null,
+  now = Date.now()
+): DisplayStatus {
+  if (status === "completed") {
+    return "completed";
+  }
+
+  if (status === "cancelled") {
+    return "cancelled";
+  }
+
+  if (isFutureScheduled(scheduledAt, now)) {
+    return "not_due";
+  }
+
+  if (isOverdueFollowUp(status, scheduledAt, now)) {
+    return "overdue";
+  }
+
+  return "pending";
+}
+
 function StatCard({
   title,
   value,
@@ -107,7 +181,7 @@ function StatCard({
   title: string;
   value: string;
   icon: string;
-  tone: "slate" | "blue" | "emerald" | "red";
+  tone: "slate" | "blue" | "amber" | "emerald" | "red";
 }) {
   const toneClasses = {
     slate: {
@@ -117,6 +191,10 @@ function StatCard({
     blue: {
       icon: "bg-blue-50 text-blue-700",
       value: "text-blue-700",
+    },
+    amber: {
+      icon: "bg-amber-50 text-amber-700",
+      value: "text-amber-700",
     },
     emerald: {
       icon: "bg-emerald-50 text-emerald-700",
@@ -134,9 +212,7 @@ function StatCard({
     <div className="group rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-lg">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">
-            {title}
-          </p>
+          <p className="text-sm font-medium text-slate-500">{title}</p>
 
           <p
             className={`mt-3 text-3xl font-black ${current.value}`}
@@ -193,95 +269,127 @@ export default function ActivitiesPage() {
   } = useActivities();
 
   const [search, setSearch] = useState("");
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const [actionLoading, setActionLoading] =
-    useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const [statusFilter, setStatusFilter] =
-    useState<
-      "all" |
-      "pending" |
-      "completed" |
-      "cancelled" |
-      "overdue"
-    >("all");
+    useState<StatusFilter>("all");
 
   const [priorityFilter, setPriorityFilter] =
-    useState<
-      "all" |
-      "low" |
-      "medium" |
-      "high" |
-      "urgent"
-    >("all");
+    useState<PriorityFilter>("all");
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 30_000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const followUpsWithStatus = useMemo(() => {
+    return followUps.map((followUp) => ({
+      followUp,
+      displayStatus: getDisplayStatus(
+        followUp.status,
+        followUp.scheduled_at,
+        now
+      ),
+    }));
+  }, [followUps, now]);
 
   const filteredFollowUps = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    return followUps.filter((followUp) => {
-      const matchesStatus =
-        statusFilter === "all" ||
-        followUp.status === statusFilter;
+    return followUpsWithStatus.filter(
+      ({ followUp, displayStatus }) => {
+        const matchesStatus =
+          statusFilter === "all" ||
+          displayStatus === statusFilter;
 
-      const matchesPriority =
-        priorityFilter === "all" ||
-        followUp.priority === priorityFilter;
+        const matchesPriority =
+          priorityFilter === "all" ||
+          followUp.priority === priorityFilter;
 
-      if (!matchesStatus || !matchesPriority) {
-        return false;
+        if (!matchesStatus || !matchesPriority) {
+          return false;
+        }
+
+        if (!query) {
+          return true;
+        }
+
+        const searchableText = [
+          followUp.customer?.name ?? "",
+          followUp.customer?.phone ?? "",
+          followUp.user?.full_name ?? "",
+          followUp.subject ?? "",
+          followUp.notes ?? "",
+          getStatusLabel(displayStatus),
+          getPriorityLabel(followUp.priority),
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        return searchableText.includes(query);
       }
-
-      if (!query) {
-        return true;
-      }
-
-      const searchableText = [
-        followUp.customer?.name ?? "",
-        followUp.customer?.phone ?? "",
-        followUp.user?.full_name ?? "",
-        followUp.subject ?? "",
-        followUp.notes ?? "",
-        getStatusLabel(followUp.status),
-        getPriorityLabel(followUp.priority),
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return searchableText.includes(query);
-    });
+    );
   }, [
-    followUps,
+    followUpsWithStatus,
     search,
     statusFilter,
     priorityFilter,
   ]);
 
-  const pendingCount = followUps.filter(
-    (item) => item.status === "pending"
+  const pendingCount = followUpsWithStatus.filter(
+    ({ displayStatus }) => displayStatus === "pending"
   ).length;
 
-  const completedCount = followUps.filter(
-    (item) => item.status === "completed"
+  const notDueCount = followUpsWithStatus.filter(
+    ({ displayStatus }) => displayStatus === "not_due"
   ).length;
 
-  const overdueCount = followUps.filter(
-    (item) => item.status === "overdue"
+  const completedCount = followUpsWithStatus.filter(
+    ({ displayStatus }) => displayStatus === "completed"
+  ).length;
+
+  const overdueCount = followUpsWithStatus.filter(
+    ({ displayStatus }) => displayStatus === "overdue"
   ).length;
 
   async function handleComplete(id: string) {
+    const target = followUpsWithStatus.find(
+      ({ followUp }) => followUp.id === id
+    );
+
+    if (!target) {
+      return;
+    }
+
+    if (target.displayStatus === "not_due") {
+      window.alert(
+        "این پیگیری هنوز سررسید نشده است و امکان تکمیل آن وجود ندارد."
+      );
+      return;
+    }
+
+    if (
+      target.displayStatus === "completed" ||
+      target.displayStatus === "cancelled"
+    ) {
+      return;
+    }
+
     try {
       setActionLoading(`complete-${id}`);
 
       await completeFollowUp(id);
     } catch (error) {
-      console.error(
-        "خطا در تکمیل پیگیری:",
-        error
-      );
+      console.error("خطا در تکمیل پیگیری:", error);
 
-      window.alert(
-        getErrorMessage(error)
-      );
+      window.alert(getErrorMessage(error));
     } finally {
       setActionLoading(null);
     }
@@ -301,14 +409,9 @@ export default function ActivitiesPage() {
 
       await deleteFollowUp(id);
     } catch (error) {
-      console.error(
-        "خطا در حذف پیگیری:",
-        error
-      );
+      console.error("خطا در حذف پیگیری:", error);
 
-      window.alert(
-        getErrorMessage(error)
-      );
+      window.alert(getErrorMessage(error));
     } finally {
       setActionLoading(null);
     }
@@ -331,8 +434,6 @@ export default function ActivitiesPage() {
       className="min-h-screen bg-slate-50 p-4 md:p-6"
     >
       <div className="mx-auto max-w-7xl space-y-6">
-
-        {/* Header */}
         <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-slate-900 via-emerald-600 to-teal-500" />
 
@@ -342,7 +443,6 @@ export default function ActivitiesPage() {
 
           <div className="relative p-6 md:p-8">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-
               <div className="flex items-start gap-4">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-600 text-2xl text-white shadow-lg shadow-emerald-100">
                   📌
@@ -394,12 +494,10 @@ export default function ActivitiesPage() {
                   + ثبت پیگیری
                 </Link>
               </div>
-
             </div>
           </div>
         </section>
 
-        {/* Error */}
         {followUpsError && (
           <section className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
             <div className="h-1 bg-red-500" />
@@ -422,48 +520,44 @@ export default function ActivitiesPage() {
           </section>
         )}
 
-        {/* Stats */}
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard
             title="کل پیگیری‌ها"
-            value={toPersianDigits(
-              followUps.length
-            )}
+            value={toPersianDigits(followUps.length)}
             icon="📌"
             tone="slate"
           />
 
           <StatCard
             title="در انتظار"
-            value={toPersianDigits(
-              pendingCount
-            )}
+            value={toPersianDigits(pendingCount)}
             icon="⏳"
             tone="blue"
           />
 
           <StatCard
+            title="سررسید نشده"
+            value={toPersianDigits(notDueCount)}
+            icon="🕒"
+            tone="amber"
+          />
+
+          <StatCard
             title="تکمیل شده"
-            value={toPersianDigits(
-              completedCount
-            )}
+            value={toPersianDigits(completedCount)}
             icon="✓"
             tone="emerald"
           />
 
           <StatCard
             title="عقب‌افتاده"
-            value={toPersianDigits(
-              overdueCount
-            )}
+            value={toPersianDigits(overdueCount)}
             icon="!"
             tone="red"
           />
         </section>
 
-        {/* Quick Links */}
         <section className="grid gap-4 md:grid-cols-2">
-
           <Link
             href="/activities/calls"
             className="group overflow-hidden rounded-3xl border border-blue-100 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg"
@@ -535,12 +629,9 @@ export default function ActivitiesPage() {
               </div>
             </div>
           </Link>
-
         </section>
 
-        {/* Search + Filters */}
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
-
           <SectionTitle
             icon="🔎"
             title="جستجو و فیلتر"
@@ -548,7 +639,6 @@ export default function ActivitiesPage() {
           />
 
           <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_220px_220px]">
-
             <div className="relative">
               <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-lg text-slate-400">
                 🔎
@@ -558,9 +648,7 @@ export default function ActivitiesPage() {
                 type="text"
                 value={search}
                 onChange={(event) =>
-                  setSearch(
-                    event.target.value
-                  )
+                  setSearch(event.target.value)
                 }
                 placeholder="نام مشتری، تلفن، موضوع، مسئول یا توضیحات..."
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-4 pr-11 pl-12 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-50"
@@ -569,9 +657,7 @@ export default function ActivitiesPage() {
               {search && (
                 <button
                   type="button"
-                  onClick={() =>
-                    setSearch("")
-                  }
+                  onClick={() => setSearch("")}
                   className="absolute left-3 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                   aria-label="پاک کردن جستجو"
                 >
@@ -584,586 +670,457 @@ export default function ActivitiesPage() {
               value={statusFilter}
               onChange={(event) =>
                 setStatusFilter(
-                  event.target.value as
-                    | "all"
-                    | "pending"
-                    | "completed"
-                    | "cancelled"
-                    | "overdue"
+                  event.target.value as StatusFilter
                 )
               }
               className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-800 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-50"
             >
-              <option value="all">
-                همه وضعیت‌ها
-              </option>
-
-              <option value="pending">
-                در انتظار
-              </option>
-
-              <option value="completed">
-                تکمیل شده
-              </option>
-
-              <option value="cancelled">
-                لغو شده
-              </option>
-
-              <option value="overdue">
-                عقب‌افتاده
-              </option>
+              <option value="all">همه وضعیت‌ها</option>
+              <option value="pending">در انتظار</option>
+              <option value="not_due">سررسید نشده</option>
+              <option value="completed">تکمیل شده</option>
+              <option value="cancelled">لغو شده</option>
+              <option value="overdue">عقب‌افتاده</option>
             </select>
 
             <select
               value={priorityFilter}
               onChange={(event) =>
                 setPriorityFilter(
-                  event.target.value as
-                    | "all"
-                    | "low"
-                    | "medium"
-                    | "high"
-                    | "urgent"
+                  event.target.value as PriorityFilter
                 )
               }
               className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-bold text-slate-800 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-50"
             >
-              <option value="all">
-                همه اولویت‌ها
-              </option>
-
-              <option value="urgent">
-                فوری
-              </option>
-
-              <option value="high">
-                زیاد
-              </option>
-
-              <option value="medium">
-                متوسط
-              </option>
-
-              <option value="low">
-                کم
-              </option>
+              <option value="all">همه اولویت‌ها</option>
+              <option value="urgent">فوری</option>
+              <option value="high">زیاد</option>
+              <option value="medium">متوسط</option>
+              <option value="low">کم</option>
             </select>
-
           </div>
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
             <p className="text-sm text-slate-500">
               تعداد نتایج:
               <span className="mr-2 font-black text-slate-900">
-                {toPersianDigits(
-                  filteredFollowUps.length
-                )}
+                {toPersianDigits(filteredFollowUps.length)}
               </span>
             </p>
 
             {hasFilters && (
               <button
                 type="button"
-                onClick={
-                  clearFilters
-                }
+                onClick={clearFilters}
                 className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
               >
-                پاک کردن فیلترها
+                حذف فیلترها
               </button>
             )}
           </div>
-
         </section>
 
-        {/* Loading */}
-        {followUpsLoading && (
-          <section className="rounded-3xl border border-slate-200 bg-white p-10 shadow-sm">
-            <div className="mx-auto max-w-sm text-center">
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-5 py-5 md:px-6">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-xl font-black text-slate-900">
+                  لیست پیگیری‌ها
+                </h2>
 
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-2xl">
+                <p className="mt-1 text-sm text-slate-500">
+                  پیگیری‌های زمان‌بندی‌شده مشتریان را مدیریت کنید.
+                </p>
+              </div>
+
+              <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">
+                {toPersianDigits(filteredFollowUps.length)} مورد
+              </span>
+            </div>
+          </div>
+
+          {followUpsLoading ? (
+            <div className="p-10 text-center">
+              <div className="mx-auto flex h-14 w-14 animate-pulse items-center justify-center rounded-2xl bg-slate-100 text-2xl">
                 📌
               </div>
 
-              <p className="mt-4 font-black text-slate-700">
+              <p className="mt-4 font-bold text-slate-600">
                 در حال دریافت پیگیری‌ها...
               </p>
-
-              <div className="mx-auto mt-4 h-2 w-48 overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full w-1/2 animate-pulse rounded-full bg-emerald-500" />
-              </div>
-
             </div>
-          </section>
-        )}
-
-        {/* Empty */}
-        {!followUpsLoading &&
-          !followUpsError &&
-          filteredFollowUps.length === 0 && (
-            <section className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm">
-
+          ) : filteredFollowUps.length === 0 ? (
+            <div className="p-10 text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-3xl">
-                📌
+                📭
               </div>
 
-              <h2 className="mt-5 text-xl font-black text-slate-900">
-                پیگیری‌ای برای نمایش وجود ندارد
-              </h2>
+              <h3 className="mt-4 text-lg font-black text-slate-900">
+                پیگیری‌ای پیدا نشد
+              </h3>
 
-              <p className="mx-auto mt-2 max-w-md text-sm leading-7 text-slate-500">
-                {hasFilters
-                  ? "با فیلترهای دیگری جستجو کنید."
-                  : "اولین پیگیری مشتری را ثبت کنید تا در این بخش نمایش داده شود."}
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                برای ثبت پیگیری جدید از دکمه «ثبت پیگیری» استفاده کنید.
               </p>
 
-              <div className="mt-6 flex flex-wrap justify-center gap-3">
-
-                {hasFilters && (
-                  <button
-                    type="button"
-                    onClick={
-                      clearFilters
-                    }
-                    className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
-                  >
-                    پاک کردن فیلترها
-                  </button>
-                )}
-
-                <Link
-                  href="/activities/follow-ups/new"
-                  className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
-                >
-                  + ثبت پیگیری
-                </Link>
-
-              </div>
-
-            </section>
-          )}
-
-        {/* List */}
-        {!followUpsLoading &&
-          !followUpsError &&
-          filteredFollowUps.length > 0 && (
-            <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-
-              <div className="flex flex-col gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-
-                <div>
-                  <h2 className="font-black text-slate-900">
-                    فهرست پیگیری‌ها
-                  </h2>
-
-                  <p className="mt-1 text-xs text-slate-400">
-                    نمایش{" "}
-                    {toPersianDigits(
-                      filteredFollowUps.length
-                    )}{" "}
-                    پیگیری
-                  </p>
-                </div>
-
-                {hasFilters && (
-                  <span className="w-fit rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
-                    فیلتر فعال است
-                  </span>
-                )}
-
-              </div>
-
-              {/* Desktop */}
+              <Link
+                href="/activities/follow-ups/new"
+                className="mt-5 inline-flex rounded-xl bg-emerald-600 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
+              >
+                + ثبت پیگیری جدید
+              </Link>
+            </div>
+          ) : (
+            <>
               <div className="hidden overflow-x-auto md:block">
-                <table className="min-w-full text-right text-sm">
-
-                  <thead className="border-b border-slate-100 bg-white">
-                    <tr>
-                      <th className="whitespace-nowrap px-5 py-4 font-bold text-slate-600">
-                        مشتری
-                      </th>
-
-                      <th className="whitespace-nowrap px-5 py-4 font-bold text-slate-600">
-                        موضوع
-                      </th>
-
-                      <th className="whitespace-nowrap px-5 py-4 font-bold text-slate-600">
-                        مسئول
-                      </th>
-
-                      <th className="whitespace-nowrap px-5 py-4 font-bold text-slate-600">
-                        زمان پیگیری
-                      </th>
-
-                      <th className="whitespace-nowrap px-5 py-4 font-bold text-slate-600">
-                        اولویت
-                      </th>
-
-                      <th className="whitespace-nowrap px-5 py-4 font-bold text-slate-600">
-                        وضعیت
-                      </th>
-
-                      <th className="whitespace-nowrap px-5 py-4 font-bold text-slate-600">
-                        عملیات
-                      </th>
+                <table className="w-full text-right">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/80 text-xs font-black text-slate-500">
+                      <th className="px-5 py-4">مشتری</th>
+                      <th className="px-5 py-4">موضوع</th>
+                      <th className="px-5 py-4">سررسید</th>
+                      <th className="px-5 py-4">اولویت</th>
+                      <th className="px-5 py-4">وضعیت</th>
+                      <th className="px-5 py-4">مسئول</th>
+                      <th className="px-5 py-4 text-left">عملیات</th>
                     </tr>
                   </thead>
 
                   <tbody className="divide-y divide-slate-100">
-
                     {filteredFollowUps.map(
-                      (followUp) => (
-                        <tr
-                          key={followUp.id}
-                          className="transition hover:bg-slate-50"
-                        >
+                      ({ followUp, displayStatus }) => {
+                        const isNotDue =
+                          displayStatus === "not_due";
 
-                          <td className="px-5 py-4">
-                            {followUp.customer?.id ? (
-                              <Link
-                                href={`/customers/${followUp.customer.id}`}
-                                className="group flex items-center gap-3"
-                              >
-                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-sm font-black text-blue-700">
-                                  {followUp.customer?.name?.charAt(
-                                    0
-                                  ) || "م"}
-                                </div>
+                        const isCompleteLoading =
+                          actionLoading ===
+                          `complete-${followUp.id}`;
 
-                                <div className="min-w-0">
-                                  <p className="truncate font-bold text-slate-900 group-hover:text-blue-600">
-                                    {followUp.customer.name}
-                                  </p>
+                        const isDeleteLoading =
+                          actionLoading ===
+                          `delete-${followUp.id}`;
 
-                                  {followUp.customer.phone && (
-                                    <p
-                                      dir="ltr"
-                                      className="mt-1 text-xs text-slate-400"
-                                    >
-                                      {followUp.customer.phone}
-                                    </p>
-                                  )}
-                                </div>
-                              </Link>
-                            ) : (
-                              <div className="flex items-center gap-3">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-sm font-black text-slate-600">
-                                  م
-                                </div>
-
-                                <span className="font-bold text-slate-500">
-                                  مشتری نامشخص
-                                </span>
+                        return (
+                          <tr
+                            key={followUp.id}
+                            className="transition hover:bg-slate-50/70"
+                          >
+                            <td className="px-5 py-5">
+                              <div className="font-black text-slate-900">
+                                {followUp.customer?.name ?? "—"}
                               </div>
-                            )}
-                          </td>
 
-                          <td className="px-5 py-4">
-                            <p className="max-w-xs font-bold text-slate-800">
-                              {followUp.subject ||
-                                "بدون موضوع"}
-                            </p>
+                              <div className="mt-1 text-xs text-slate-500">
+                                {followUp.customer?.phone ?? "بدون تلفن"}
+                              </div>
+                            </td>
 
-                            {followUp.notes && (
-                              <p className="mt-1 max-w-xs truncate text-xs text-slate-400">
-                                {followUp.notes}
-                              </p>
-                            )}
-                          </td>
+                            <td className="px-5 py-5">
+                              <div className="font-bold text-slate-800">
+                                {followUp.subject ?? "بدون موضوع"}
+                              </div>
 
-                          <td className="px-5 py-4 text-slate-700">
-                            {followUp.user?.full_name ??
-                              "—"}
-                          </td>
-
-                          <td className="whitespace-nowrap px-5 py-4 text-slate-700">
-                            {formatJalaliDateTime(
-                              followUp.scheduled_at
-                            )}
-                          </td>
-
-                          <td className="px-5 py-4">
-                            <span
-                              className={`inline-flex rounded-full px-3 py-1.5 text-xs font-bold ${getPriorityClass(
-                                followUp.priority
-                              )}`}
-                            >
-                              {getPriorityLabel(
-                                followUp.priority
+                              {followUp.notes && (
+                                <div className="mt-1 max-w-xs truncate text-xs text-slate-500">
+                                  {followUp.notes}
+                                </div>
                               )}
-                            </span>
-                          </td>
+                            </td>
 
-                          <td className="px-5 py-4">
-                            <span
-                              className={`inline-flex rounded-full px-3 py-1.5 text-xs font-bold ${getStatusClass(
-                                followUp.status
-                              )}`}
-                            >
-                              {getStatusLabel(
-                                followUp.status
+                            <td className="px-5 py-5">
+                              <div className="font-bold text-slate-700">
+                                {followUp.scheduled_at
+                                  ? formatJalaliDateTime(
+                                      followUp.scheduled_at
+                                    )
+                                  : "—"}
+                              </div>
+
+                              {isNotDue && (
+                                <div className="mt-1 text-xs font-bold text-amber-600">
+                                  هنوز موعد فرا نرسیده
+                                </div>
                               )}
-                            </span>
-                          </td>
+                            </td>
 
-                          <td className="px-5 py-4">
-                            <div className="flex flex-wrap gap-2">
+                            <td className="px-5 py-5">
+                              <span
+                                className={`inline-flex rounded-full px-3 py-1.5 text-xs font-black ${getPriorityClass(
+                                  followUp.priority
+                                )}`}
+                              >
+                                {getPriorityLabel(
+                                  followUp.priority
+                                )}
+                              </span>
+                            </td>
 
-                              {followUp.status !==
-                                "completed" && (
+                            <td className="px-5 py-5">
+                              <span
+                                className={`inline-flex rounded-full px-3 py-1.5 text-xs font-black ${getStatusClass(
+                                  displayStatus
+                                )}`}
+                              >
+                                {getStatusLabel(
+                                  displayStatus
+                                )}
+                              </span>
+                            </td>
+
+                            <td className="px-5 py-5">
+                              <div className="font-bold text-slate-700">
+                                {followUp.user?.full_name ?? "—"}
+                              </div>
+                            </td>
+
+                            <td className="px-5 py-5">
+                              <div className="flex items-center justify-end gap-2">
+                                <Link
+                                  href={`/activities/follow-ups/${followUp.id}/edit`}
+                                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+                                >
+                                  ویرایش
+                                </Link>
+
+                                {displayStatus !==
+                                  "completed" &&
+                                  displayStatus !==
+                                    "cancelled" && (
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        isNotDue ||
+                                        isCompleteLoading ||
+                                        isDeleteLoading
+                                      }
+                                      onClick={() =>
+                                        handleComplete(
+                                          followUp.id
+                                        )
+                                      }
+                                      className={`rounded-xl px-3 py-2 text-xs font-black transition ${
+                                        isNotDue
+                                          ? "cursor-not-allowed bg-amber-50 text-amber-500"
+                                          : "bg-emerald-600 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                      }`}
+                                    >
+                                      {isCompleteLoading
+                                        ? "در حال ثبت..."
+                                        : isNotDue
+                                          ? "هنوز سررسید نشده"
+                                          : "تکمیل"}
+                                    </button>
+                                  )}
+
                                 <button
                                   type="button"
+                                  disabled={
+                                    isDeleteLoading ||
+                                    isCompleteLoading
+                                  }
                                   onClick={() =>
-                                    void handleComplete(
+                                    handleDelete(
                                       followUp.id
                                     )
                                   }
-                                  disabled={
-                                    actionLoading ===
-                                    `complete-${followUp.id}`
-                                  }
-                                  className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                  className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                  {actionLoading ===
-                                  `complete-${followUp.id}`
-                                    ? "در حال تکمیل..."
-                                    : "✓ تکمیل"}
+                                  {isDeleteLoading
+                                    ? "در حال حذف..."
+                                    : "حذف"}
                                 </button>
-                              )}
-
-                              <Link
-                                href={`/activities/follow-ups/${followUp.id}/edit`}
-                                className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200"
-                              >
-                                ویرایش
-                              </Link>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  void handleDelete(
-                                    followUp.id
-                                  )
-                                }
-                                disabled={
-                                  actionLoading ===
-                                  `delete-${followUp.id}`
-                                }
-                                className="rounded-xl bg-red-50 px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                {actionLoading ===
-                                `delete-${followUp.id}`
-                                  ? "در حال حذف..."
-                                  : "حذف"}
-                              </button>
-
-                            </div>
-                          </td>
-
-                        </tr>
-                      )
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
                     )}
-
                   </tbody>
                 </table>
               </div>
 
-              {/* Mobile */}
               <div className="divide-y divide-slate-100 md:hidden">
-
                 {filteredFollowUps.map(
-                  (followUp) => (
-                    <div
-                      key={followUp.id}
-                      className="p-5"
-                    >
+                  ({ followUp, displayStatus }) => {
+                    const isNotDue =
+                      displayStatus === "not_due";
 
-                      <div className="flex items-start justify-between gap-3">
+                    const isCompleteLoading =
+                      actionLoading ===
+                      `complete-${followUp.id}`;
 
-                        {followUp.customer?.id ? (
-                          <Link
-                            href={`/customers/${followUp.customer.id}`}
-                            className="flex min-w-0 items-center gap-3"
-                          >
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-sm font-black text-blue-700">
-                              {followUp.customer?.name?.charAt(
-                                0
-                              ) || "م"}
-                            </div>
+                    const isDeleteLoading =
+                      actionLoading ===
+                      `delete-${followUp.id}`;
 
-                            <div className="min-w-0">
-                              <h2 className="truncate font-black text-slate-900">
-                                {followUp.customer.name}
-                              </h2>
+                    return (
+                      <article
+                        key={followUp.id}
+                        className="p-5"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="truncate text-base font-black text-slate-900">
+                              {followUp.customer?.name ?? "—"}
+                            </h3>
 
-                              {followUp.customer.phone && (
-                                <p
-                                  dir="ltr"
-                                  className="mt-1 text-xs text-slate-400"
-                                >
-                                  {followUp.customer.phone}
-                                </p>
-                              )}
-                            </div>
-                          </Link>
-                        ) : (
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 font-black text-slate-600">
-                              م
-                            </div>
-
-                            <span className="font-bold text-slate-500">
-                              مشتری نامشخص
-                            </span>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {followUp.customer?.phone ?? "بدون تلفن"}
+                            </p>
                           </div>
-                        )}
 
-                        <span
-                          className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold ${getStatusClass(
-                            followUp.status
-                          )}`}
-                        >
-                          {getStatusLabel(
-                            followUp.status
-                          )}
-                        </span>
-
-                      </div>
-
-                      <div className="mt-5 rounded-2xl bg-slate-50 p-4">
-
-                        <div>
-                          <p className="text-xs font-medium text-slate-400">
-                            موضوع پیگیری
-                          </p>
-
-                          <p className="mt-1 font-black text-slate-800">
-                            {followUp.subject ||
-                              "بدون موضوع"}
-                          </p>
+                          <span
+                            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-black ${getStatusClass(
+                              displayStatus
+                            )}`}
+                          >
+                            {getStatusLabel(
+                              displayStatus
+                            )}
+                          </span>
                         </div>
 
-                        <div className="mt-4 grid grid-cols-2 gap-4">
+                        <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                          <p className="font-black text-slate-800">
+                            {followUp.subject ?? "بدون موضوع"}
+                          </p>
 
-                          <div>
-                            <p className="text-xs font-medium text-slate-400">
-                              مسئول
+                          {followUp.notes && (
+                            <p className="mt-2 text-sm leading-6 text-slate-500">
+                              {followUp.notes}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                          <div className="rounded-2xl border border-slate-100 bg-white p-3">
+                            <p className="text-xs text-slate-400">
+                              سررسید
                             </p>
 
-                            <p className="mt-1 text-sm font-bold text-slate-700">
-                              {followUp.user?.full_name ??
-                                "—"}
+                            <p className="mt-1 font-bold text-slate-700">
+                              {followUp.scheduled_at
+                                ? formatJalaliDateTime(
+                                    followUp.scheduled_at
+                                  )
+                                : "—"}
                             </p>
                           </div>
 
-                          <div>
-                            <p className="text-xs font-medium text-slate-400">
+                          <div className="rounded-2xl border border-slate-100 bg-white p-3">
+                            <p className="text-xs text-slate-400">
                               اولویت
                             </p>
 
-                            <span
-                              className={`mt-1 inline-flex rounded-full px-3 py-1 text-xs font-bold ${getPriorityClass(
-                                followUp.priority
-                              )}`}
-                            >
-                              {getPriorityLabel(
-                                followUp.priority
-                              )}
-                            </span>
+                            <p className="mt-1">
+                              <span
+                                className={`inline-flex rounded-full px-2.5 py-1 text-xs font-black ${getPriorityClass(
+                                  followUp.priority
+                                )}`}
+                              >
+                                {getPriorityLabel(
+                                  followUp.priority
+                                )}
+                              </span>
+                            </p>
                           </div>
-
                         </div>
 
-                        <div className="mt-4">
-                          <p className="text-xs font-medium text-slate-400">
-                            زمان پیگیری
-                          </p>
-
-                          <p className="mt-1 text-sm font-bold text-slate-700">
-                            {formatJalaliDateTime(
-                              followUp.scheduled_at
-                            )}
-                          </p>
-                        </div>
-
-                        {followUp.notes && (
-                          <div className="mt-4 border-t border-slate-200 pt-4">
-
-                            <p className="text-xs font-medium text-slate-400">
-                              توضیحات
-                            </p>
-
-                            <p className="mt-1 text-sm leading-6 text-slate-600">
-                              {followUp.notes}
-                            </p>
-
+                        {isNotDue && (
+                          <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm font-bold leading-6 text-amber-700">
+                            این پیگیری هنوز سررسید نشده است و دکمه
+                            تکمیل تا رسیدن زمان سررسید غیرفعال است.
                           </div>
                         )}
 
-                      </div>
+                        <div className="mt-4 text-sm">
+                          <span className="text-slate-400">
+                            مسئول:
+                          </span>
 
-                      <div className="mt-4 flex flex-wrap gap-2">
+                          <span className="mr-2 font-bold text-slate-700">
+                            {followUp.user?.full_name ?? "—"}
+                          </span>
+                        </div>
 
-                        {followUp.status !==
-                          "completed" && (
+                        <div className="mt-5 grid grid-cols-2 gap-2">
+                          <Link
+                            href={`/activities/follow-ups/${followUp.id}/edit`}
+                            className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
+                          >
+                            ویرایش
+                          </Link>
+
+                          {displayStatus !==
+                            "completed" &&
+                            displayStatus !==
+                              "cancelled" && (
+                              <button
+                                type="button"
+                                disabled={
+                                  isNotDue ||
+                                  isCompleteLoading ||
+                                  isDeleteLoading
+                                }
+                                onClick={() =>
+                                  handleComplete(
+                                    followUp.id
+                                  )
+                                }
+                                className={`rounded-xl px-3 py-3 text-xs font-black transition ${
+                                  isNotDue
+                                    ? "cursor-not-allowed bg-amber-50 text-amber-600"
+                                    : "bg-emerald-600 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                }`}
+                              >
+                                {isCompleteLoading
+                                  ? "در حال ثبت..."
+                                  : isNotDue
+                                    ? "هنوز سررسید نشده"
+                                    : "تکمیل"}
+                              </button>
+                            )}
+
+                          {displayStatus ===
+                            "completed" && (
+                            <div className="col-span-2 rounded-xl bg-emerald-50 px-3 py-3 text-center text-xs font-black text-emerald-700">
+                              این پیگیری تکمیل شده است.
+                            </div>
+                          )}
+
+                          {displayStatus ===
+                            "cancelled" && (
+                            <div className="col-span-2 rounded-xl bg-slate-100 px-3 py-3 text-center text-xs font-black text-slate-600">
+                              این پیگیری لغو شده است.
+                            </div>
+                          )}
+
                           <button
                             type="button"
+                            disabled={
+                              isDeleteLoading ||
+                              isCompleteLoading
+                            }
                             onClick={() =>
-                              void handleComplete(
+                              handleDelete(
                                 followUp.id
                               )
                             }
-                            disabled={
-                              actionLoading ===
-                              `complete-${followUp.id}`
-                            }
-                            className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="col-span-2 rounded-xl border border-red-100 bg-red-50 px-3 py-3 text-xs font-black text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            {actionLoading ===
-                            `complete-${followUp.id}`
-                              ? "در حال تکمیل..."
-                              : "✓ تکمیل پیگیری"}
+                            {isDeleteLoading
+                              ? "در حال حذف..."
+                              : "حذف پیگیری"}
                           </button>
-                        )}
-
-                        <Link
-                          href={`/activities/follow-ups/${followUp.id}/edit`}
-                          className="flex-1 rounded-xl bg-slate-100 px-4 py-3 text-center text-xs font-black text-slate-700 transition hover:bg-slate-200"
-                        >
-                          ویرایش
-                        </Link>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void handleDelete(
-                              followUp.id
-                            )
-                          }
-                          disabled={
-                            actionLoading ===
-                            `delete-${followUp.id}`
-                          }
-                          className="rounded-xl bg-red-50 px-4 py-3 text-xs font-black text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {actionLoading ===
-                          `delete-${followUp.id}`
-                            ? "در حال حذف..."
-                            : "حذف"}
-                        </button>
-
-                      </div>
-
-                    </div>
-                  )
+                        </div>
+                      </article>
+                    );
+                  }
                 )}
-
               </div>
-
-            </section>
+            </>
           )}
-
+        </section>
       </div>
     </main>
   );
