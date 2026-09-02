@@ -23,6 +23,13 @@ import {
   type AIRecommendationPriority,
 } from "@/src/lib/services/ai";
 
+import {
+  reportTargetsService,
+  type MonthlyTargetReport,
+} from "@/src/lib/services/report-targets";
+
+import { getTodayJalali } from "@/src/lib/utils/jalali";
+
 function formatNumber(
   value: number,
 ): string {
@@ -40,6 +47,17 @@ function formatTonnage(
       maximumFractionDigits: 1,
     },
   ).format(value)} تن`;
+}
+
+function formatPercent(
+  value: number,
+): string {
+  return new Intl.NumberFormat(
+    "fa-IR",
+    {
+      maximumFractionDigits: 1,
+    },
+  ).format(value);
 }
 
 function getPriorityLabel(
@@ -472,6 +490,13 @@ export default function AIRecommendations() {
     AIRecommendedCustomer[]
   >([]);
 
+  const [
+    monthlyTargetReport,
+    setMonthlyTargetReport,
+  ] = useState<
+    MonthlyTargetReport | null
+  >(null);
+
   const [loading, setLoading] =
     useState(true);
 
@@ -488,10 +513,20 @@ export default function AIRecommendations() {
         setLoading(true);
         setError(null);
 
-        const result =
-          await aiService.getDailyCustomerRecommendations(
-            5,
-          );
+        const today =
+          getTodayJalali();
+
+        const [result, targetReport] =
+          await Promise.all([
+            aiService.getDailyCustomerRecommendations(
+              5,
+            ),
+
+            reportTargetsService.getMonthlyReport(
+              today.year,
+              today.month,
+            ),
+          ]);
 
         if (cancelled) {
           return;
@@ -499,6 +534,10 @@ export default function AIRecommendations() {
 
         setRecommendations(
           result,
+        );
+
+        setMonthlyTargetReport(
+          targetReport,
         );
       } catch (err) {
         if (cancelled) {
@@ -511,6 +550,10 @@ export default function AIRecommendations() {
         );
 
         setRecommendations([]);
+
+        setMonthlyTargetReport(
+          null,
+        );
 
         setError(
           err instanceof Error
@@ -530,6 +573,31 @@ export default function AIRecommendations() {
       cancelled = true;
     };
   }, []);
+
+  const suggestedTonnage =
+    recommendations.reduce(
+      (total, customer) =>
+        total +
+        customer.suggestedOrderTonnage,
+      0,
+    );
+
+  const targetRemaining =
+    Math.max(
+      monthlyTargetReport?.remainingTonnage ??
+        0,
+      0,
+    );
+
+  const targetCoverage =
+    targetRemaining > 0
+      ? Math.min(
+          (suggestedTonnage /
+            targetRemaining) *
+            100,
+          100,
+        )
+      : 0;
 
   return (
     <section className="overflow-hidden rounded-3xl border border-blue-100 bg-white shadow-sm">
@@ -563,6 +631,110 @@ export default function AIRecommendations() {
             <ArrowLeft size={15} />
           </Link>
         </div>
+
+        {!loading &&
+          !error &&
+          monthlyTargetReport &&
+          recommendations.length > 0 ? (
+          <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+            <div className="mb-4 flex items-center gap-2">
+              <Target
+                size={17}
+                className="text-blue-600"
+              />
+
+              <div>
+                <h3 className="text-sm font-black text-slate-800">
+                  اتصال پیشنهادهای AI به هدف ماهانه
+                </h3>
+
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  سناریوی پیشنهادی بر اساس{" "}
+                  {formatNumber(
+                    recommendations.length,
+                  )}{" "}
+                  مشتری منتخب امروز
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <p className="text-[11px] font-bold text-slate-400">
+                  هدف ماه
+                </p>
+
+                <p className="mt-1 text-lg font-black text-slate-900">
+                  {formatTonnage(
+                    monthlyTargetReport.targetTonnage,
+                  )}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <p className="text-[11px] font-bold text-slate-400">
+                  فروش محقق‌شده
+                </p>
+
+                <p className="mt-1 text-lg font-black text-emerald-700">
+                  {formatTonnage(
+                    monthlyTargetReport.achievedTonnage,
+                  )}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <p className="text-[11px] font-bold text-slate-400">
+                  تناژ پیشنهادی امروز
+                </p>
+
+                <p className="mt-1 text-lg font-black text-blue-700">
+                  {formatTonnage(
+                    suggestedTonnage,
+                  )}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <p className="text-[11px] font-bold text-slate-400">
+                  پوشش هدف باقی‌مانده
+                </p>
+
+                <p className="mt-1 text-lg font-black text-violet-700">
+                  {formatPercent(
+                    targetCoverage,
+                  )}
+                  %
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-bold text-slate-500">
+                    باقی‌مانده هدف ماه
+                  </p>
+
+                  <p className="mt-1 text-sm font-black text-slate-800">
+                    {formatTonnage(
+                      targetRemaining,
+                    )}
+                  </p>
+                </div>
+
+                <p className="text-xs leading-5 text-slate-500">
+                  این درصد فقط پوشش نظری هدف توسط
+                  پیشنهادهای{" "}
+                  {formatNumber(
+                    recommendations.length,
+                  )}{" "}
+                  مشتری منتخب AI است و پیش‌بینی قطعی فروش نیست.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {loading ? (
           <div className="flex min-h-40 items-center justify-center rounded-2xl bg-slate-50">
