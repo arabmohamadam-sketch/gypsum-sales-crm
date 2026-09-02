@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import {
   useEffect,
   useMemo,
@@ -28,10 +30,7 @@ import {
 function formatSettingValue(
   value: Record<string, unknown>
 ): string {
-  if (
-    Object.keys(value).length ===
-    0
-  ) {
+  if (Object.keys(value).length === 0) {
     return "—";
   }
 
@@ -54,8 +53,7 @@ function getErrorMessage(
     typeof error === "object" &&
     error !== null &&
     "message" in error &&
-    typeof error.message ===
-      "string"
+    typeof error.message === "string"
   ) {
     return error.message;
   }
@@ -92,14 +90,10 @@ export default function SettingsPage() {
     );
 
   const canReadUsers =
-    hasPermission(
-      "users.read"
-    );
+    hasPermission("users.read");
 
   const canManageUsers =
-    hasPermission(
-      "users.write"
-    );
+    hasPermission("users.write");
 
   async function loadSettings() {
     try {
@@ -117,6 +111,7 @@ export default function SettingsPage() {
       );
 
       setOverview(null);
+
       setError(
         getErrorMessage(err)
       );
@@ -146,7 +141,8 @@ export default function SettingsPage() {
     () =>
       overview?.roles
         .map((role) => role.name)
-        .join("، ") || "بدون نقش",
+        .join("، ") ||
+      "بدون نقش",
     [overview]
   );
 
@@ -184,7 +180,9 @@ export default function SettingsPage() {
         <section className="rounded-3xl border border-red-200 bg-white p-8 shadow-sm">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600">
-              <ShieldCheck size={24} />
+              <ShieldCheck
+                size={24}
+              />
             </div>
 
             <div>
@@ -193,8 +191,7 @@ export default function SettingsPage() {
               </h1>
 
               <p className="mt-2 text-sm leading-7 text-slate-500">
-                شما مجوز مشاهده تنظیمات
-                سیستم را ندارید.
+                شما مجوز مشاهده تنظیمات سیستم را ندارید.
               </p>
 
               {permissionsError && (
@@ -220,7 +217,10 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-5 p-6 md:p-8 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700">
-              <SettingsIcon size={15} />
+              <SettingsIcon
+                size={15}
+              />
+
               تنظیمات سیستم
             </div>
 
@@ -229,8 +229,7 @@ export default function SettingsPage() {
             </h1>
 
             <p className="mt-2 text-sm leading-7 text-slate-500">
-              مدیریت پروفایل، نقش‌ها و
-              تنظیمات شرکت.
+              مدیریت پروفایل، نقش‌ها و تنظیمات شرکت.
             </p>
           </div>
 
@@ -241,7 +240,10 @@ export default function SettingsPage() {
             }}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
           >
-            <RefreshCw size={17} />
+            <RefreshCw
+              size={17}
+            />
+
             بروزرسانی
           </button>
         </div>
@@ -261,7 +263,9 @@ export default function SettingsPage() {
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
-              <UserRound size={21} />
+              <UserRound
+                size={21}
+              />
             </div>
 
             <div>
@@ -334,7 +338,9 @@ export default function SettingsPage() {
                   overview.roles.map(
                     (role) => (
                       <span
-                        key={role.id}
+                        key={
+                          role.id
+                        }
                         className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700"
                       >
                         {role.name}
@@ -355,7 +361,9 @@ export default function SettingsPage() {
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
-              <Building2 size={21} />
+              <Building2
+                size={21}
+              />
             </div>
 
             <div>
@@ -426,7 +434,10 @@ export default function SettingsPage() {
               </p>
 
               <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
-                <CheckCircle2 size={14} />
+                <CheckCircle2
+                  size={14}
+                />
+
                 {overview?.company
                   ?.is_active
                   ? "فعال"
@@ -440,21 +451,50 @@ export default function SettingsPage() {
       {/* Roles & access */}
       {canReadUsers && (
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <h2 className="text-lg font-black text-slate-900">
                 نقش و سطح دسترسی
               </h2>
 
               <p className="mt-1 text-xs text-slate-400">
-                دسترسی‌های فعلی کاربر
+                دسترسی‌های فعلی کاربر و مدیریت اعضای شرکت
               </p>
             </div>
 
-            <div className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600">
-              {canManageUsers
-                ? "مدیریت کاربران فعال"
-                : "دسترسی مشاهده کاربران"}
+            <div className="flex flex-wrap items-center gap-2">
+              {canManageUsers && (
+                <Link
+                  href="/settings/users"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+                >
+                  <UserRound
+                    size={15}
+                  />
+
+                  مدیریت کاربران
+                </Link>
+              )}
+
+              {canManageSettings && (
+                <Link
+                  href="/settings/roles"
+                  className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800"
+                >
+                  <ShieldCheck
+                    size={15}
+                  />
+
+                  مدیریت نقش‌ها و دسترسی‌ها
+                </Link>
+              )}
+
+              {!canManageUsers &&
+                !canManageSettings && (
+                  <span className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-500">
+                    فقط مشاهده
+                  </span>
+                )}
             </div>
           </div>
 
@@ -478,7 +518,9 @@ export default function SettingsPage() {
 
                   {role.description && (
                     <p className="mt-3 text-xs leading-6 text-slate-500">
-                      {role.description}
+                      {
+                        role.description
+                      }
                     </p>
                   )}
                 </div>
@@ -488,8 +530,7 @@ export default function SettingsPage() {
             {!overview?.roles
               .length && (
               <div className="rounded-2xl border border-dashed border-slate-200 p-5 text-sm text-slate-400">
-                هیچ نقشی برای این
-                کاربر ثبت نشده است.
+                هیچ نقشی برای این کاربر ثبت نشده است.
               </div>
             )}
           </div>
@@ -498,7 +539,7 @@ export default function SettingsPage() {
 
       {/* Company settings */}
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-lg font-black text-slate-900">
               تنظیمات شرکت
@@ -523,24 +564,26 @@ export default function SettingsPage() {
                 key={setting.id}
                 className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between"
               >
-                <div>
+                <div className="min-w-0">
                   <p
                     dir="ltr"
-                    className="text-sm font-black text-slate-800 md:text-right"
+                    className="text-sm font-black text-slate-800"
                   >
                     {setting.key}
                   </p>
 
                   {setting.description && (
-                    <p className="mt-1 text-xs leading-6 text-slate-500">
-                      {setting.description}
+                    <p className="mt-1 text-xs leading-6 text-slate-400">
+                      {
+                        setting.description
+                      }
                     </p>
                   )}
                 </div>
 
                 <div
                   dir="ltr"
-                  className="rounded-xl bg-white px-3 py-2 text-xs font-medium text-slate-600 ring-1 ring-slate-200"
+                  className="max-w-full text-left text-xs font-medium text-slate-600 md:max-w-[65%]"
                 >
                   {formatSettingValue(
                     setting.value
@@ -552,9 +595,8 @@ export default function SettingsPage() {
 
           {!overview?.settings
             .length && (
-            <div className="rounded-2xl border border-dashed border-slate-200 p-5 text-sm text-slate-400">
-              تنظیمات شرکتی ثبت‌شده‌ای
-              پیدا نشد.
+            <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
+              تنظیمات شرکتی ثبت نشده است.
             </div>
           )}
         </div>
