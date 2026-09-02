@@ -55,9 +55,8 @@ const menus: MenuItem[] = [
   },
   {
     title: "اهداف فروش",
-    href: "#",
+    href: "/targets",
     icon: Target,
-    comingSoon: true,
   },
   {
     title: "گزارش‌ها",
