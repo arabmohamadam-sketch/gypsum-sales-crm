@@ -7,6 +7,7 @@ import {
   Activity,
   BarChart3,
   Bot,
+  CheckCircle2,
   ChevronLeft,
   ClipboardList,
   LayoutDashboard,
@@ -24,7 +25,6 @@ type MenuItem = {
   title: string;
   href: string;
   icon: typeof LayoutDashboard;
-  comingSoon?: boolean;
 };
 
 const menus: MenuItem[] = [
@@ -65,9 +65,8 @@ const menus: MenuItem[] = [
   },
   {
     title: "هوش مصنوعی",
-    href: "#",
+    href: "/",
     icon: Bot,
-    comingSoon: true,
   },
   {
     title: "تنظیمات",
@@ -76,10 +75,7 @@ const menus: MenuItem[] = [
   },
 ];
 
-function isMenuActive(
-  pathname: string,
-  href: string
-): boolean {
+function isMenuActive(pathname: string, href: string): boolean {
   if (href === "/") {
     return pathname === "/";
   }
@@ -147,7 +143,8 @@ export default function Sidebar() {
                 نسخه هوشمند فروش
               </span>
 
-              <span className="mr-auto rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-400">
+              <span className="mr-auto inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-bold text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                 فعال
               </span>
             </div>
@@ -200,38 +197,12 @@ export default function Sidebar() {
             <nav className="space-y-1.5">
               {menus.map((item) => {
                 const Icon = item.icon;
+                const active = isMenuActive(
+                  pathname,
+                  item.href,
+                );
 
-                if (
-                  item.comingSoon ||
-                  item.href === "#"
-                ) {
-                  return (
-                    <div
-                      key={item.title}
-                      className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-right text-slate-500"
-                    >
-                      <span className="flex items-center gap-3">
-                        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.03] text-slate-500">
-                          <Icon size={18} />
-                        </span>
-
-                        <span className="text-sm font-medium">
-                          {item.title}
-                        </span>
-                      </span>
-
-                      <span className="rounded-full border border-white/5 bg-white/[0.04] px-2 py-0.5 text-[9px] font-medium text-slate-600">
-                        به‌زودی
-                      </span>
-                    </div>
-                  );
-                }
-
-                const active =
-                  isMenuActive(
-                    pathname,
-                    item.href
-                  );
+                const isAI = item.title === "هوش مصنوعی";
 
                 return (
                   <Link
@@ -251,7 +222,9 @@ export default function Sidebar() {
                       className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${
                         active
                           ? "bg-blue-600 text-white"
-                          : "bg-white/[0.04] text-slate-400 group-hover:bg-white/[0.08] group-hover:text-white"
+                          : isAI
+                            ? "bg-violet-500/10 text-violet-400 group-hover:bg-violet-500/20 group-hover:text-violet-300"
+                            : "bg-white/[0.04] text-slate-400 group-hover:bg-white/[0.08] group-hover:text-white"
                       }`}
                     >
                       <Icon size={18} />
@@ -261,7 +234,20 @@ export default function Sidebar() {
                       {item.title}
                     </span>
 
-                    {active && (
+                    {isAI ? (
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                          active
+                            ? "bg-violet-100 text-violet-700"
+                            : "bg-violet-500/10 text-violet-300"
+                        }`}
+                      >
+                        <CheckCircle2 size={10} />
+                        فعال
+                      </span>
+                    ) : null}
+
+                    {active && !isAI && (
                       <span className="h-2 w-2 rounded-full bg-blue-600" />
                     )}
                   </Link>
@@ -269,14 +255,39 @@ export default function Sidebar() {
               })}
             </nav>
 
+            {/* AI shortcut */}
+
+            <div className="mt-5 rounded-2xl border border-violet-500/10 bg-violet-500/[0.04] p-3">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300">
+                  <Sparkles size={16} />
+                </div>
+
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-violet-200">
+                    پیشنهاد هوشمند فعال است
+                  </p>
+
+                  <p className="mt-1 text-[10px] leading-5 text-slate-500">
+                    اولویت تماس مشتریان بر اساس سابقه فروش و فعالیت CRM
+                    محاسبه می‌شود.
+                  </p>
+
+                  <Link
+                    href="/"
+                    className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold text-violet-300 transition hover:text-violet-200"
+                  >
+                    مشاهده پیشنهادها
+                    <ChevronLeft size={12} />
+                  </Link>
+                </div>
+              </div>
+            </div>
+
             {/* Activities shortcuts */}
 
-            {(pathname.startsWith(
-              "/activities"
-            ) ||
-              pathname.startsWith(
-                "/customers/"
-              )) && (
+            {(pathname.startsWith("/activities") ||
+              pathname.startsWith("/customers/")) && (
               <div className="mt-5 rounded-2xl border border-white/5 bg-white/[0.03] p-3">
                 <p className="px-2 pb-2 text-[10px] font-bold text-slate-500">
                   دسترسی سریع فعالیت‌ها
@@ -360,24 +371,18 @@ export default function Sidebar() {
               const active =
                 item.href === "/"
                   ? pathname === "/"
-                  : pathname ===
-                      item.href ||
-                    pathname.startsWith(
-                      `${item.href}/`
-                    );
+                  : pathname === item.href ||
+                    pathname.startsWith(`${item.href}/`);
 
               const isCreateOrder =
-                item.href ===
-                "/orders/new";
+                item.href === "/orders/new";
 
               return (
                 <Link
                   key={`${item.href}-${item.title}`}
                   href={item.href}
                   aria-current={
-                    active
-                      ? "page"
-                      : undefined
+                    active ? "page" : undefined
                   }
                   className={`group flex min-h-[64px] items-center justify-center rounded-2xl px-1.5 py-2 transition-all duration-200 active:scale-95 ${
                     isCreateOrder
