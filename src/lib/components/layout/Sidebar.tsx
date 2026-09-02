@@ -71,9 +71,8 @@ const menus: MenuItem[] = [
   },
   {
     title: "تنظیمات",
-    href: "#",
+    href: "/settings",
     icon: Settings,
-    comingSoon: true,
   },
 ];
 
