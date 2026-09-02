@@ -25,6 +25,8 @@ import {
   useState,
 } from "react";
 
+import MonthlyTargetReport from "@/src/lib/components/reports/MonthlyTargetReport";
+
 import {
   reportsService,
   type CityReport,
@@ -57,7 +59,8 @@ function toPersianDigits(
 
   return String(value).replace(
     /\d/g,
-    (digit) => digits[Number(digit)]
+    (digit) =>
+      digits[Number(digit)]
   );
 }
 
@@ -531,15 +534,6 @@ export default function ReportsPage() {
     []
   );
 
-  /*
-   * پیش‌فرض گزارش:
-   * ماه جاری جلالی
-   *
-   * مثال:
-   * اگر امروز ۱۴۰۵/۰۶/۱۰ باشد:
-   * از ۱۴۰۵/۰۶/۰۱
-   * تا ۱۴۰۵/۰۶/۳۱
-   */
   const currentMonthLastDay =
     getJalaliMonthLastDay(
       today.month
@@ -686,15 +680,13 @@ export default function ReportsPage() {
       return;
     }
 
-    const fromDate =
-      new Date(
-        currentPeriod.from
-      );
+    const fromDate = new Date(
+      currentPeriod.from
+    );
 
-    const toDate =
-      new Date(
-        currentPeriod.to
-      );
+    const toDate = new Date(
+      currentPeriod.to
+    );
 
     if (
       Number.isNaN(
@@ -711,9 +703,7 @@ export default function ReportsPage() {
       return;
     }
 
-    if (
-      fromDate > toDate
-    ) {
+    if (fromDate > toDate) {
       setError(
         "تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد."
       );
@@ -762,9 +752,7 @@ export default function ReportsPage() {
       }, 0);
 
     return () => {
-      window.clearTimeout(
-        timer
-      );
+      window.clearTimeout(timer);
     };
   }, []);
 
@@ -1037,6 +1025,30 @@ export default function ReportsPage() {
         )
       : null;
 
+  const monthlyTargetYear =
+    reportFrom &&
+    reportTo &&
+    reportFrom.year ===
+      reportTo.year &&
+    reportFrom.month ===
+      reportTo.month
+      ? reportFrom.year
+      : null;
+
+  const monthlyTargetMonth =
+    reportFrom &&
+    reportTo &&
+    reportFrom.year ===
+      reportTo.year &&
+    reportFrom.month ===
+      reportTo.month
+      ? reportFrom.month
+      : null;
+
+  const isSingleMonthReport =
+    monthlyTargetYear !== null &&
+    monthlyTargetMonth !== null;
+
   if (loading) {
     return (
       <main
@@ -1084,7 +1096,9 @@ export default function ReportsPage() {
 
           <div className="p-7 md:p-9">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600">
-              <BarChart3 size={25} />
+              <BarChart3
+                size={25}
+              />
             </div>
 
             <h1 className="mt-5 text-2xl font-black text-slate-900">
@@ -1125,7 +1139,10 @@ export default function ReportsPage() {
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
               >
                 بازگشت به داشبورد
-                <ArrowLeft size={16} />
+
+                <ArrowLeft
+                  size={16}
+                />
               </Link>
             </div>
           </div>
@@ -1165,13 +1182,17 @@ export default function ReportsPage() {
                 href="/"
                 className="inline-flex items-center gap-2 text-sm font-bold text-slate-500 transition hover:text-blue-600"
               >
-                <ArrowLeft size={16} />
+                <ArrowLeft
+                  size={16}
+                />
                 بازگشت به داشبورد
               </Link>
 
               <div className="mt-6 flex items-center gap-4">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-900 to-slate-700 text-white shadow-lg">
-                  <BarChart3 size={26} />
+                  <BarChart3
+                    size={26}
+                  />
                 </div>
 
                 <div>
@@ -1220,7 +1241,9 @@ export default function ReportsPage() {
                 href="/waybills"
                 className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700"
               >
-                <Truck size={17} />
+                <Truck
+                  size={17}
+                />
                 حواله‌ها
               </Link>
             </div>
@@ -1233,7 +1256,9 @@ export default function ReportsPage() {
           title="فیلتر بازه گزارش"
           description="بازه زمانی را با تقویم جلالی مشخص کنید."
           icon={
-            <CalendarDays size={19} />
+            <CalendarDays
+              size={19}
+            />
           }
         />
 
@@ -1260,9 +1285,12 @@ export default function ReportsPage() {
                     min="1300"
                     max="1500"
                     value={fromYear}
-                    onChange={(event) =>
+                    onChange={(
+                      event
+                    ) =>
                       setFromYear(
-                        event.target.value
+                        event.target
+                          .value
                       )
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
@@ -1279,9 +1307,12 @@ export default function ReportsPage() {
                     value={
                       fromMonth
                     }
-                    onChange={(event) =>
+                    onChange={(
+                      event
+                    ) =>
                       setFromMonth(
-                        event.target.value
+                        event.target
+                          .value
                       )
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
@@ -1290,7 +1321,10 @@ export default function ReportsPage() {
                     {Array.from({
                       length: 12,
                     }).map(
-                      (_, index) => {
+                      (
+                        _,
+                        index
+                      ) => {
                         const value =
                           String(
                             index + 1
@@ -1327,10 +1361,15 @@ export default function ReportsPage() {
                     type="number"
                     min="1"
                     max="31"
-                    value={fromDay}
-                    onChange={(event) =>
+                    value={
+                      fromDay
+                    }
+                    onChange={(
+                      event
+                    ) =>
                       setFromDay(
-                        event.target.value
+                        event.target
+                          .value
                       )
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
@@ -1356,9 +1395,12 @@ export default function ReportsPage() {
                     min="1300"
                     max="1500"
                     value={toYear}
-                    onChange={(event) =>
+                    onChange={(
+                      event
+                    ) =>
                       setToYear(
-                        event.target.value
+                        event.target
+                          .value
                       )
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
@@ -1375,9 +1417,12 @@ export default function ReportsPage() {
                     value={
                       toMonth
                     }
-                    onChange={(event) =>
+                    onChange={(
+                      event
+                    ) =>
                       setToMonth(
-                        event.target.value
+                        event.target
+                          .value
                       )
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
@@ -1386,7 +1431,10 @@ export default function ReportsPage() {
                     {Array.from({
                       length: 12,
                     }).map(
-                      (_, index) => {
+                      (
+                        _,
+                        index
+                      ) => {
                         const value =
                           String(
                             index + 1
@@ -1424,9 +1472,12 @@ export default function ReportsPage() {
                     min="1"
                     max="31"
                     value={toDay}
-                    onChange={(event) =>
+                    onChange={(
+                      event
+                    ) =>
                       setToDay(
-                        event.target.value
+                        event.target
+                          .value
                       )
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
@@ -1482,7 +1533,9 @@ export default function ReportsPage() {
                 }
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-black text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <BarChart3 size={17} />
+                <BarChart3
+                  size={17}
+                />
                 نمایش گزارش
               </button>
             </div>
@@ -1532,6 +1585,18 @@ export default function ReportsPage() {
         </div>
       </section>
 
+      <MonthlyTargetReport
+        year={
+          monthlyTargetYear
+        }
+        month={
+          monthlyTargetMonth
+        }
+        enabled={
+          isSingleMonthReport
+        }
+      />
+
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <ReportCard
           title="تعداد سفارش"
@@ -1571,7 +1636,9 @@ export default function ReportsPage() {
           )}
           description="بارگیری نهایی"
           icon={
-            <Truck size={22} />
+            <Truck
+              size={22}
+            />
           }
           className="bg-blue-50 text-blue-700"
         />
@@ -1597,649 +1664,378 @@ export default function ReportsPage() {
           )}٪`}
           description="پیگیری‌های تکمیل‌شده"
           icon={
-            <Bell size={22} />
+            <Activity
+              size={22}
+            />
           }
           className="bg-cyan-50 text-cyan-700"
         />
       </section>
 
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="p-6 md:p-7">
-          <SectionHeader
-            title="گزارش فروش"
-            description="خلاصه سفارش‌های تأییدشده و تناژ فروش"
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
+        <SectionHeader
+          title="خلاصه گزارش"
+          description="نمای کلی از فعالیت‌های فروش و عملیات در بازه انتخاب‌شده."
+          icon={
+            <FileText
+              size={19}
+            />
+          }
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <SummaryItem
+            title="حواله‌ها"
+            value={formatNumber(
+              waybills?.totalCount ??
+                0
+            )}
+            description="کل حواله‌های ثبت‌شده"
             icon={
-              <ShoppingCart
+              <Truck
+                size={19}
+              />
+            }
+            iconClass="bg-blue-50 text-blue-700"
+          />
+
+          <SummaryItem
+            title="بارگیری تأییدشده"
+            value={formatNumber(
+              waybills?.loadingConfirmedCount ??
+                0
+            )}
+            description="حواله‌های بارگیری‌شده"
+            icon={
+              <CheckCircle2
+                size={19}
+              />
+            }
+            iconClass="bg-emerald-50 text-emerald-700"
+          />
+
+          <SummaryItem
+            title="تماس‌ها"
+            value={formatNumber(
+              activities?.callsCount ??
+                0
+            )}
+            description="تماس‌های ثبت‌شده"
+            icon={
+              <Phone
+                size={19}
+              />
+            }
+            iconClass="bg-violet-50 text-violet-700"
+          />
+
+          <SummaryItem
+            title="مشتریان فعال"
+            value={formatNumber(
+              customers?.activeCustomersCount ??
+                0
+            )}
+            description="مشتریان فعال شرکت"
+            icon={
+              <Users
+                size={19}
+              />
+            }
+            iconClass="bg-amber-50 text-amber-700"
+          />
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
+        <SectionHeader
+          title="وضعیت پیگیری‌ها"
+          description="تفکیک وضعیت پیگیری‌های ثبت‌شده در بازه گزارش."
+          icon={
+            <Activity
+              size={19}
+            />
+          }
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <SummaryItem
+            title="کل پیگیری‌ها"
+            value={formatNumber(
+              activities?.followUpsCount ??
+                0
+            )}
+            description="مجموع پیگیری‌ها"
+            icon={
+              <Activity
+                size={19}
+              />
+            }
+            iconClass="bg-blue-50 text-blue-700"
+          />
+
+          <SummaryItem
+            title="تکمیل‌شده"
+            value={formatNumber(
+              activities?.completedFollowUpsCount ??
+                0
+            )}
+            description="پیگیری‌های موفق"
+            icon={
+              <CheckCircle2
+                size={19}
+              />
+            }
+            iconClass="bg-emerald-50 text-emerald-700"
+          />
+
+          <SummaryItem
+            title="در انتظار"
+            value={formatNumber(
+              activities?.pendingFollowUpsCount ??
+                0
+            )}
+            description="پیگیری‌های باز"
+            icon={
+              <Bell
+                size={19}
+              />
+            }
+            iconClass="bg-amber-50 text-amber-700"
+          />
+
+          <SummaryItem
+            title="لغوشده"
+            value={formatNumber(
+              activities?.cancelledFollowUpsCount ??
+                0
+            )}
+            description="پیگیری‌های لغوشده"
+            icon={
+              <XCircle
+                size={19}
+              />
+            }
+            iconClass="bg-red-50 text-red-700"
+          />
+        </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <SectionHeader
+            title="عملکرد شهرها"
+            description="مقایسه عملکرد فروش، فعالیت و بارگیری شهرها."
+            icon={
+              <Users
                 size={19}
               />
             }
           />
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <SummaryItem
-              title="تعداد سفارش‌ها"
-              value={formatNumber(
-                sales?.ordersCount ??
-                  0
-              )}
-              description="سفارش‌های تأییدشده در بازه"
-              icon={
-                <ShoppingCart
-                  size={20}
-                />
+          <div className="w-full md:w-72">
+            <input
+              type="search"
+              value={citySearch}
+              onChange={(
+                event
+              ) =>
+                setCitySearch(
+                  event.target
+                    .value
+                )
               }
-              iconClass="bg-violet-50 text-violet-700"
-            />
-
-            <SummaryItem
-              title="تناژ فروش"
-              value={formatTonnage(
-                sales?.totalTonnage ??
-                  0
-              )}
-              description="مجموع تناژ سفارش‌های تأییدشده"
-              icon={
-                <BarChart3
-                  size={20}
-                />
-              }
-              iconClass="bg-emerald-50 text-emerald-700"
+              placeholder="جستجوی شهر..."
+              className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-blue-400 focus:bg-white"
             />
           </div>
         </div>
-      </section>
 
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="p-6 md:p-7">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <SectionHeader
-              title="گزارش حواله و بارگیری"
-              description="وضعیت چرخه حواله از ثبت تا بارگیری نهایی"
-              icon={
-                <Truck size={19} />
-              }
-            />
-
-            <Link
-              href="/waybills"
-              className="mb-6 inline-flex items-center gap-1 text-sm font-bold text-blue-600 transition hover:text-blue-700"
-            >
-              فهرست حواله‌ها
-              <ArrowLeft size={15} />
-            </Link>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <ReportCard
-              title="کل حواله‌ها"
-              value={formatNumber(
-                waybills?.totalCount ??
-                  0
+        {cityReports.length > 0 ? (
+          <>
+            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+              {cityReports.map(
+                (city) => (
+                  <CityPerformanceCard
+                    key={`${city.cityId ?? "no-city"}-${city.cityName}`}
+                    city={city}
+                  />
+                )
               )}
-              description="حواله‌های بازه"
-              icon={
-                <FileText
-                  size={22}
-                />
-              }
-              className="bg-slate-100 text-slate-700"
-            />
-
-            <ReportCard
-              title="پیش‌نویس"
-              value={formatNumber(
-                waybills?.draftCount ??
-                  0
-              )}
-              description="هنوز صادر نشده"
-              icon={
-                <FileText
-                  size={22}
-                />
-              }
-              className="bg-slate-100 text-slate-700"
-            />
-
-            <ReportCard
-              title="صادرشده"
-              value={formatNumber(
-                waybills?.issuedCount ??
-                  0
-              )}
-              description="در انتظار بارگیری"
-              icon={
-                <Truck size={22} />
-              }
-              className="bg-blue-50 text-blue-700"
-            />
-
-            <ReportCard
-              title="بارگیری تأییدشده"
-              value={formatNumber(
-                waybills?.loadingConfirmedCount ??
-                  0
-              )}
-              description="بارگیری نهایی"
-              icon={
-                <CheckCircle2
-                  size={22}
-                />
-              }
-              className="bg-emerald-50 text-emerald-700"
-            />
-
-            <ReportCard
-              title="لغوشده"
-              value={formatNumber(
-                waybills?.cancelledCount ??
-                  0
-              )}
-              description="حواله لغوشده"
-              icon={
-                <XCircle
-                  size={22}
-                />
-              }
-              className="bg-red-50 text-red-700"
-            />
-
-            <ReportCard
-              title="تناژ بارگیری"
-              value={formatTonnage(
-                waybills?.loadingTonnage ??
-                  0
-              )}
-              description="مجموع بارگیری نهایی"
-              icon={
-                <Truck size={22} />
-              }
-              className="bg-violet-50 text-violet-700"
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="p-6 md:p-7">
-          <SectionHeader
-            title="گزارش فعالیت فروش"
-            description="بررسی تماس‌ها و پیگیری‌های ثبت‌شده"
-            icon={
-              <Activity size={19} />
-            }
-          />
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <ReportCard
-              title="تماس‌ها"
-              value={formatNumber(
-                activities?.callsCount ??
-                  0
-              )}
-              description="تماس ثبت‌شده"
-              icon={
-                <Phone size={22} />
-              }
-              className="bg-sky-50 text-sky-700"
-            />
-
-            <ReportCard
-              title="کل پیگیری‌ها"
-              value={formatNumber(
-                activities?.followUpsCount ??
-                  0
-              )}
-              description="پیگیری‌های بازه"
-              icon={
-                <Bell size={22} />
-              }
-              className="bg-amber-50 text-amber-700"
-            />
-
-            <ReportCard
-              title="تکمیل‌شده"
-              value={formatNumber(
-                activities?.completedFollowUpsCount ??
-                  0
-              )}
-              description="پیگیری تکمیل‌شده"
-              icon={
-                <CheckCircle2
-                  size={22}
-                />
-              }
-              className="bg-emerald-50 text-emerald-700"
-            />
-
-            <ReportCard
-              title="در انتظار"
-              value={formatNumber(
-                activities?.pendingFollowUpsCount ??
-                  0
-              )}
-              description="پیگیری در انتظار"
-              icon={
-                <Bell size={22} />
-              }
-              className="bg-blue-50 text-blue-700"
-            />
-
-            <ReportCard
-              title="لغوشده"
-              value={formatNumber(
-                activities?.cancelledFollowUpsCount ??
-                  0
-              )}
-              description="پیگیری لغوشده"
-              icon={
-                <XCircle
-                  size={22}
-                />
-              }
-              className="bg-red-50 text-red-700"
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="p-6 md:p-7">
-          <SectionHeader
-            title="گزارش مشتریان"
-            description="تصویر کلی مشتریان فعال و کیفیت پیگیری"
-            icon={
-              <Users size={19} />
-            }
-          />
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <SummaryItem
-              title="مشتریان فعال"
-              value={formatNumber(
-                customers?.activeCustomersCount ??
-                  0
-              )}
-              description="مشتریان فعال شرکت"
-              icon={
-                <Users size={20} />
-              }
-              iconClass="bg-blue-50 text-blue-700"
-            />
-
-            <SummaryItem
-              title="نرخ تکمیل پیگیری"
-              value={`${toPersianDigits(
-                completedRate
-              )}٪`}
-              description="درصد پیگیری‌های تکمیل‌شده در بازه"
-              icon={
-                <CheckCircle2
-                  size={20}
-                />
-              }
-              iconClass="bg-emerald-50 text-emerald-700"
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="p-6 md:p-7">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <SectionHeader
-              title="عملکرد به تفکیک شهر"
-              description="مقایسه فروش، بارگیری و فعالیت فروش در شهرهای تحت پوشش"
-              icon={
-                <BarChart3
-                  size={19}
-                />
-              }
-            />
-
-            <div className="mb-6 w-full lg:w-72">
-              <input
-                type="search"
-                value={citySearch}
-                onChange={(event) =>
-                  setCitySearch(
-                    event.target.value
-                  )
-                }
-                placeholder="جستجوی شهر..."
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
-              />
             </div>
-          </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {cityReports.map(
-              (city) => (
-                <CityPerformanceCard
-                  key={
-                    city.cityId ??
-                    city.cityName
-                  }
-                  city={city}
-                />
-              )
-            )}
-          </div>
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-sm font-black text-slate-800">
+                    جمع شهرهای نمایش‌داده‌شده
+                  </p>
 
-          {cityReports.length ===
-            0 && (
-            <div className="rounded-2xl bg-slate-50 p-10 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm">
-                <Users size={24} />
+                  <p className="mt-1 text-xs text-slate-400">
+                    خلاصه داده‌های شهرهای فعلی
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl bg-white px-4 py-3">
+                    <p className="text-[11px] text-slate-400">
+                      مشتری
+                    </p>
+
+                    <p className="mt-1 text-sm font-black text-slate-800">
+                      {formatNumber(
+                        cityTotals.customersCount
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-white px-4 py-3">
+                    <p className="text-[11px] text-slate-400">
+                      سفارش
+                    </p>
+
+                    <p className="mt-1 text-sm font-black text-slate-800">
+                      {formatNumber(
+                        cityTotals.ordersCount
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-white px-4 py-3">
+                    <p className="text-[11px] text-slate-400">
+                      فروش
+                    </p>
+
+                    <p className="mt-1 text-sm font-black text-emerald-700">
+                      {formatTonnage(
+                        cityTotals.salesTonnage
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-white px-4 py-3">
+                    <p className="text-[11px] text-slate-400">
+                      بارگیری
+                    </p>
+
+                    <p className="mt-1 text-sm font-black text-blue-700">
+                      {formatTonnage(
+                        cityTotals.loadingTonnage
+                      )}
+                    </p>
+                  </div>
+                </div>
               </div>
+            </div>
+          </>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center">
+            <p className="text-sm font-bold text-slate-400">
+              برای این بازه اطلاعاتی برای شهرها پیدا نشد.
+            </p>
+          </div>
+        )}
+      </section>
 
-              <p className="mt-4 font-bold text-slate-700">
-                شهری برای نمایش پیدا نشد
-              </p>
+      <section className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+              <TrendingUpIcon />
+            </div>
+
+            <div>
+              <h2 className="text-lg font-black text-slate-900">
+                بهترین عملکرد فروش
+              </h2>
 
               <p className="mt-1 text-xs text-slate-400">
-                عبارت جستجو را تغییر دهید.
+                شهری که بیشترین تناژ فروش را ثبت کرده است.
               </p>
             </div>
-          )}
-
-          <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200">
-            <table className="min-w-[1100px] w-full text-right text-sm">
-              <thead className="border-b bg-slate-50">
-                <tr>
-                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                    شهر
-                  </th>
-
-                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                    مشتری
-                  </th>
-
-                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                    سفارش
-                  </th>
-
-                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                    فروش
-                  </th>
-
-                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                    تماس
-                  </th>
-
-                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                    پیگیری
-                  </th>
-
-                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                    حواله
-                  </th>
-
-                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                    بارگیری
-                  </th>
-
-                  <th className="whitespace-nowrap px-4 py-4 font-black text-slate-700">
-                    تناژ بارگیری
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-slate-100">
-                {cityReports.map(
-                  (city) => (
-                    <tr
-                      key={`table-${
-                        city.cityId ??
-                        city.cityName
-                      }`}
-                      className="transition hover:bg-slate-50"
-                    >
-                      <td className="px-4 py-4">
-                        <span className="font-black text-slate-900">
-                          {
-                            city.cityName
-                          }
-                        </span>
-                      </td>
-
-                      <td className="px-4 py-4 text-slate-700">
-                        {formatNumber(
-                          city.customersCount
-                        )}
-                      </td>
-
-                      <td className="px-4 py-4 text-slate-700">
-                        {formatNumber(
-                          city.ordersCount
-                        )}
-                      </td>
-
-                      <td className="px-4 py-4 font-black text-emerald-700">
-                        {formatTonnage(
-                          city.salesTonnage
-                        )}
-                      </td>
-
-                      <td className="px-4 py-4 text-slate-700">
-                        {formatNumber(
-                          city.callsCount
-                        )}
-                      </td>
-
-                      <td className="px-4 py-4 text-slate-700">
-                        {formatNumber(
-                          city.followUpsCount
-                        )}
-                      </td>
-
-                      <td className="px-4 py-4 text-slate-700">
-                        {formatNumber(
-                          city.waybillsCount
-                        )}
-                      </td>
-
-                      <td className="px-4 py-4 font-black text-blue-700">
-                        {formatNumber(
-                          city.loadingConfirmedCount
-                        )}
-                      </td>
-
-                      <td className="px-4 py-4 font-black text-violet-700">
-                        {formatTonnage(
-                          city.loadingTonnage
-                        )}
-                      </td>
-                    </tr>
-                  )
-                )}
-              </tbody>
-
-              <tfoot className="border-t bg-slate-50">
-                <tr>
-                  <td className="px-4 py-4 font-black text-slate-900">
-                    جمع
-                  </td>
-
-                  <td className="px-4 py-4 font-black text-slate-900">
-                    {formatNumber(
-                      cityTotals.customersCount
-                    )}
-                  </td>
-
-                  <td className="px-4 py-4 font-black text-slate-900">
-                    {formatNumber(
-                      cityTotals.ordersCount
-                    )}
-                  </td>
-
-                  <td className="px-4 py-4 font-black text-emerald-700">
-                    {formatTonnage(
-                      cityTotals.salesTonnage
-                    )}
-                  </td>
-
-                  <td className="px-4 py-4 font-black text-slate-900">
-                    {formatNumber(
-                      cityTotals.callsCount
-                    )}
-                  </td>
-
-                  <td className="px-4 py-4 font-black text-slate-900">
-                    {formatNumber(
-                      cityTotals.followUpsCount
-                    )}
-                  </td>
-
-                  <td className="px-4 py-4 font-black text-slate-900">
-                    {formatNumber(
-                      cityTotals.waybillsCount
-                    )}
-                  </td>
-
-                  <td className="px-4 py-4 font-black text-blue-700">
-                    {formatNumber(
-                      cityTotals.loadingConfirmedCount
-                    )}
-                  </td>
-
-                  <td className="px-4 py-4 font-black text-violet-700">
-                    {formatTonnage(
-                      cityTotals.loadingTonnage
-                    )}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
           </div>
-        </div>
-      </section>
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <SummaryItem
-          title="شهر برتر فروش"
-          value={
-            bestSalesCity
-              ? bestSalesCity.cityName
-              : "—"
-          }
-          description={
-            bestSalesCity
-              ? formatTonnage(
+          {bestSalesCity ? (
+            <div className="mt-6 rounded-2xl bg-slate-50 p-5">
+              <p className="text-xs font-bold text-slate-400">
+                شهر برتر
+              </p>
+
+              <p className="mt-2 text-2xl font-black text-slate-900">
+                {bestSalesCity.cityName}
+              </p>
+
+              <p className="mt-2 text-sm font-bold text-emerald-700">
+                {formatTonnage(
                   bestSalesCity.salesTonnage
-                )
-              : "فروشی در بازه ثبت نشده است"
-          }
-          icon={
-            <ShoppingCart
-              size={20}
-            />
-          }
-          iconClass="bg-emerald-50 text-emerald-700"
-        />
+                )}
+              </p>
+            </div>
+          ) : (
+            <div className="mt-6 rounded-2xl bg-slate-50 p-5 text-sm text-slate-400">
+              هنوز فروش ثبت نشده است.
+            </div>
+          )}
+        </div>
 
-        <SummaryItem
-          title="شهر برتر بارگیری"
-          value={
-            bestLoadingCity
-              ? bestLoadingCity.cityName
-              : "—"
-          }
-          description={
-            bestLoadingCity
-              ? formatTonnage(
-                  bestLoadingCity.loadingTonnage
-                )
-              : "بارگیری در بازه ثبت نشده است"
-          }
-          icon={
-            <Truck size={20} />
-          }
-          iconClass="bg-blue-50 text-blue-700"
-        />
-      </section>
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+              <Truck size={21} />
+            </div>
 
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="p-6 md:p-7">
-          <SectionHeader
-            title="جمع‌بندی مدیریتی"
-            description="نمای سریع از وضعیت فروش، فعالیت و عملیات در بازه انتخاب‌شده"
-            icon={
-              <BarChart3
-                size={19}
-              />
-            }
-          />
+            <div>
+              <h2 className="text-lg font-black text-slate-900">
+                بهترین عملکرد بارگیری
+              </h2>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <SummaryItem
-              title="فروش"
-              value={formatTonnage(
-                sales?.totalTonnage ??
-                  0
-              )}
-              description={`${formatNumber(
-                sales?.ordersCount ??
-                  0
-              )} سفارش تأییدشده`}
-              icon={
-                <ShoppingCart
-                  size={20}
-                />
-              }
-              iconClass="bg-violet-50 text-violet-700"
-            />
-
-            <SummaryItem
-              title="بارگیری"
-              value={formatTonnage(
-                waybills?.loadingTonnage ??
-                  0
-              )}
-              description={`${formatNumber(
-                waybills?.loadingConfirmedCount ??
-                  0
-              )} حواله بارگیری‌شده`}
-              icon={
-                <Truck size={20} />
-              }
-              iconClass="bg-emerald-50 text-emerald-700"
-            />
-
-            <SummaryItem
-              title="فعالیت"
-              value={formatNumber(
-                activities?.callsCount ??
-                  0
-              )}
-              description={`${formatNumber(
-                activities?.followUpsCount ??
-                  0
-              )} پیگیری ثبت‌شده`}
-              icon={
-                <Activity
-                  size={20}
-                />
-              }
-              iconClass="bg-sky-50 text-sky-700"
-            />
-
-            <SummaryItem
-              title="عملیات حواله"
-              value={formatNumber(
-                waybills?.totalCount ??
-                  0
-              )}
-              description="مجموع حواله‌های بازه"
-              icon={
-                <FileText
-                  size={20}
-                />
-              }
-              iconClass="bg-slate-100 text-slate-700"
-            />
+              <p className="mt-1 text-xs text-slate-400">
+                شهری که بیشترین تناژ بارگیری نهایی را ثبت کرده است.
+              </p>
+            </div>
           </div>
+
+          {bestLoadingCity ? (
+            <div className="mt-6 rounded-2xl bg-slate-50 p-5">
+              <p className="text-xs font-bold text-slate-400">
+                شهر برتر
+              </p>
+
+              <p className="mt-2 text-2xl font-black text-slate-900">
+                {bestLoadingCity.cityName}
+              </p>
+
+              <p className="mt-2 text-sm font-bold text-blue-700">
+                {formatTonnage(
+                  bestLoadingCity.loadingTonnage
+                )}
+              </p>
+            </div>
+          ) : (
+            <div className="mt-6 rounded-2xl bg-slate-50 p-5 text-sm text-slate-400">
+              هنوز بارگیری نهایی ثبت نشده است.
+            </div>
+          )}
         </div>
       </section>
     </main>
+  );
+}
+
+function TrendingUpIcon() {
+  return (
+    <svg
+      width="21"
+      height="21"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+      <polyline points="16 7 22 7 22 13" />
+    </svg>
   );
 }
