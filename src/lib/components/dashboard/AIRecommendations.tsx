@@ -5,9 +5,12 @@ import {
   AlertCircle,
   ArrowLeft,
   CalendarClock,
+  CheckCircle2,
+  Clock3,
   Loader2,
   Phone,
   Sparkles,
+  TrendingUp,
 } from "lucide-react";
 import {
   useEffect,
@@ -21,26 +24,26 @@ import {
 } from "@/src/lib/services/ai";
 
 function formatNumber(
-  value: number
+  value: number,
 ): string {
   return new Intl.NumberFormat(
-    "fa-IR"
+    "fa-IR",
   ).format(value);
 }
 
 function formatTonnage(
-  value: number
+  value: number,
 ): string {
   return `${new Intl.NumberFormat(
     "fa-IR",
     {
       maximumFractionDigits: 1,
-    }
+    },
   ).format(value)} تن`;
 }
 
 function getPriorityLabel(
-  priority: AIRecommendationPriority
+  priority: AIRecommendationPriority,
 ): string {
   switch (priority) {
     case "high":
@@ -55,7 +58,7 @@ function getPriorityLabel(
 }
 
 function getPriorityClass(
-  priority: AIRecommendationPriority
+  priority: AIRecommendationPriority,
 ): string {
   switch (priority) {
     case "high":
@@ -69,8 +72,42 @@ function getPriorityClass(
   }
 }
 
+function getOpportunityLabel(
+  customer: AIRecommendedCustomer,
+): string {
+  switch (
+    customer.opportunityType
+  ) {
+    case "reactivation":
+      return "احیای مشتری";
+
+    case "retention":
+      return "خرید مجدد";
+
+    default:
+      return "جذب مشتری";
+  }
+}
+
+function getOpportunityClass(
+  customer: AIRecommendedCustomer,
+): string {
+  switch (
+    customer.opportunityType
+  ) {
+    case "reactivation":
+      return "bg-orange-50 text-orange-700";
+
+    case "retention":
+      return "bg-emerald-50 text-emerald-700";
+
+    default:
+      return "bg-violet-50 text-violet-700";
+  }
+}
+
 function getCityName(
-  name?: string | null
+  name?: string | null,
 ): string {
   if (!name) {
     return "نامشخص";
@@ -110,7 +147,7 @@ function getCityName(
 }
 
 function getCustomerTypeLabel(
-  type: string
+  type: string,
 ): string {
   const labels: Record<
     string,
@@ -163,6 +200,13 @@ function RecommendationCard({
   customer: AIRecommendedCustomer;
   index: number;
 }) {
+  const averageInterval =
+    customer.averageOrderIntervalDays > 0
+      ? Math.round(
+          customer.averageOrderIntervalDays,
+        )
+      : null;
+
   return (
     <div className="rounded-2xl border border-slate-100 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-100 hover:bg-blue-50/20 hover:shadow-sm">
       <div className="flex flex-col gap-4">
@@ -172,7 +216,7 @@ function RecommendationCard({
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-sm font-black text-white">
             {formatNumber(
-              index + 1
+              index + 1,
             )}
           </div>
 
@@ -190,11 +234,21 @@ function RecommendationCard({
 
               <span
                 className={`rounded-full px-2.5 py-1 text-[11px] font-black ${getPriorityClass(
-                  customer.priority
+                  customer.priority,
                 )}`}
               >
                 {getPriorityLabel(
-                  customer.priority
+                  customer.priority,
+                )}
+              </span>
+
+              <span
+                className={`rounded-full px-2.5 py-1 text-[11px] font-black ${getOpportunityClass(
+                  customer,
+                )}`}
+              >
+                {getOpportunityLabel(
+                  customer,
                 )}
               </span>
             </div>
@@ -203,14 +257,14 @@ function RecommendationCard({
               <span>
                 شهر:{" "}
                 {getCityName(
-                  customer.city?.name
+                  customer.city?.name,
                 )}
               </span>
 
               <span>
                 نوع:{" "}
                 {getCustomerTypeLabel(
-                  customer.customerType
+                  customer.customerType,
                 )}
               </span>
 
@@ -220,17 +274,66 @@ function RecommendationCard({
                 9999
                   ? "بدون فعالیت قبلی"
                   : `${formatNumber(
-                      customer.inactivityDays
+                      customer.inactivityDays,
                     )} روز`}
               </span>
             </div>
 
-            <div className="mt-2 text-xs font-medium text-slate-500">
-              تناژ کل:{" "}
-              {formatTonnage(
-                customer.lifetimeTonnage
-              )}
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium text-slate-500">
+              <span>
+                تناژ کل:{" "}
+                {formatTonnage(
+                  customer.lifetimeTonnage,
+                )}
+              </span>
+
+              <span>
+                سفارش:{" "}
+                {formatNumber(
+                  customer.orderCount,
+                )}
+              </span>
+
+              <span>
+                میانگین سفارش:{" "}
+                {formatTonnage(
+                  customer.averageOrderTonnage,
+                )}
+              </span>
             </div>
+
+            {averageInterval !==
+              null && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1.5 text-[11px] font-bold text-blue-700">
+                  <Clock3 size={13} />
+                  چرخه خرید:{" "}
+                  {formatNumber(
+                    averageInterval,
+                  )}{" "}
+                  روز
+                </span>
+
+                {customer.isOrderDue ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700">
+                    <CheckCircle2 size={13} />
+                    موعد خرید رسیده
+                  </span>
+                ) : customer.daysUntilExpectedOrder !==
+                    null &&
+                  customer.daysUntilExpectedOrder >
+                    0 ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 text-[11px] font-bold text-slate-600">
+                    <CalendarClock size={13} />
+                    حدود{" "}
+                    {formatNumber(
+                      customer.daysUntilExpectedOrder,
+                    )}{" "}
+                    روز تا خرید
+                  </span>
+                ) : null}
+              </div>
+            )}
 
             {customer.reasons.length >
               0 && (
@@ -239,13 +342,13 @@ function RecommendationCard({
                   (reason) => (
                     <span
                       key={
-                        reason.code
+                        `${reason.code}-${reason.points}`
                       }
                       className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-[11px] font-bold text-slate-600"
                     >
                       {reason.title}
                     </span>
-                  )
+                  ),
                 )}
               </div>
             )}
@@ -255,7 +358,7 @@ function RecommendationCard({
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
               <span className="text-sm font-black">
                 {formatNumber(
-                  customer.score
+                  customer.score,
                 )}
               </span>
             </div>
@@ -265,6 +368,37 @@ function RecommendationCard({
             </p>
           </div>
         </Link>
+
+        {customer.opportunityType ===
+          "reactivation" && (
+          <div className="flex items-center gap-2 rounded-xl bg-orange-50 px-3 py-2.5 text-xs font-bold text-orange-700">
+            <TrendingUp
+              size={14}
+            />
+            پیشنهاد: تماس برای فعال‌سازی مجدد و بررسی نیاز به سفارش جدید
+          </div>
+        )}
+
+        {customer.opportunityType ===
+          "retention" &&
+          customer.isOrderDue && (
+            <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-xs font-bold text-emerald-700">
+              <CheckCircle2
+                size={14}
+              />
+              پیشنهاد: زمان مناسبی برای تماس و گرفتن سفارش مجدد است
+            </div>
+          )}
+
+        {customer.opportunityType ===
+          "acquisition" && (
+          <div className="flex items-center gap-2 rounded-xl bg-violet-50 px-3 py-2.5 text-xs font-bold text-violet-700">
+            <Sparkles
+              size={14}
+            />
+            پیشنهاد: تماس برای معرفی محصول و ایجاد اولین سفارش
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2">
           <Link
@@ -279,7 +413,9 @@ function RecommendationCard({
             href={`/activities/follow-ups/new?customerId=${customer.customerId}`}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-700"
           >
-            <CalendarClock size={15} />
+            <CalendarClock
+              size={15}
+            />
             ثبت پیگیری
           </Link>
         </div>
@@ -301,7 +437,7 @@ export default function AIRecommendations() {
 
   const [error, setError] =
     useState<string | null>(
-      null
+      null,
     );
 
   useEffect(() => {
@@ -314,7 +450,7 @@ export default function AIRecommendations() {
 
         const result =
           await aiService.getDailyCustomerRecommendations(
-            5
+            5,
           );
 
         if (cancelled) {
@@ -322,7 +458,7 @@ export default function AIRecommendations() {
         }
 
         setRecommendations(
-          result
+          result,
         );
       } catch (err) {
         if (cancelled) {
@@ -331,7 +467,7 @@ export default function AIRecommendations() {
 
         console.error(
           "AI DASHBOARD RECOMMENDATIONS ERROR:",
-          err
+          err,
         );
 
         setRecommendations([]);
@@ -339,7 +475,7 @@ export default function AIRecommendations() {
         setError(
           err instanceof Error
             ? err.message
-            : "خطا در دریافت پیشنهادهای هوشمند."
+            : "خطا در دریافت پیشنهادهای هوشمند.",
         );
       } finally {
         if (!cancelled) {
@@ -372,7 +508,8 @@ export default function AIRecommendations() {
               </h2>
 
               <p className="mt-1 text-sm leading-6 text-slate-500">
-                مشتریانی که بر اساس سابقه فروش و فعالیت CRM، اولویت بیشتری برای تماس دارند
+                پیشنهادها بر اساس سابقه فروش، چرخه خرید، تناژ و فعالیت CRM
+                محاسبه می‌شوند.
               </p>
             </div>
           </div>
@@ -427,7 +564,7 @@ export default function AIRecommendations() {
             </p>
 
             <p className="mt-1 text-xs leading-6 text-slate-400">
-              مشتریان فعال امروز از فهرست پیشنهاد حذف شده‌اند.
+              مشتریانی که امروز تماس گرفته‌اند از فهرست پیشنهاد حذف شده‌اند.
             </p>
           </div>
         ) : (
@@ -441,7 +578,7 @@ export default function AIRecommendations() {
                   customer={customer}
                   index={index}
                 />
-              )
+              ),
             )}
           </div>
         )}

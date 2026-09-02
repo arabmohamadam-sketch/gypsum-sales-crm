@@ -47,10 +47,16 @@ export interface AIRecommendedCustomer {
   lastCallDate: string | null;
 
   daysSinceLastOrder: number;
+
   hasPendingFollowUp: boolean;
   calledToday: boolean;
 
   averageOrderTonnage: number;
+
+  averageOrderIntervalDays: number;
+  expectedNextOrderDate: string | null;
+  daysUntilExpectedOrder: number | null;
+  isOrderDue: boolean;
 
   reasons: AIRecommendationReason[];
 }
@@ -108,7 +114,7 @@ function getTodayStart(): Date {
   return new Date(
     now.getFullYear(),
     now.getMonth(),
-    now.getDate()
+    now.getDate(),
   );
 }
 
@@ -116,15 +122,13 @@ function getTomorrowStart(): Date {
   const tomorrow = getTodayStart();
 
   tomorrow.setDate(
-    tomorrow.getDate() + 1
+    tomorrow.getDate() + 1,
   );
 
   return tomorrow;
 }
 
-function isToday(
-  value: string
-): boolean {
+function isToday(value: string): boolean {
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
@@ -138,7 +142,7 @@ function isToday(
 }
 
 function calculateDaysSince(
-  dateValue: string | null
+  dateValue: string | null,
 ): number {
   if (!dateValue) {
     return 9999;
@@ -155,15 +159,126 @@ function calculateDaysSince(
   return Math.max(
     0,
     Math.floor(
-      (now.getTime() -
-        date.getTime()) /
-        (1000 * 60 * 60 * 24)
-    )
+      (now.getTime() - date.getTime()) /
+        (1000 * 60 * 60 * 24),
+    ),
   );
 }
 
+function calculateAverageOrderIntervalDays(
+  orders: OrderRow[],
+): number {
+  if (orders.length < 2) {
+    return 0;
+  }
+
+  const dates = orders
+    .map((order) => new Date(order.order_date))
+    .filter(
+      (date) => !Number.isNaN(date.getTime()),
+    )
+    .sort(
+      (a, b) =>
+        a.getTime() - b.getTime(),
+    );
+
+  if (dates.length < 2) {
+    return 0;
+  }
+
+  let totalGapDays = 0;
+
+  for (let index = 1; index < dates.length; index += 1) {
+    const difference =
+      dates[index].getTime() -
+      dates[index - 1].getTime();
+
+    totalGapDays +=
+      difference /
+      (1000 * 60 * 60 * 24);
+  }
+
+  return totalGapDays /
+    (dates.length - 1);
+}
+
+function calculateExpectedNextOrderDate(
+  lastOrderDate: string | null,
+  averageIntervalDays: number,
+): string | null {
+  if (
+    !lastOrderDate ||
+    averageIntervalDays <= 0
+  ) {
+    return null;
+  }
+
+  const date = new Date(lastOrderDate);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  date.setDate(
+    date.getDate() +
+      Math.round(averageIntervalDays),
+  );
+
+  return date.toISOString();
+}
+
+function calculateDaysUntilExpectedOrder(
+  expectedDate: string | null,
+): number | null {
+  if (!expectedDate) {
+    return null;
+  }
+
+  const date = new Date(expectedDate);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  const now = new Date();
+
+  return Math.ceil(
+    (date.getTime() - now.getTime()) /
+      (1000 * 60 * 60 * 24),
+  );
+}
+
+function getOpportunityType(
+  orderCount: number,
+  daysSinceLastOrder: number,
+  averageOrderIntervalDays: number,
+): AIOpportunityType {
+  if (orderCount === 0) {
+    return "acquisition";
+  }
+
+  const dueThreshold =
+    averageOrderIntervalDays > 0
+      ? Math.max(
+          14,
+          Math.round(
+            averageOrderIntervalDays * 1.25,
+          ),
+        )
+      : 14;
+
+  if (
+    daysSinceLastOrder >=
+    dueThreshold
+  ) {
+    return "reactivation";
+  }
+
+  return "retention";
+}
+
 function getPriority(
-  score: number
+  score: number,
 ): AIRecommendationPriority {
   if (score >= 70) {
     return "high";
@@ -178,7 +293,7 @@ function getPriority(
 
 function getErrorMessage(
   error: unknown,
-  fallback: string
+  fallback: string,
 ): string {
   if (
     typeof error === "object" &&
@@ -205,43 +320,43 @@ function getErrorMessage(
 
 function logAIError(
   operation: string,
-  error: unknown
+  error: unknown,
 ): void {
   console.error(
-    `========== AI ${operation} ERROR ==========`
+    `========== AI ${operation} ERROR ==========`,
   );
 
   console.error(
     getErrorMessage(
       error,
-      "خطای ناشناخته در موتور پیشنهاد فروش"
-    )
+      "خطای ناشناخته در موتور پیشنهاد فروش",
+    ),
   );
 
   console.error(
-    "============================================"
+    "============================================",
   );
 }
 
 export const aiService = {
   async getDailyCustomerRecommendations(
-    limit = 5
+    limit = 5,
   ): Promise<AIRecommendedCustomer[]> {
     const safeLimit = Math.min(
       Math.max(
         Math.floor(limit),
-        1
+        1,
       ),
-      20
+      20,
     );
 
     const supabase =
       createSupabaseClient();
 
     try {
-      // ========================================================
+      // ==========================================
       // CUSTOMERS
-      // ========================================================
+      // ==========================================
 
       const {
         data: customers,
@@ -263,29 +378,28 @@ export const aiService = {
         `)
         .eq(
           "company_id",
-          COMPANY_ID
+          COMPANY_ID,
         )
         .eq(
           "is_active",
-          true
+          true,
         )
         .is(
           "deleted_at",
-          null
+          null,
         );
 
       if (customersError) {
         logAIError(
           "CUSTOMERS",
-          customersError
+          customersError,
         );
 
         throw customersError;
       }
 
       const customerRows =
-        (customers ??
-          []) as unknown as CustomerRow[];
+        (customers ?? []) as unknown as CustomerRow[];
 
       if (
         customerRows.length === 0
@@ -293,9 +407,9 @@ export const aiService = {
         return [];
       }
 
-      // ========================================================
+      // ==========================================
       // CONFIRMED ORDERS
-      // ========================================================
+      // ==========================================
 
       const {
         data: orders,
@@ -310,39 +424,38 @@ export const aiService = {
         `)
         .eq(
           "company_id",
-          COMPANY_ID
+          COMPANY_ID,
         )
         .eq(
           "status",
-          "confirmed"
+          "confirmed",
         )
         .is(
           "deleted_at",
-          null
+          null,
         )
         .order(
           "order_date",
           {
             ascending: false,
-          }
+          },
         );
 
       if (ordersError) {
         logAIError(
           "ORDERS",
-          ordersError
+          ordersError,
         );
 
         throw ordersError;
       }
 
       const orderRows =
-        (orders ??
-          []) as OrderRow[];
+        (orders ?? []) as OrderRow[];
 
-      // ========================================================
+      // ==========================================
       // CALLS
-      // ========================================================
+      // ==========================================
 
       const {
         data: calls,
@@ -356,35 +469,34 @@ export const aiService = {
         `)
         .eq(
           "company_id",
-          COMPANY_ID
+          COMPANY_ID,
         )
         .is(
           "deleted_at",
-          null
+          null,
         )
         .order(
           "call_date",
           {
             ascending: false,
-          }
+          },
         );
 
       if (callsError) {
         logAIError(
           "CALLS",
-          callsError
+          callsError,
         );
 
         throw callsError;
       }
 
       const callRows =
-        (calls ??
-          []) as CallRow[];
+        (calls ?? []) as CallRow[];
 
-      // ========================================================
+      // ==========================================
       // FOLLOW UPS
-      // ========================================================
+      // ==========================================
 
       const {
         data: followUps,
@@ -399,83 +511,69 @@ export const aiService = {
         `)
         .eq(
           "company_id",
-          COMPANY_ID
+          COMPANY_ID,
         )
         .is(
           "deleted_at",
-          null
+          null,
         )
         .order(
           "scheduled_at",
           {
             ascending: true,
-          }
+          },
         );
 
       if (followUpsError) {
         logAIError(
           "FOLLOW UPS",
-          followUpsError
+          followUpsError,
         );
 
         throw followUpsError;
       }
 
       const followUpRows =
-        (followUps ??
-          []) as FollowUpRow[];
+        (followUps ?? []) as FollowUpRow[];
 
-      // ========================================================
-      // INDEX DATA
-      // ========================================================
+      // ==========================================
+      // INDEX
+      // ==========================================
 
       const ordersByCustomer =
-        new Map<
-          string,
-          OrderRow[]
-        >();
+        new Map<string, OrderRow[]>();
 
       const callsByCustomer =
-        new Map<
-          string,
-          CallRow[]
-        >();
+        new Map<string, CallRow[]>();
 
       const followUpsByCustomer =
-        new Map<
-          string,
-          FollowUpRow[]
-        >();
+        new Map<string, FollowUpRow[]>();
 
-      for (
-        const order of orderRows
-      ) {
+      for (const order of orderRows) {
         const list =
           ordersByCustomer.get(
-            order.customer_id
+            order.customer_id,
           ) ?? [];
 
         list.push(order);
 
         ordersByCustomer.set(
           order.customer_id,
-          list
+          list,
         );
       }
 
-      for (
-        const call of callRows
-      ) {
+      for (const call of callRows) {
         const list =
           callsByCustomer.get(
-            call.customer_id
+            call.customer_id,
           ) ?? [];
 
         list.push(call);
 
         callsByCustomer.set(
           call.customer_id,
-          list
+          list,
         );
       }
 
@@ -484,40 +582,40 @@ export const aiService = {
       ) {
         const list =
           followUpsByCustomer.get(
-            followUp.customer_id
+            followUp.customer_id,
           ) ?? [];
 
         list.push(followUp);
 
         followUpsByCustomer.set(
           followUp.customer_id,
-          list
+          list,
         );
       }
 
-      // ========================================================
-      // SCORE CUSTOMERS
-      // ========================================================
+      // ==========================================
+      // CALCULATE
+      // ==========================================
 
       const recommendations =
         customerRows
           .map(
             (
-              customer
+              customer,
             ): AIRecommendedCustomer => {
               const customerOrders =
                 ordersByCustomer.get(
-                  customer.id
+                  customer.id,
                 ) ?? [];
 
               const customerCalls =
                 callsByCustomer.get(
-                  customer.id
+                  customer.id,
                 ) ?? [];
 
               const customerFollowUps =
                 followUpsByCustomer.get(
-                  customer.id
+                  customer.id,
                 ) ?? [];
 
               const orderCount =
@@ -527,15 +625,13 @@ export const aiService = {
                 customerCalls.length;
 
               const lastOrderDate =
-                customerOrders.length >
-                0
+                customerOrders.length > 0
                   ? customerOrders[0]
                       .order_date
                   : null;
 
               const lastCallDate =
-                customerCalls.length >
-                0
+                customerCalls.length > 0
                   ? customerCalls[0]
                       .call_date
                   : null;
@@ -544,14 +640,14 @@ export const aiService = {
                 customerOrders.reduce(
                   (
                     total,
-                    order
+                    order,
                   ) =>
                     total +
                     Number(
                       order.total_tonnage ??
-                        0
+                        0,
                     ),
-                  0
+                  0,
                 );
 
               const averageOrderTonnage =
@@ -560,9 +656,35 @@ export const aiService = {
                     orderCount
                   : 0;
 
+              const averageOrderIntervalDays =
+                calculateAverageOrderIntervalDays(
+                  customerOrders,
+                );
+
               const daysSinceLastOrder =
                 calculateDaysSince(
-                  lastOrderDate
+                  lastOrderDate,
+                );
+
+              const expectedNextOrderDate =
+                calculateExpectedNextOrderDate(
+                  lastOrderDate,
+                  averageOrderIntervalDays,
+                );
+
+              const daysUntilExpectedOrder =
+                calculateDaysUntilExpectedOrder(
+                  expectedNextOrderDate,
+                );
+
+              const isOrderDue =
+                Boolean(
+                  averageOrderIntervalDays >
+                    0 &&
+                    daysUntilExpectedOrder !==
+                      null &&
+                    daysUntilExpectedOrder <=
+                      0,
                 );
 
               const activityDates =
@@ -571,48 +693,50 @@ export const aiService = {
                   lastCallDate,
                 ].filter(
                   (
-                    value
+                    value,
                   ): value is string =>
-                    Boolean(value)
+                    Boolean(value),
                 );
 
               const lastActivityDate =
-                activityDates.length >
-                0
+                activityDates.length > 0
                   ? activityDates.reduce(
                       (
                         latest,
-                        current
+                        current,
                       ) =>
                         current >
                         latest
                           ? current
-                          : latest
+                          : latest,
                     )
                   : null;
 
               const inactivityDays =
                 calculateDaysSince(
-                  lastActivityDate
+                  lastActivityDate,
                 );
 
               const calledToday =
                 customerCalls.some(
-                  (
-                    call
-                  ) =>
+                  (call) =>
                     isToday(
-                      call.call_date
-                    )
+                      call.call_date,
+                    ),
                 );
 
               const hasPendingFollowUp =
                 customerFollowUps.some(
-                  (
-                    followUp
-                  ) =>
+                  (followUp) =>
                     followUp.status ===
-                    "pending"
+                    "pending",
+                );
+
+              const opportunityType =
+                getOpportunityType(
+                  orderCount,
+                  daysSinceLastOrder,
+                  averageOrderIntervalDays,
                 );
 
               const reasons: AIRecommendationReason[] =
@@ -620,29 +744,9 @@ export const aiService = {
 
               let score = 0;
 
-              let opportunityType:
-                | AIOpportunityType;
-
-              // ==================================================
-              // OPPORTUNITY TYPE
-              // ==================================================
-
-              if (
-                orderCount >= 1
-              ) {
-                opportunityType =
-                  daysSinceLastOrder >=
-                  14
-                    ? "reactivation"
-                    : "retention";
-              } else {
-                opportunityType =
-                  "acquisition";
-              }
-
-              // ==================================================
+              // ========================================
               // PURCHASE HISTORY
-              // ==================================================
+              // ========================================
 
               if (
                 orderCount >= 5
@@ -653,11 +757,7 @@ export const aiService = {
                   code:
                     "strong_purchase_history",
                   title:
-                    `${formatTonnage(
-                      lifetimeTonnage
-                    )} در ${formatNumber(
-                      orderCount
-                    )} سفارش`,
+                    `${formatNumber(orderCount)} سفارش تأییدشده`,
                   points: 20,
                 });
               } else if (
@@ -669,11 +769,7 @@ export const aiService = {
                   code:
                     "repeat_purchase_history",
                   title:
-                    `${formatTonnage(
-                      lifetimeTonnage
-                    )} در ${formatNumber(
-                      orderCount
-                    )} سفارش`,
+                    `${formatNumber(orderCount)} سفارش تأییدشده`,
                   points: 17,
                 });
               } else if (
@@ -685,9 +781,7 @@ export const aiService = {
                   code:
                     "repeat_customer",
                   title:
-                    `${formatNumber(
-                      orderCount
-                    )} سفارش تأییدشده`,
+                    "۲ سفارش تأییدشده",
                   points: 14,
                 });
               } else if (
@@ -704,9 +798,9 @@ export const aiService = {
                 });
               }
 
-              // ==================================================
-              // LIFETIME TONNAGE
-              // ==================================================
+              // ========================================
+              // CUSTOMER VALUE
+              // ========================================
 
               if (
                 lifetimeTonnage >=
@@ -719,7 +813,7 @@ export const aiService = {
                     "high_customer_value",
                   title:
                     `سابقه خرید ${formatTonnage(
-                      lifetimeTonnage
+                      lifetimeTonnage,
                     )}`,
                   points: 28,
                 });
@@ -734,7 +828,7 @@ export const aiService = {
                     "good_customer_value",
                   title:
                     `سابقه خرید ${formatTonnage(
-                      lifetimeTonnage
+                      lifetimeTonnage,
                     )}`,
                   points: 23,
                 });
@@ -749,7 +843,7 @@ export const aiService = {
                     "valuable_customer",
                   title:
                     `سابقه خرید ${formatTonnage(
-                      lifetimeTonnage
+                      lifetimeTonnage,
                     )}`,
                   points: 20,
                 });
@@ -764,7 +858,7 @@ export const aiService = {
                     "moderate_customer_value",
                   title:
                     `سابقه خرید ${formatTonnage(
-                      lifetimeTonnage
+                      lifetimeTonnage,
                     )}`,
                   points: 14,
                 });
@@ -775,18 +869,88 @@ export const aiService = {
 
                 reasons.push({
                   code:
-                    "customer_value",
+                    "some_purchase_value",
                   title:
                     `سابقه خرید ${formatTonnage(
-                      lifetimeTonnage
+                      lifetimeTonnage,
                     )}`,
                   points: 8,
                 });
               }
 
-              // ==================================================
-              // REORDER OPPORTUNITY
-              // ==================================================
+              // ========================================
+              // PURCHASE CADENCE
+              // ========================================
+
+              if (
+                averageOrderIntervalDays >
+                0
+              ) {
+                const roundedInterval =
+                  Math.round(
+                    averageOrderIntervalDays,
+                  );
+
+                if (
+                  daysUntilExpectedOrder !==
+                    null &&
+                  daysUntilExpectedOrder <=
+                    0 &&
+                  daysSinceLastOrder <=
+                    roundedInterval * 1.75
+                ) {
+                  score += 25;
+
+                  reasons.push({
+                    code:
+                      "purchase_cycle_due",
+                    title:
+                      `موعد خرید مجدد رسیده؛ چرخه حدود ${formatNumber(
+                        roundedInterval,
+                      )} روز`,
+                    points: 25,
+                  });
+                } else if (
+                  daysUntilExpectedOrder !==
+                    null &&
+                  daysUntilExpectedOrder <=
+                    5
+                ) {
+                  score += 20;
+
+                  reasons.push({
+                    code:
+                      "purchase_cycle_near",
+                    title:
+                      `حدود ${formatNumber(
+                        Math.max(
+                          0,
+                          daysUntilExpectedOrder,
+                        ),
+                      )} روز تا موعد خرید`,
+                    points: 20,
+                  });
+                } else if (
+                  daysUntilExpectedOrder !==
+                    null &&
+                  daysUntilExpectedOrder <=
+                    10
+                ) {
+                  score += 12;
+
+                  reasons.push({
+                    code:
+                      "purchase_cycle_approaching",
+                    title:
+                      `نزدیک شدن به چرخه خرید`,
+                    points: 12,
+                  });
+                }
+              }
+
+              // ========================================
+              // RECENCY / INACTIVITY
+              // ========================================
 
               if (
                 orderCount > 0
@@ -799,9 +963,11 @@ export const aiService = {
 
                   reasons.push({
                     code:
-                      "strong_reorder_opportunity",
+                      "long_purchase_gap",
                     title:
-                      "بیش از ۳۰ روز از آخرین خرید گذشته",
+                      `${formatNumber(
+                        daysSinceLastOrder,
+                      )} روز از آخرین خرید`,
                     points: 28,
                   });
                 } else if (
@@ -812,9 +978,11 @@ export const aiService = {
 
                   reasons.push({
                     code:
-                      "reorder_opportunity",
+                      "purchase_gap",
                     title:
-                      "بیش از ۲۱ روز از آخرین خرید گذشته",
+                      `${formatNumber(
+                        daysSinceLastOrder,
+                      )} روز از آخرین خرید`,
                     points: 24,
                   });
                 } else if (
@@ -825,30 +993,34 @@ export const aiService = {
 
                   reasons.push({
                     code:
-                      "reorder_window",
+                      "moderate_purchase_gap",
                     title:
-                      "بیش از ۱۴ روز از آخرین خرید گذشته",
+                      `${formatNumber(
+                        daysSinceLastOrder,
+                      )} روز از آخرین خرید`,
                     points: 20,
                   });
                 } else if (
                   daysSinceLastOrder >=
                   7
                 ) {
-                  score += 12;
+                  score += 10;
 
                   reasons.push({
                     code:
-                      "upcoming_reorder",
+                      "recent_purchase_gap",
                     title:
-                      "بیش از ۷ روز از آخرین خرید گذشته",
-                    points: 12,
+                      `${formatNumber(
+                        daysSinceLastOrder,
+                      )} روز از آخرین خرید`,
+                    points: 10,
                   });
                 }
               }
 
-              // ==================================================
-              // AVERAGE ORDER SIZE
-              // ==================================================
+              // ========================================
+              // ORDER SIZE
+              // ========================================
 
               if (
                 averageOrderTonnage >=
@@ -858,10 +1030,10 @@ export const aiService = {
 
                 reasons.push({
                   code:
-                    "large_average_order",
+                    "high_average_order",
                   title:
                     `میانگین سفارش ${formatTonnage(
-                      averageOrderTonnage
+                      averageOrderTonnage,
                     )}`,
                   points: 12,
                 });
@@ -873,18 +1045,18 @@ export const aiService = {
 
                 reasons.push({
                   code:
-                    "medium_average_order",
+                    "good_average_order",
                   title:
                     `میانگین سفارش ${formatTonnage(
-                      averageOrderTonnage
+                      averageOrderTonnage,
                     )}`,
                   points: 8,
                 });
               }
 
-              // ==================================================
+              // ========================================
               // VIP
-              // ==================================================
+              // ========================================
 
               if (
                 customer.is_vip
@@ -899,9 +1071,9 @@ export const aiService = {
                 });
               }
 
-              // ==================================================
-              // PENDING FOLLOW-UP
-              // ==================================================
+              // ========================================
+              // FOLLOW-UP
+              // ========================================
 
               if (
                 hasPendingFollowUp
@@ -917,13 +1089,15 @@ export const aiService = {
                 });
               }
 
-              // ==================================================
-              // NOT CALLED TODAY
-              // ==================================================
+              // ========================================
+              // TODAY CONTACT
+              // ========================================
 
               if (
-                !calledToday
+                calledToday
               ) {
+                score -= 35;
+              } else {
                 score += 5;
 
                 reasons.push({
@@ -933,16 +1107,15 @@ export const aiService = {
                     "امروز هنوز تماس نشده",
                   points: 5,
                 });
-              } else {
-                score -= 35;
               }
 
-              // ==================================================
-              // NEW CUSTOMER
-              // ==================================================
+              // ========================================
+              // ACQUISITION
+              // ========================================
 
               if (
-                orderCount === 0
+                opportunityType ===
+                "acquisition"
               ) {
                 score += 3;
 
@@ -953,32 +1126,49 @@ export const aiService = {
                     "فرصت جذب مشتری جدید",
                   points: 3,
                 });
-
-                if (
-                  hasPendingFollowUp
-                ) {
-                  score += 5;
-
-                  reasons.push({
-                    code:
-                      "new_customer_follow_up",
-                    title:
-                      "برای جذب مشتری پیگیری باز وجود دارد",
-                    points: 5,
-                  });
-                }
               }
 
-              // ==================================================
-              // VERY RECENT PURCHASE PENALTY
-              // ==================================================
+              if (
+                opportunityType ===
+                "reactivation"
+              ) {
+                score += 8;
+
+                reasons.push({
+                  code:
+                    "reactivation_opportunity",
+                  title:
+                    "مشتری وارد مرحله احیا شده است",
+                  points: 8,
+                });
+              }
+
+              if (
+                opportunityType ===
+                "retention" &&
+                isOrderDue
+              ) {
+                score += 10;
+
+                reasons.push({
+                  code:
+                    "retention_due",
+                  title:
+                    "زمان مناسب حفظ و پیگیری مشتری",
+                  points: 10,
+                });
+              }
+
+              // ========================================
+              // VERY RECENT ORDER
+              // ========================================
 
               if (
                 orderCount > 0 &&
                 daysSinceLastOrder <=
                   3
               ) {
-                score -= 10;
+                score -= 15;
               }
 
               if (
@@ -989,23 +1179,56 @@ export const aiService = {
                 score -= 10;
               }
 
-              // ==================================================
-              // FINAL SCORE
-              // ==================================================
+              // ========================================
+              // ZERO-ORDER CUSTOMER
+              // ========================================
+
+              if (
+                orderCount === 0
+              ) {
+                if (
+                  hasPendingFollowUp
+                ) {
+                  score += 5;
+
+                  reasons.push({
+                    code:
+                      "acquisition_follow_up",
+                    title:
+                      "برای جذب مشتری پیگیری باز وجود دارد",
+                    points: 5,
+                  });
+                }
+              }
 
               score = Math.max(
                 0,
                 Math.min(
+                  100,
                   Math.round(score),
-                  100
-                )
+                ),
               );
 
-              reasons.sort(
-                (a, b) =>
-                  b.points -
-                  a.points
-              );
+              const uniqueReasons =
+                reasons
+                  .sort(
+                    (a, b) =>
+                      b.points -
+                      a.points,
+                  )
+                  .filter(
+                    (
+                      reason,
+                      index,
+                      all,
+                    ) =>
+                      all.findIndex(
+                        (item) =>
+                          item.code ===
+                          reason.code,
+                      ) === index,
+                  )
+                  .slice(0, 4);
 
               return {
                 customerId:
@@ -1030,9 +1253,7 @@ export const aiService = {
                 score,
 
                 priority:
-                  getPriority(
-                    score
-                  ),
+                  getPriority(score),
 
                 opportunityType,
 
@@ -1056,30 +1277,43 @@ export const aiService = {
 
                 averageOrderTonnage,
 
+                averageOrderIntervalDays:
+
+                  averageOrderIntervalDays,
+
+                expectedNextOrderDate,
+
+                daysUntilExpectedOrder,
+
+                isOrderDue,
+
                 reasons:
-                  reasons.slice(
-                    0,
-                    3
-                  ),
+                  uniqueReasons,
               };
-            }
+            },
           )
           .filter(
-            (
-              customer
-            ) =>
-              !customer.calledToday
+            (customer) =>
+              !customer.calledToday,
           )
           .sort(
             (a, b) => {
               if (
-                a.score !==
-                b.score
+                a.score !== b.score
               ) {
                 return (
                   b.score -
                   a.score
                 );
+              }
+
+              if (
+                a.isOrderDue !==
+                b.isOrderDue
+              ) {
+                return a.isOrderDue
+                  ? -1
+                  : 1;
               }
 
               if (
@@ -1125,26 +1359,18 @@ export const aiService = {
                 b.inactivityDays -
                 a.inactivityDays
               );
-            }
+            },
           )
-          .slice(
-            0,
-            safeLimit
-          );
+          .slice(0, safeLimit);
 
       return recommendations;
     } catch (error) {
       logAIError(
-        "DAILY CUSTOMER RECOMMENDATIONS",
-        error
+        "RECOMMENDATIONS",
+        error,
       );
 
-      throw new Error(
-        getErrorMessage(
-          error,
-          "خطا در تولید پیشنهادهای هوشمند فروش."
-        )
-      );
+      throw error;
     }
   },
 };
