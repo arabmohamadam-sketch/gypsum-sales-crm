@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import MonthlyTargetSummary from "@/src/lib/components/dashboard/MonthlyTargetSummary";
 import { useDashboard } from "@/src/lib/hooks/useDashboard";
 import { waybillsService } from "@/src/lib/services/waybills";
 import type { Waybill } from "@/src/lib/types/waybill";
@@ -464,7 +465,8 @@ export default function Dashboard() {
     waybills.filter(
       (waybill) =>
         waybill.status === "issued" &&
-        waybill.loading?.status === "pending"
+        waybill.loading?.status ===
+          "pending"
     ).length;
 
   const loadingConfirmedTonnage =
@@ -481,11 +483,9 @@ export default function Dashboard() {
         0
       );
 
-  /*
-   * ============================================================
+  /* ============================================================
    * TODAY OPERATIONAL KPIs
-   * ============================================================
-   */
+   * ============================================================ */
 
   const todayWaybills =
     waybills.filter(
@@ -635,7 +635,9 @@ export default function Dashboard() {
             stats.totalTonnage
           )}
           description="مجموع فروش ثبت‌شده"
-          icon={<TrendingUp size={22} />}
+          icon={
+            <TrendingUp size={22} />
+          }
           iconClass="bg-emerald-50 text-emerald-700"
           valueClass="text-emerald-700"
         />
@@ -662,6 +664,12 @@ export default function Dashboard() {
           valueClass="text-amber-700"
         />
       </section>
+
+      {/* ===================================================== */}
+      {/* MONTHLY TARGET */}
+      {/* ===================================================== */}
+
+      <MonthlyTargetSummary />
 
       {/* ===================================================== */}
       {/* TODAY OPERATIONAL KPI */}
@@ -757,7 +765,9 @@ export default function Dashboard() {
                   }
                   description="بارگیری نهایی امروز"
                   icon={
-                    <CheckCircle2 size={22} />
+                    <CheckCircle2
+                      size={22}
+                    />
                   }
                   iconClass="bg-emerald-50 text-emerald-700"
                   valueClass="text-emerald-700"
@@ -879,7 +889,9 @@ export default function Dashboard() {
                     )
               }
               description="هنوز صادر نشده"
-              icon={<FileText size={20} />}
+              icon={
+                <FileText size={20} />
+              }
               iconClass="bg-amber-50 text-amber-700"
             />
 
@@ -908,7 +920,9 @@ export default function Dashboard() {
               }
               description="بارگیری نهایی"
               icon={
-                <CheckCircle2 size={20} />
+                <CheckCircle2
+                  size={20}
+                />
               }
               iconClass="bg-emerald-50 text-emerald-700"
             />
@@ -1017,7 +1031,9 @@ export default function Dashboard() {
             href="/activities/follow-ups/new"
             title="ثبت پیگیری"
             description="ایجاد پیگیری جدید"
-            icon={<CalendarClock size={20} />}
+            icon={
+              <CalendarClock size={20} />
+            }
             className="bg-emerald-50 text-emerald-700"
           />
 
@@ -1046,9 +1062,12 @@ export default function Dashboard() {
               icon={<Activity size={19} />}
             />
 
-            {recentActivities.length === 0 ? (
+            {recentActivities.length ===
+            0 ? (
               <EmptyState
-                icon={<Activity size={24} />}
+                icon={
+                  <Activity size={24} />
+                }
                 title="هنوز فعالیتی ثبت نشده است"
                 description="با ثبت تماس یا پیگیری، فعالیت مشتریان در این بخش نمایش داده می‌شود."
               />
@@ -1128,7 +1147,8 @@ export default function Dashboard() {
               icon={<Users size={19} />}
             />
 
-            {recommendedCustomers.length === 0 ? (
+            {recommendedCustomers.length ===
+            0 ? (
               <EmptyState
                 icon={
                   <CheckCircle2 size={24} />
@@ -1220,7 +1240,9 @@ export default function Dashboard() {
                             href={`/activities/follow-ups/new?customerId=${customer.id}`}
                             className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-700"
                           >
-                            <CalendarClock size={15} />
+                            <CalendarClock
+                              size={15}
+                            />
                             ثبت پیگیری
                           </Link>
                         </div>
@@ -1325,7 +1347,9 @@ export default function Dashboard() {
           <SectionHeader
             title="نمای کلی فروش و عملیات"
             description="شاخص‌های اصلی فعلی CRM"
-            icon={<TrendingUp size={19} />}
+            icon={
+              <TrendingUp size={19} />
+            }
           />
 
           <div className="grid gap-4 md:grid-cols-3">
@@ -1390,7 +1414,9 @@ export default function Dashboard() {
               }
               description="بارگیری تأییدشده"
               icon={
-                <CheckCircle2 size={20} />
+                <CheckCircle2
+                  size={20}
+                />
               }
               iconClass="bg-emerald-50 text-emerald-700"
             />
