@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import {
-  AlertCircle,
   ArrowLeft,
   CalendarClock,
   CheckCircle2,
@@ -10,6 +9,7 @@ import {
   Loader2,
   Phone,
   Sparkles,
+  Target,
   TrendingUp,
 } from "lucide-react";
 import {
@@ -201,7 +201,8 @@ function RecommendationCard({
   index: number;
 }) {
   const averageInterval =
-    customer.averageOrderIntervalDays > 0
+    customer.averageOrderIntervalDays >
+    0
       ? Math.round(
           customer.averageOrderIntervalDays,
         )
@@ -316,7 +317,9 @@ function RecommendationCard({
 
                 {customer.isOrderDue ? (
                   <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700">
-                    <CheckCircle2 size={13} />
+                    <CheckCircle2
+                      size={13}
+                    />
                     موعد خرید رسیده
                   </span>
                 ) : customer.daysUntilExpectedOrder !==
@@ -324,7 +327,9 @@ function RecommendationCard({
                   customer.daysUntilExpectedOrder >
                     0 ? (
                   <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 text-[11px] font-bold text-slate-600">
-                    <CalendarClock size={13} />
+                    <CalendarClock
+                      size={13}
+                    />
                     حدود{" "}
                     {formatNumber(
                       customer.daysUntilExpectedOrder,
@@ -335,15 +340,23 @@ function RecommendationCard({
               </div>
             )}
 
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1.5 text-[11px] font-black text-blue-700">
+                <Target size={13} />
+                تناژ پیشنهادی:{" "}
+                {formatTonnage(
+                  customer.suggestedOrderTonnage,
+                )}
+              </span>
+            </div>
+
             {customer.reasons.length >
               0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {customer.reasons.map(
                   (reason) => (
                     <span
-                      key={
-                        `${reason.code}-${reason.points}`
-                      }
+                      key={`${reason.code}-${reason.points}`}
                       className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-[11px] font-bold text-slate-600"
                     >
                       {reason.title}
@@ -369,36 +382,63 @@ function RecommendationCard({
           </div>
         </Link>
 
-        {customer.opportunityType ===
-          "reactivation" && (
-          <div className="flex items-center gap-2 rounded-xl bg-orange-50 px-3 py-2.5 text-xs font-bold text-orange-700">
-            <TrendingUp
-              size={14}
-            />
-            پیشنهاد: تماس برای فعال‌سازی مجدد و بررسی نیاز به سفارش جدید
-          </div>
-        )}
-
-        {customer.opportunityType ===
-          "retention" &&
-          customer.isOrderDue && (
-            <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-xs font-bold text-emerald-700">
-              <CheckCircle2
-                size={14}
+        <div
+          className={`rounded-xl px-3 py-3 ${
+            customer.opportunityType ===
+            "reactivation"
+              ? "bg-orange-50 text-orange-700"
+              : customer.opportunityType ===
+                  "retention"
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-violet-50 text-violet-700"
+          }`}
+        >
+          <div className="flex items-start gap-2">
+            {customer.opportunityType ===
+            "reactivation" ? (
+              <TrendingUp
+                size={16}
+                className="mt-0.5 shrink-0"
               />
-              پیشنهاد: زمان مناسبی برای تماس و گرفتن سفارش مجدد است
-            </div>
-          )}
+            ) : customer.opportunityType ===
+              "retention" ? (
+              <CheckCircle2
+                size={16}
+                className="mt-0.5 shrink-0"
+              />
+            ) : (
+              <Sparkles
+                size={16}
+                className="mt-0.5 shrink-0"
+              />
+            )}
 
-        {customer.opportunityType ===
-          "acquisition" && (
-          <div className="flex items-center gap-2 rounded-xl bg-violet-50 px-3 py-2.5 text-xs font-bold text-violet-700">
-            <Sparkles
-              size={14}
-            />
-            پیشنهاد: تماس برای معرفی محصول و ایجاد اولین سفارش
+            <div>
+              <div className="text-sm font-black">
+                {customer.suggestedAction}
+              </div>
+
+              <div className="mt-1 text-xs font-medium leading-6">
+                {
+                  customer.suggestedActionDescription
+                }
+              </div>
+            </div>
           </div>
-        )}
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="mb-1 flex items-center gap-1.5 text-xs font-bold text-slate-500">
+            <Target size={14} />
+            هدف تماس
+          </div>
+
+          <div className="text-sm font-medium leading-6 text-slate-800">
+            {
+              customer.suggestedContactGoal
+            }
+          </div>
+        </div>
 
         <div className="grid grid-cols-2 gap-2">
           <Link
@@ -508,7 +548,8 @@ export default function AIRecommendations() {
               </h2>
 
               <p className="mt-1 text-sm leading-6 text-slate-500">
-                پیشنهادها بر اساس سابقه فروش، چرخه خرید، تناژ و فعالیت CRM
+                پیشنهادها بر اساس سابقه فروش،
+                چرخه خرید، تناژ و فعالیت CRM
                 محاسبه می‌شوند.
               </p>
             </div>
@@ -530,52 +571,42 @@ export default function AIRecommendations() {
                 size={18}
                 className="animate-spin"
               />
-              در حال تحلیل مشتریان...
+              در حال محاسبه پیشنهادهای هوشمند...
             </div>
           </div>
         ) : error ? (
-          <div className="rounded-2xl border border-red-100 bg-red-50 p-5">
-            <div className="flex items-start gap-3">
-              <AlertCircle
-                size={20}
-                className="mt-0.5 shrink-0 text-red-600"
-              />
-
-              <div>
-                <p className="font-black text-red-800">
-                  خطا در تولید پیشنهادهای هوشمند
-                </p>
-
-                <p className="mt-1 text-sm leading-6 text-red-600">
-                  {error}
-                </p>
-              </div>
-            </div>
+          <div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-sm font-medium leading-7 text-red-700">
+            {error}
           </div>
         ) : recommendations.length ===
           0 ? (
-          <div className="rounded-2xl bg-slate-50 p-10 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-emerald-600 shadow-sm">
-              <Sparkles size={24} />
-            </div>
-
-            <p className="mt-4 font-bold text-slate-700">
-              برای امروز پیشنهاد جدیدی وجود ندارد
+          <div className="rounded-2xl bg-slate-50 p-6 text-center">
+            <p className="text-sm font-bold text-slate-700">
+              در حال حاضر پیشنهاد
+              هوشمندی برای نمایش وجود
+              ندارد.
             </p>
 
-            <p className="mt-1 text-xs leading-6 text-slate-400">
-              مشتریانی که امروز تماس گرفته‌اند از فهرست پیشنهاد حذف شده‌اند.
+            <p className="mt-1 text-xs text-slate-500">
+              با ثبت تماس، پیگیری و سفارش‌های
+              بیشتر، پیشنهادها دقیق‌تر
+              خواهند شد.
             </p>
           </div>
         ) : (
           <div className="space-y-3">
             {recommendations.map(
-              (customer, index) => (
+              (
+                customer,
+                index,
+              ) => (
                 <RecommendationCard
                   key={
                     customer.customerId
                   }
-                  customer={customer}
+                  customer={
+                    customer
+                  }
                   index={index}
                 />
               ),
