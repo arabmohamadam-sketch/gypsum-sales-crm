@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+
 import {
   ArrowLeft,
   CalendarClock,
@@ -12,10 +13,15 @@ import {
   Target,
   TrendingUp,
 } from "lucide-react";
+
 import {
   useEffect,
   useState,
 } from "react";
+
+import {
+  isLeapJalaaliYear,
+} from "jalaali-js";
 
 import {
   aiService,
@@ -28,7 +34,9 @@ import {
   type MonthlyTargetReport,
 } from "@/src/lib/services/report-targets";
 
-import { getTodayJalali } from "@/src/lib/utils/jalali";
+import {
+  getTodayJalali,
+} from "@/src/lib/utils/jalali";
 
 function formatNumber(
   value: number,
@@ -201,6 +209,9 @@ function getCustomerTypeLabel(
     distributor:
       "توزیع‌کننده",
 
+    distributor_company:
+      "توزیع‌کننده",
+
     retailer:
       "خرده‌فروشی",
   };
@@ -209,6 +220,77 @@ function getCustomerTypeLabel(
     labels[type] ??
     type
   );
+}
+
+function getDaysInJalaliMonth(
+  year: number,
+  month: number,
+): number {
+  if (month >= 1 && month <= 6) {
+    return 31;
+  }
+
+  if (month >= 7 && month <= 11) {
+    return 30;
+  }
+
+  return isLeapJalaaliYear(year)
+    ? 30
+    : 29;
+}
+
+function getProbabilityLabel(
+  probability: number,
+): string {
+  return `${formatPercent(
+    probability * 100,
+  )}%`;
+}
+
+function getProbabilityClass(
+  probability: number,
+): string {
+  if (probability >= 0.75) {
+    return "bg-emerald-50 text-emerald-700";
+  }
+
+  if (probability >= 0.55) {
+    return "bg-blue-50 text-blue-700";
+  }
+
+  if (probability >= 0.4) {
+    return "bg-amber-50 text-amber-700";
+  }
+
+  return "bg-slate-100 text-slate-600";
+}
+
+function getExpectedSalesClass(
+  expectedSalesTonnage: number,
+): string {
+  if (expectedSalesTonnage >= 10) {
+    return "border-emerald-100 bg-emerald-50/70 text-emerald-800";
+  }
+
+  if (expectedSalesTonnage >= 5) {
+    return "border-blue-100 bg-blue-50/70 text-blue-800";
+  }
+
+  return "border-slate-200 bg-slate-50 text-slate-700";
+}
+
+function getExpectedSalesLabel(
+  expectedSalesTonnage: number,
+): string {
+  if (expectedSalesTonnage >= 10) {
+    return "پتانسیل فروش بالا";
+  }
+
+  if (expectedSalesTonnage >= 5) {
+    return "پتانسیل فروش متوسط";
+  }
+
+  return "پتانسیل فروش محدود";
 }
 
 function RecommendationCard({
@@ -358,12 +440,63 @@ function RecommendationCard({
               </div>
             )}
 
-            <div className="mt-3 flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1.5 text-[11px] font-black text-blue-700">
-                <Target size={13} />
-                تناژ پیشنهادی:{" "}
-                {formatTonnage(
-                  customer.suggestedOrderTonnage,
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-3 py-2.5">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-600">
+                  <Target size={13} />
+                  تناژ پیشنهادی
+                </div>
+
+                <p className="mt-1 text-sm font-black text-blue-800">
+                  {formatTonnage(
+                    customer.suggestedOrderTonnage,
+                  )}
+                </p>
+              </div>
+
+              <div
+                className={`rounded-xl px-3 py-2.5 ${getProbabilityClass(
+                  customer.estimatedPurchaseProbability,
+                )}`}
+              >
+                <div className="flex items-center gap-1.5 text-[11px] font-bold">
+                  <TrendingUp size={13} />
+                  احتمال خرید
+                </div>
+
+                <p className="mt-1 text-sm font-black">
+                  {getProbabilityLabel(
+                    customer.estimatedPurchaseProbability,
+                  )}
+                </p>
+              </div>
+
+              <div
+                className={`rounded-xl border px-3 py-2.5 ${getExpectedSalesClass(
+                  customer.expectedSalesTonnage,
+                )}`}
+              >
+                <div className="flex items-center gap-1.5 text-[11px] font-bold">
+                  <Sparkles size={13} />
+                  فروش مورد انتظار
+                </div>
+
+                <p className="mt-1 text-sm font-black">
+                  {formatTonnage(
+                    customer.expectedSalesTonnage,
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-2">
+              <span
+                className={`inline-flex rounded-lg px-2.5 py-1.5 text-[11px] font-black ${getProbabilityClass(
+                  customer.estimatedPurchaseProbability,
+                )}`}
+              >
+                {getExpectedSalesLabel(
+                  customer.expectedSalesTonnage,
                 )}
               </span>
             </div>
@@ -516,17 +649,19 @@ export default function AIRecommendations() {
         const today =
           getTodayJalali();
 
-        const [result, targetReport] =
-          await Promise.all([
-            aiService.getDailyCustomerRecommendations(
-              5,
-            ),
+        const [
+          result,
+          targetReport,
+        ] = await Promise.all([
+          aiService.getDailyCustomerRecommendations(
+            5,
+          ),
 
-            reportTargetsService.getMonthlyReport(
-              today.year,
-              today.month,
-            ),
-          ]);
+          reportTargetsService.getMonthlyReport(
+            today.year,
+            today.month,
+          ),
+        ]);
 
         if (cancelled) {
           return;
@@ -574,11 +709,28 @@ export default function AIRecommendations() {
     };
   }, []);
 
+  const today =
+    getTodayJalali();
+
   const suggestedTonnage =
     recommendations.reduce(
-      (total, customer) =>
+      (
+        total,
+        customer,
+      ) =>
         total +
         customer.suggestedOrderTonnage,
+      0,
+    );
+
+  const expectedSalesTonnage =
+    recommendations.reduce(
+      (
+        total,
+        customer,
+      ) =>
+        total +
+        customer.expectedSalesTonnage,
       0,
     );
 
@@ -591,12 +743,50 @@ export default function AIRecommendations() {
 
   const targetCoverage =
     targetRemaining > 0
-      ? Math.min(
-          (suggestedTonnage /
-            targetRemaining) *
-            100,
-          100,
-        )
+      ? (suggestedTonnage /
+          targetRemaining) *
+        100
+      : 0;
+
+  const expectedSalesCoverage =
+    targetRemaining > 0
+      ? (expectedSalesTonnage /
+          targetRemaining) *
+        100
+      : 0;
+
+  const daysInCurrentMonth =
+    getDaysInJalaliMonth(
+      today.year,
+      today.month,
+    );
+
+  const remainingDays =
+    Math.max(
+      daysInCurrentMonth -
+        today.day,
+      0,
+    );
+
+  const dailyRequiredTonnage =
+    remainingDays > 0 &&
+    targetRemaining > 0
+      ? targetRemaining /
+        remainingDays
+      : 0;
+
+  const dailyNeedCoverage =
+    dailyRequiredTonnage > 0
+      ? (suggestedTonnage /
+          dailyRequiredTonnage) *
+        100
+      : 0;
+
+  const expectedDailyNeedCoverage =
+    dailyRequiredTonnage > 0
+      ? (expectedSalesTonnage /
+          dailyRequiredTonnage) *
+        100
       : 0;
 
   return (
@@ -616,9 +806,7 @@ export default function AIRecommendations() {
               </h2>
 
               <p className="mt-1 text-sm leading-6 text-slate-500">
-                پیشنهادها بر اساس سابقه فروش،
-                چرخه خرید، تناژ و فعالیت CRM
-                محاسبه می‌شوند.
+                پیشنهادها بر اساس سابقه فروش، چرخه خرید، تناژ، احتمال خرید و فعالیت CRM محاسبه می‌شوند.
               </p>
             </div>
           </div>
@@ -634,8 +822,7 @@ export default function AIRecommendations() {
 
         {!loading &&
           !error &&
-          monthlyTargetReport &&
-          recommendations.length > 0 ? (
+          monthlyTargetReport ? (
           <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
             <div className="mb-4 flex items-center gap-2">
               <Target
@@ -658,7 +845,7 @@ export default function AIRecommendations() {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <div className="rounded-xl bg-white p-3 shadow-sm">
                 <p className="text-[11px] font-bold text-slate-400">
                   هدف ماه
@@ -685,6 +872,18 @@ export default function AIRecommendations() {
 
               <div className="rounded-xl bg-white p-3 shadow-sm">
                 <p className="text-[11px] font-bold text-slate-400">
+                  باقی‌مانده هدف
+                </p>
+
+                <p className="mt-1 text-lg font-black text-amber-700">
+                  {formatTonnage(
+                    targetRemaining,
+                  )}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-white p-3 shadow-sm">
+                <p className="text-[11px] font-bold text-slate-400">
                   تناژ پیشنهادی امروز
                 </p>
 
@@ -697,41 +896,177 @@ export default function AIRecommendations() {
 
               <div className="rounded-xl bg-white p-3 shadow-sm">
                 <p className="text-[11px] font-bold text-slate-400">
-                  پوشش هدف باقی‌مانده
+                  فروش مورد انتظار
                 </p>
 
                 <p className="mt-1 text-lg font-black text-violet-700">
+                  {formatTonnage(
+                    expectedSalesTonnage,
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-[11px] font-bold text-slate-400">
+                  پوشش نظری هدف
+                </p>
+
+                <p className="mt-1 text-xl font-black text-blue-700">
                   {formatPercent(
                     targetCoverage,
                   )}
                   %
                 </p>
+
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  بر اساس کل تناژ پیشنهادی
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-4">
+                <p className="text-[11px] font-bold text-violet-600">
+                  پوشش مورد انتظار هدف
+                </p>
+
+                <p className="mt-1 text-xl font-black text-violet-800">
+                  {formatPercent(
+                    expectedSalesCoverage,
+                  )}
+                  %
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-violet-700/70">
+                  بر اساس فروش مورد انتظار
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+                <p className="text-[11px] font-bold text-emerald-600">
+                  پوشش نیاز روزانه مورد انتظار
+                </p>
+
+                <p className="mt-1 text-xl font-black text-emerald-800">
+                  {formatPercent(
+                    expectedDailyNeedCoverage,
+                  )}
+                  %
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-emerald-700/70">
+                  بر اساس فروش مورد انتظار
+                </p>
               </div>
             </div>
 
-            <div className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-400">
+                      روز باقی‌مانده تا پایان ماه
+                    </p>
+
+                    <p className="mt-1 text-xl font-black text-slate-800">
+                      {formatNumber(
+                        remainingDays,
+                      )}{" "}
+                      روز
+                    </p>
+                  </div>
+
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-50 text-slate-600">
+                    <CalendarClock size={18} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-bold text-slate-400">
+                      نیاز فروش روزانه
+                    </p>
+
+                    <p className="mt-1 text-xl font-black text-slate-800">
+                      {formatTonnage(
+                        dailyRequiredTonnage,
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                    <TrendingUp size={18} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-xs font-bold text-slate-500">
-                    باقی‌مانده هدف ماه
+                    پوشش نیاز روزانه توسط پیشنهادهای امروز
                   </p>
 
                   <p className="mt-1 text-sm font-black text-slate-800">
-                    {formatTonnage(
-                      targetRemaining,
+                    {formatPercent(
+                      dailyNeedCoverage,
                     )}
+                    %
                   </p>
                 </div>
 
                 <p className="text-xs leading-5 text-slate-500">
-                  این درصد فقط پوشش نظری هدف توسط
-                  پیشنهادهای{" "}
+                  این شاخص نشان می‌دهد تناژ پیشنهادی{" "}
                   {formatNumber(
                     recommendations.length,
                   )}{" "}
-                  مشتری منتخب AI است و پیش‌بینی قطعی فروش نیست.
+                  مشتری منتخب امروز، معادل چند درصد از نیاز متوسط یک روز فروش تا پایان ماه است.
                 </p>
               </div>
+
+              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className="h-full rounded-full bg-blue-500 transition-all duration-500"
+                  style={{
+                    width: `${Math.min(
+                      Math.max(
+                        dailyNeedCoverage,
+                        0,
+                      ),
+                      100,
+                    )}%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/60 px-4 py-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-bold text-violet-700">
+                    فروش مورد انتظار از ۵ تماس
+                  </p>
+
+                  <p className="mt-1 text-sm font-black text-violet-900">
+                    {formatTonnage(
+                      expectedSalesTonnage,
+                    )}
+                  </p>
+                </div>
+
+                <p className="text-xs leading-5 text-violet-700/80">
+                  این عدد حاصل‌ضرب تناژ پیشنهادی هر مشتری در احتمال تقریبی تبدیل تماس به سفارش است و پیش‌بینی قطعی فروش نیست.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+              <p className="text-xs leading-6 text-amber-800">
+                احتمال خرید و فروش مورد انتظار شاخص‌های تحلیلی موتور پیشنهاد فروش هستند و به معنی تضمین ثبت سفارش نیستند.
+              </p>
             </div>
           </div>
         ) : null}
@@ -754,15 +1089,11 @@ export default function AIRecommendations() {
           0 ? (
           <div className="rounded-2xl bg-slate-50 p-6 text-center">
             <p className="text-sm font-bold text-slate-700">
-              در حال حاضر پیشنهاد
-              هوشمندی برای نمایش وجود
-              ندارد.
+              در حال حاضر پیشنهاد هوشمندی برای نمایش وجود ندارد.
             </p>
 
             <p className="mt-1 text-xs text-slate-500">
-              با ثبت تماس، پیگیری و سفارش‌های
-              بیشتر، پیشنهادها دقیق‌تر
-              خواهند شد.
+              با ثبت تماس، پیگیری و سفارش‌های بیشتر، پیشنهادها دقیق‌تر خواهند شد.
             </p>
           </div>
         ) : (

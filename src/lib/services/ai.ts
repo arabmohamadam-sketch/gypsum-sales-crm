@@ -28,47 +28,48 @@ export interface AIRecommendedCustomer {
   customerId: string;
   customerName: string;
   phone: string | null;
-
   customerType: string;
   isVip: boolean;
-
   city: {
     id: string;
     name: string;
     region_id?: string | null;
   } | null;
-
   score: number;
   priority: AIRecommendationPriority;
-
   opportunityType: AIOpportunityType;
-
   inactivityDays: number;
   lifetimeTonnage: number;
-
   orderCount: number;
   callCount: number;
-
   lastOrderDate: string | null;
   lastCallDate: string | null;
-
   daysSinceLastOrder: number;
-
   hasPendingFollowUp: boolean;
   calledToday: boolean;
-
   averageOrderTonnage: number;
-
   averageOrderIntervalDays: number;
   expectedNextOrderDate: string | null;
   daysUntilExpectedOrder: number | null;
   isOrderDue: boolean;
-
   suggestedOrderTonnage: number;
+
+  /**
+   * احتمال تقریبی تبدیل تماس امروز به سفارش.
+   * این مقدار پیش‌بینی قطعی نیست و صرفاً برای رتبه‌بندی
+   * فرصت‌های فروش استفاده می‌شود.
+   */
+  estimatedPurchaseProbability: number;
+
+  /**
+   * فروش مورد انتظار از این تماس:
+   * suggestedOrderTonnage × estimatedPurchaseProbability
+   */
+  expectedSalesTonnage: number;
+
   suggestedAction: string;
   suggestedActionDescription: string;
   suggestedContactGoal: string;
-
   reasons: AIRecommendationReason[];
 }
 
@@ -80,7 +81,6 @@ interface CustomerRow {
   is_vip: boolean | null;
   city_id: string | null;
   created_at: string;
-
   city:
     | {
         id: string;
@@ -126,6 +126,15 @@ interface RegionPerformance {
   achievementRate: number;
 }
 
+interface PeerTonnageStats {
+  total: number;
+  count: number;
+}
+
+/* ==========================================
+   BASIC HELPERS
+   ========================================== */
+
 function formatTonnage(
   value: number,
 ): string {
@@ -135,6 +144,32 @@ function formatTonnage(
       maximumFractionDigits: 1,
     },
   ).format(value)} تن`;
+}
+
+function normalizeCustomerType(
+  value: string,
+): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
+}
+
+function isBuildingMaterialStore(
+  customerType: string,
+): boolean {
+  const normalizedType =
+    normalizeCustomerType(
+      customerType,
+    );
+
+  return (
+    normalizedType ===
+      "building_material_store" ||
+    normalizedType ===
+      "building_material_stores" ||
+    normalizedType.includes("مصالح")
+  );
 }
 
 function getCurrentGregorianPeriod(): {
@@ -172,7 +207,8 @@ function getTodayStart(): Date {
 }
 
 function getTomorrowStart(): Date {
-  const tomorrow = getTodayStart();
+  const tomorrow =
+    getTodayStart();
 
   tomorrow.setDate(
     tomorrow.getDate() + 1,
@@ -203,7 +239,9 @@ function calculateDaysSince(
     return 9999;
   }
 
-  const date = new Date(dateValue);
+  const date = new Date(
+    dateValue,
+  );
 
   if (Number.isNaN(date.getTime())) {
     return 9999;
@@ -221,6 +259,59 @@ function calculateDaysSince(
   );
 }
 
+function roundSuggestedTonnage(
+  value: number,
+): number {
+  if (
+    !Number.isFinite(value) ||
+    value <= 0
+  ) {
+    return 0;
+  }
+
+  return (
+    Math.round(value * 2) / 2
+  );
+}
+
+function roundProbability(
+  value: number,
+): number {
+  if (
+    !Number.isFinite(value)
+  ) {
+    return 0;
+  }
+
+  return Math.min(
+    1,
+    Math.max(
+      0,
+      Math.round(value * 100) / 100,
+    ),
+  );
+}
+
+function toNumber(
+  value:
+    | number
+    | string
+    | null
+    | undefined,
+): number {
+  const result = Number(
+    value ?? 0,
+  );
+
+  return Number.isFinite(result)
+    ? result
+    : 0;
+}
+
+/* ==========================================
+   ORDER CADENCE
+   ========================================== */
+
 function calculateAverageOrderIntervalDays(
   orders: OrderRow[],
 ): number {
@@ -231,7 +322,9 @@ function calculateAverageOrderIntervalDays(
   const dates = orders
     .map(
       (order) =>
-        new Date(order.order_date),
+        new Date(
+          order.order_date,
+        ),
     )
     .filter(
       (date) =>
@@ -368,36 +461,656 @@ function getPriority(
   return "low";
 }
 
-function roundSuggestedTonnage(
-  value: number,
+/* ==========================================
+   CUSTOMER TYPE
+   ========================================== */
+
+function getCustomerTypePriority(
+  customerType: string,
 ): number {
+  const normalizedType =
+    normalizeCustomerType(
+      customerType,
+    );
+
   if (
+    isBuildingMaterialStore(
+      customerType,
+    )
+  ) {
+    return 100;
+  }
+
+  if (
+    normalizedType ===
+      "distributor" ||
+    normalizedType ===
+      "distributor_company"
+  ) {
+    return 85;
+  }
+
+  if (
+    normalizedType ===
+      "contractor" ||
+    normalizedType ===
+      "contractor_company"
+  ) {
+    return 70;
+  }
+
+  if (
+    normalizedType ===
+      "employer" ||
+    normalizedType ===
+      "employers"
+  ) {
+    return 65;
+  }
+
+  if (
+    normalizedType ===
+      "plaster_worker" ||
+    normalizedType ===
+      "plasterer" ||
+    normalizedType ===
+      "plasterer_company"
+  ) {
+    return 50;
+  }
+
+  if (
+    normalizedType ===
+    "retailer"
+  ) {
+    return 40;
+  }
+
+  return 35;
+}
+
+/* ==========================================
+   PEER TONNAGE
+   ========================================== */
+
+function addPeerTonnage(
+  map: Map<
+    string,
+    PeerTonnageStats
+  >,
+  key: string,
+  value: number,
+): void {
+  if (
+    !key ||
     !Number.isFinite(value) ||
     value <= 0
+  ) {
+    return;
+  }
+
+  const existing =
+    map.get(key) ?? {
+      total: 0,
+      count: 0,
+    };
+
+  existing.total += value;
+  existing.count += 1;
+
+  map.set(
+    key,
+    existing,
+  );
+}
+
+function getPeerAverage(
+  map: Map<
+    string,
+    PeerTonnageStats
+  >,
+  key: string | null,
+  minimumSample = 2,
+): number {
+  if (!key) {
+    return 0;
+  }
+
+  const stats =
+    map.get(key);
+
+  if (
+    !stats ||
+    stats.count <
+      minimumSample
   ) {
     return 0;
   }
 
   return (
-    Math.round(value * 2) / 2
+    stats.total /
+    stats.count
   );
 }
+
+function buildPeerTonnageMaps(
+  customers: CustomerRow[],
+  ordersByCustomer: Map<
+    string,
+    OrderRow[]
+  >,
+): {
+  byTypeAndRegion: Map<
+    string,
+    PeerTonnageStats
+  >;
+  byType: Map<
+    string,
+    PeerTonnageStats
+  >;
+  byRegion: Map<
+    string,
+    PeerTonnageStats
+  >;
+  global: PeerTonnageStats;
+} {
+  const byTypeAndRegion =
+    new Map<
+      string,
+      PeerTonnageStats
+    >();
+
+  const byType =
+    new Map<
+      string,
+      PeerTonnageStats
+    >();
+
+  const byRegion =
+    new Map<
+      string,
+      PeerTonnageStats
+    >();
+
+  const global: PeerTonnageStats = {
+    total: 0,
+    count: 0,
+  };
+
+  for (const customer of customers) {
+    const customerOrders =
+      ordersByCustomer.get(
+        customer.id,
+      ) ?? [];
+
+    if (
+      customerOrders.length ===
+      0
+    ) {
+      continue;
+    }
+
+    const validTonnages =
+      customerOrders
+        .map(
+          (order) =>
+            Number(
+              order.total_tonnage ??
+                0,
+            ),
+        )
+        .filter(
+          (value) =>
+            Number.isFinite(
+              value,
+            ) &&
+            value > 0,
+        );
+
+    if (
+      validTonnages.length ===
+      0
+    ) {
+      continue;
+    }
+
+    const customerAverage =
+      validTonnages.reduce(
+        (sum, value) =>
+          sum + value,
+        0,
+      ) /
+      validTonnages.length;
+
+    const normalizedType =
+      normalizeCustomerType(
+        customer.customer_type,
+      );
+
+    const regionId =
+      customer.city?.region_id ??
+      null;
+
+    addPeerTonnage(
+      byType,
+      normalizedType,
+      customerAverage,
+    );
+
+    if (regionId) {
+      addPeerTonnage(
+        byRegion,
+        regionId,
+        customerAverage,
+      );
+
+      addPeerTonnage(
+        byTypeAndRegion,
+        `${normalizedType}:${regionId}`,
+        customerAverage,
+      );
+    }
+
+    global.total +=
+      customerAverage;
+
+    global.count += 1;
+  }
+
+  return {
+    byTypeAndRegion,
+    byType,
+    byRegion,
+    global,
+  };
+}
+
+function getCustomerPeerAverageTonnage(
+  customer: CustomerRow,
+  peerMaps: {
+    byTypeAndRegion: Map<
+      string,
+      PeerTonnageStats
+    >;
+    byType: Map<
+      string,
+      PeerTonnageStats
+    >;
+    byRegion: Map<
+      string,
+      PeerTonnageStats
+    >;
+    global: PeerTonnageStats;
+  },
+): number {
+  const normalizedType =
+    normalizeCustomerType(
+      customer.customer_type,
+    );
+
+  const regionId =
+    customer.city?.region_id ??
+    null;
+
+  if (regionId) {
+    const typeAndRegionAverage =
+      getPeerAverage(
+        peerMaps.byTypeAndRegion,
+        `${normalizedType}:${regionId}`,
+      );
+
+    if (
+      typeAndRegionAverage > 0
+    ) {
+      return typeAndRegionAverage;
+    }
+  }
+
+  const typeAverage =
+    getPeerAverage(
+      peerMaps.byType,
+      normalizedType,
+    );
+
+  if (typeAverage > 0) {
+    return typeAverage;
+  }
+
+  if (regionId) {
+    const regionAverage =
+      getPeerAverage(
+        peerMaps.byRegion,
+        regionId,
+      );
+
+    if (regionAverage > 0) {
+      return regionAverage;
+    }
+  }
+
+  if (
+    peerMaps.global.count >=
+    2
+  ) {
+    return (
+      peerMaps.global.total /
+      peerMaps.global.count
+    );
+  }
+
+  return 0;
+}
+
+/* ==========================================
+   SUGGESTED ORDER TONNAGE
+   ========================================== */
 
 function getSuggestedOrderTonnage(
   opportunityType: AIOpportunityType,
   averageOrderTonnage: number,
+  customerType: string,
+  isVip: boolean,
+  peerAverageOrderTonnage: number,
 ): number {
   if (
-    opportunityType ===
+    opportunityType !==
     "acquisition"
   ) {
-    return 0;
+    return roundSuggestedTonnage(
+      averageOrderTonnage,
+    );
+  }
+
+  const normalizedType =
+    normalizeCustomerType(
+      customerType,
+    );
+
+  let ruleBasedTonnage = 5;
+
+  if (
+    isBuildingMaterialStore(
+      customerType,
+    )
+  ) {
+    ruleBasedTonnage = 10;
+  } else if (
+    normalizedType ===
+      "distributor" ||
+    normalizedType ===
+      "distributor_company"
+  ) {
+    ruleBasedTonnage = 15;
+  } else if (
+    normalizedType ===
+      "contractor" ||
+    normalizedType ===
+      "contractor_company"
+  ) {
+    ruleBasedTonnage = 10;
+  } else if (
+    normalizedType ===
+      "employer" ||
+    normalizedType ===
+      "employers"
+  ) {
+    ruleBasedTonnage = 10;
+  } else if (
+    normalizedType ===
+      "plaster_worker" ||
+    normalizedType ===
+      "plasterer" ||
+    normalizedType ===
+      "plasterer_company"
+  ) {
+    ruleBasedTonnage = 5;
+  } else if (
+    normalizedType ===
+    "retailer"
+  ) {
+    ruleBasedTonnage = 5;
+  }
+
+  let suggestedTonnage =
+    peerAverageOrderTonnage >
+    0
+      ? peerAverageOrderTonnage
+      : ruleBasedTonnage;
+
+  suggestedTonnage =
+    Math.max(
+      5,
+      suggestedTonnage,
+    );
+
+  suggestedTonnage =
+    Math.min(
+      30,
+      suggestedTonnage,
+    );
+
+  if (
+    isVip &&
+    suggestedTonnage < 30
+  ) {
+    suggestedTonnage += 5;
   }
 
   return roundSuggestedTonnage(
-    averageOrderTonnage,
+    suggestedTonnage,
   );
 }
+
+/* ==========================================
+   PURCHASE PROBABILITY
+   ========================================== */
+
+function estimatePurchaseProbability(
+  customer: {
+    opportunityType: AIOpportunityType;
+    orderCount: number;
+    lifetimeTonnage: number;
+    averageOrderTonnage: number;
+    averageOrderIntervalDays: number;
+    daysSinceLastOrder: number;
+    daysUntilExpectedOrder: number | null;
+    isOrderDue: boolean;
+    isVip: boolean;
+    hasPendingFollowUp: boolean;
+    calledToday: boolean;
+    inactivityDays: number;
+    customerType: string;
+  },
+): number {
+  /*
+   * پایه:
+   * مشتری قدیمی به‌صورت طبیعی احتمال تبدیل
+   * بالاتری از مشتری کاملاً جدید دارد.
+   */
+  let probability =
+    customer.orderCount > 0
+      ? 0.45
+      : 0.25;
+
+  /* سابقه سفارش */
+  if (customer.orderCount >= 5) {
+    probability += 0.16;
+  } else if (
+    customer.orderCount >= 3
+  ) {
+    probability += 0.12;
+  } else if (
+    customer.orderCount >= 2
+  ) {
+    probability += 0.08;
+  } else if (
+    customer.orderCount === 1
+  ) {
+    probability += 0.04;
+  }
+
+  /* سابقه تناژ واقعی */
+  if (
+    customer.lifetimeTonnage >=
+    100
+  ) {
+    probability += 0.12;
+  } else if (
+    customer.lifetimeTonnage >=
+    50
+  ) {
+    probability += 0.09;
+  } else if (
+    customer.lifetimeTonnage >=
+    20
+  ) {
+    probability += 0.06;
+  } else if (
+    customer.lifetimeTonnage > 0
+  ) {
+    probability += 0.03;
+  }
+
+  /*
+   * مهم‌ترین عامل:
+   * اگر موعد خرید رسیده باشد،
+   * احتمال تبدیل تماس به سفارش بالا می‌رود.
+   */
+  if (customer.isOrderDue) {
+    probability += 0.20;
+  } else if (
+    customer.daysUntilExpectedOrder !==
+      null &&
+    customer.daysUntilExpectedOrder <=
+      3
+  ) {
+    probability += 0.15;
+  } else if (
+    customer.daysUntilExpectedOrder !==
+      null &&
+    customer.daysUntilExpectedOrder <=
+      7
+  ) {
+    probability += 0.09;
+  }
+
+  /* احیای مشتری */
+  if (
+    customer.opportunityType ===
+    "reactivation"
+  ) {
+    probability +=
+      customer.lifetimeTonnage >= 20
+        ? 0.10
+        : 0.06;
+  }
+
+  /* پیگیری باز */
+  if (
+    customer.hasPendingFollowUp
+  ) {
+    probability += 0.08;
+  }
+
+  /* VIP */
+  if (customer.isVip) {
+    probability += 0.06;
+  }
+
+  /* مصالح‌فروش */
+  if (
+    isBuildingMaterialStore(
+      customer.customerType,
+    )
+  ) {
+    probability += 0.05;
+  }
+
+  /*
+   * مشتری‌ای که بسیار تازه خرید کرده،
+   * احتمال سفارش فوری پایین‌تری دارد؛
+   * مگر اینکه موعد خرید رسیده باشد.
+   */
+  if (
+    customer.orderCount > 0 &&
+    customer.daysSinceLastOrder <=
+      3 &&
+    !customer.isOrderDue
+  ) {
+    probability -= 0.12;
+  } else if (
+    customer.orderCount > 0 &&
+    customer.daysSinceLastOrder <=
+      7 &&
+    !customer.isOrderDue
+  ) {
+    probability -= 0.05;
+  }
+
+  /*
+   * فاصله بسیار زیاد از خرید،
+   * بدون هیچ سیگنال دیگری، کمی احتمال تبدیل
+   * را کاهش می‌دهد. در احیای مشتری این کاهش کمتر است.
+   */
+  if (
+    customer.orderCount > 0 &&
+    customer.daysSinceLastOrder >=
+      120 &&
+    customer.opportunityType !==
+      "reactivation"
+  ) {
+    probability -= 0.08;
+  }
+
+  /*
+   * مشتری جدید:
+   * مصالح‌فروش بودن کمک می‌کند،
+   * اما بدون سابقه واقعی سقف احتمال محدود می‌ماند.
+   */
+  if (
+    customer.opportunityType ===
+    "acquisition"
+  ) {
+    if (
+      isBuildingMaterialStore(
+        customer.customerType,
+      )
+    ) {
+      probability = Math.max(
+        probability,
+        0.36,
+      );
+    }
+
+    probability = Math.min(
+      probability,
+      0.60,
+    );
+  }
+
+  if (customer.calledToday) {
+    probability *= 0.15;
+  }
+
+  /*
+   * احتمال نهایی بین 10٪ و 95٪ نگه داشته می‌شود.
+   * این عدد «پیش‌بینی قطعی» نیست؛
+   * صرفاً برای اولویت‌بندی تماس‌هاست.
+   */
+  return roundProbability(
+    Math.min(
+      0.95,
+      Math.max(
+        0.10,
+        probability,
+      ),
+    ),
+  );
+}
+
+/* ==========================================
+   SUGGESTED ACTION
+   ========================================== */
 
 function getSuggestedAction(
   opportunityType: AIOpportunityType,
@@ -421,7 +1134,6 @@ function getSuggestedAction(
     return {
       action:
         "احیای مشتری و سفارش مجدد",
-
       description: tonnage
         ? `مشتری از چرخه خرید فاصله گرفته است؛ برای فعال‌سازی مجدد و سفارش حدود ${tonnage} اقدام کن.`
         : "مشتری از چرخه خرید فاصله گرفته است؛ علت توقف خرید را بررسی و برای سفارش مجدد اقدام کن.",
@@ -436,7 +1148,6 @@ function getSuggestedAction(
       return {
         action:
           "گرفتن سفارش مجدد",
-
         description: tonnage
           ? `زمان مناسبی برای تماس است؛ سفارش بعدی مشتری می‌تواند حدود ${tonnage} باشد.`
           : "زمان مناسبی برای تماس و بررسی سفارش مجدد مشتری است.",
@@ -446,7 +1157,6 @@ function getSuggestedAction(
     return {
       action:
         "حفظ ارتباط با مشتری",
-
       description: tonnage
         ? `رابطه فروش را حفظ کن و نیاز مشتری برای سفارش حدود ${tonnage} را بررسی کن.`
         : "رابطه فروش را حفظ کن و نیاز جدید مشتری را بررسی کن.",
@@ -456,11 +1166,15 @@ function getSuggestedAction(
   return {
     action:
       "جذب مشتری جدید",
-
-    description:
-      "تماس اولیه را برای معرفی محصول، شناخت نیاز مشتری و ایجاد اولین سفارش انجام بده.",
+    description: tonnage
+      ? `تماس اولیه را برای معرفی محصول، شناخت نیاز مشتری و تلاش برای ایجاد سفارش حدود ${tonnage} انجام بده.`
+      : "تماس اولیه را برای معرفی محصول، شناخت نیاز مشتری و ایجاد اولین سفارش انجام بده.",
   };
 }
+
+/* ==========================================
+   CONTACT GOAL
+   ========================================== */
 
 function getSuggestedContactGoal(
   opportunityType: AIOpportunityType,
@@ -498,9 +1212,7 @@ function getSuggestedContactGoal(
       return `بررسی نیاز فعلی مشتری و تلاش برای ثبت سفارش بعدی حدود ${tonnage}`;
     }
 
-    if (
-      hasPendingFollowUp
-    ) {
+    if (hasPendingFollowUp) {
       return "پیگیری موضوع ثبت‌شده و تبدیل پیگیری به فرصت فروش";
     }
 
@@ -517,26 +1229,16 @@ function getSuggestedContactGoal(
     return "پیگیری موضوع باز و تلاش برای تبدیل مشتری به اولین سفارش";
   }
 
+  if (tonnage) {
+    return `معرفی محصول، شناخت نیاز مشتری و تلاش برای ثبت اولین سفارش حدود ${tonnage}`;
+  }
+
   return "معرفی محصول، شناخت نیاز مشتری و تلاش برای ثبت اولین سفارش";
 }
 
-function toNumber(
-  value:
-    | number
-    | string
-    | null
-    | undefined,
-): number {
-  const result = Number(
-    value ?? 0,
-  );
-
-  return Number.isFinite(
-    result,
-  )
-    ? result
-    : 0;
-}
+/* ==========================================
+   REGION PERFORMANCE
+   ========================================== */
 
 function buildRegionPerformanceMap(
   targets: MonthlyRegionTargetRow[],
@@ -632,7 +1334,8 @@ function getRegionTargetScore(
 } {
   if (
     !regionPerformance ||
-    regionPerformance.targetTonnage <= 0
+    regionPerformance.targetTonnage <=
+      0
   ) {
     return {
       points: 0,
@@ -649,13 +1352,12 @@ function getRegionTargetScore(
       reason: {
         code:
           "region_target_critical",
-        title:
-          `منطقه از هدف ماهانه عقب است؛ تحقق ${new Intl.NumberFormat(
-            "fa-IR",
-            {
-              maximumFractionDigits: 1,
-            },
-          ).format(rate * 100)}٪`,
+        title: `منطقه از هدف ماهانه عقب است؛ تحقق ${new Intl.NumberFormat(
+          "fa-IR",
+          {
+            maximumFractionDigits: 1,
+          },
+        ).format(rate * 100)}٪`,
         points: 12,
       },
     };
@@ -667,13 +1369,12 @@ function getRegionTargetScore(
       reason: {
         code:
           "region_target_behind",
-        title:
-          `منطقه از هدف ماهانه عقب است؛ تحقق ${new Intl.NumberFormat(
-            "fa-IR",
-            {
-              maximumFractionDigits: 1,
-            },
-          ).format(rate * 100)}٪`,
+        title: `منطقه از هدف ماهانه عقب است؛ تحقق ${new Intl.NumberFormat(
+          "fa-IR",
+          {
+            maximumFractionDigits: 1,
+          },
+        ).format(rate * 100)}٪`,
         points: 8,
       },
     };
@@ -685,13 +1386,12 @@ function getRegionTargetScore(
       reason: {
         code:
           "region_target_need",
-        title:
-          `نیاز به تقویت فروش منطقه؛ تحقق ${new Intl.NumberFormat(
-            "fa-IR",
-            {
-              maximumFractionDigits: 1,
-            },
-          ).format(rate * 100)}٪`,
+        title: `نیاز به تقویت فروش منطقه؛ تحقق ${new Intl.NumberFormat(
+          "fa-IR",
+          {
+            maximumFractionDigits: 1,
+          },
+        ).format(rate * 100)}٪`,
         points: 4,
       },
     };
@@ -702,6 +1402,308 @@ function getRegionTargetScore(
     reason: null,
   };
 }
+
+/* ==========================================
+   SALES PRIORITY
+   ========================================== */
+
+function getTonnagePriority(
+  suggestedOrderTonnage: number,
+): number {
+  if (
+    !Number.isFinite(
+      suggestedOrderTonnage,
+    ) ||
+    suggestedOrderTonnage <= 0
+  ) {
+    return 0;
+  }
+
+  return Math.min(
+    100,
+    (suggestedOrderTonnage / 20) *
+      100,
+  );
+}
+
+function getRegionNeedPriority(
+  regionPerformance:
+    | RegionPerformance
+    | undefined,
+): number {
+  if (
+    !regionPerformance ||
+    regionPerformance.targetTonnage <=
+      0
+  ) {
+    return 0;
+  }
+
+  const rate = Math.max(
+    0,
+    regionPerformance.achievementRate,
+  );
+
+  if (rate <= 0) {
+    return 100;
+  }
+
+  if (rate < 0.25) {
+    return 85;
+  }
+
+  if (rate < 0.5) {
+    return 65;
+  }
+
+  if (rate < 0.75) {
+    return 40;
+  }
+
+  if (rate < 1) {
+    return 20;
+  }
+
+  return 0;
+}
+
+function getContactTimingPriority(
+  opportunityType: AIOpportunityType,
+  isOrderDue: boolean,
+  daysUntilExpectedOrder:
+    | number
+    | null,
+  hasPendingFollowUp: boolean,
+): number {
+  if (isOrderDue) {
+    return 100;
+  }
+
+  if (
+    daysUntilExpectedOrder !==
+      null &&
+    daysUntilExpectedOrder <= 3
+  ) {
+    return 90;
+  }
+
+  if (
+    daysUntilExpectedOrder !==
+      null &&
+    daysUntilExpectedOrder <= 7
+  ) {
+    return 75;
+  }
+
+  if (
+    opportunityType ===
+    "reactivation"
+  ) {
+    return 70;
+  }
+
+  if (hasPendingFollowUp) {
+    return 65;
+  }
+
+  if (
+    opportunityType ===
+    "acquisition"
+  ) {
+    return 50;
+  }
+
+  return 35;
+}
+
+function getPurchaseHistoryPriority(
+  customer: AIRecommendedCustomer,
+): number {
+  if (
+    customer.orderCount >= 5
+  ) {
+    return 100;
+  }
+
+  if (
+    customer.orderCount >= 3
+  ) {
+    return 90;
+  }
+
+  if (
+    customer.orderCount >= 2
+  ) {
+    return 80;
+  }
+
+  if (
+    customer.orderCount === 1
+  ) {
+    return 65;
+  }
+
+  return 30;
+}
+
+function getSalesOpportunityPriority(
+  customer: AIRecommendedCustomer,
+): number {
+  if (
+    customer.opportunityType ===
+    "reactivation"
+  ) {
+    return 95;
+  }
+
+  if (
+    customer.opportunityType ===
+      "retention" &&
+    customer.isOrderDue
+  ) {
+    return 100;
+  }
+
+  if (
+    customer.opportunityType ===
+    "retention"
+  ) {
+    return 75;
+  }
+
+  return 40;
+}
+
+function getExpectedSalesPriority(
+  customer: AIRecommendedCustomer,
+): number {
+  if (
+    customer.expectedSalesTonnage <=
+    0
+  ) {
+    return 0;
+  }
+
+  /*
+   * 10 تن فروش مورد انتظار = 100 امتیاز پایه
+   */
+  return Math.min(
+    100,
+    (customer.expectedSalesTonnage /
+      10) *
+      100,
+  );
+}
+
+function calculateSalesPriority(
+  customer: AIRecommendedCustomer,
+  regionPriority: number,
+): number {
+  const customerTypePriority =
+    getCustomerTypePriority(
+      customer.customerType,
+    );
+
+  const tonnagePriority =
+    getTonnagePriority(
+      customer.suggestedOrderTonnage,
+    );
+
+  const timingPriority =
+    getContactTimingPriority(
+      customer.opportunityType,
+      customer.isOrderDue,
+      customer.daysUntilExpectedOrder,
+      customer.hasPendingFollowUp,
+    );
+
+  const purchaseHistoryPriority =
+    getPurchaseHistoryPriority(
+      customer,
+    );
+
+  const salesOpportunityPriority =
+    getSalesOpportunityPriority(
+      customer,
+    );
+
+  const expectedSalesPriority =
+    getExpectedSalesPriority(
+      customer,
+    );
+
+  /*
+   * فروش مورد انتظار: 40%
+   * سابقه خرید واقعی: 20%
+   * زمان مناسب تماس: 15%
+   * نیاز منطقه: 10%
+   * تناژ پیشنهادی خام: 5%
+   * نوع مشتری: 5%
+   * نوع فرصت فروش: 5%
+   */
+
+  let priority =
+    expectedSalesPriority * 0.4 +
+    purchaseHistoryPriority * 0.2 +
+    timingPriority * 0.15 +
+    regionPriority * 0.1 +
+    tonnagePriority * 0.05 +
+    customerTypePriority * 0.05 +
+    salesOpportunityPriority *
+      0.05;
+
+  /*
+   * مشتری دارای سابقه که موعد خریدش رسیده،
+   * یک تقویت اضافه دریافت می‌کند.
+   */
+  if (
+    customer.orderCount > 0 &&
+    customer.isOrderDue
+  ) {
+    priority += 7;
+  }
+
+  /*
+   * مشتری قدیمی با سابقه تناژ بالا
+   * در احیا ارزش بیشتری دارد.
+   */
+  if (
+    customer.opportunityType ===
+      "reactivation" &&
+    customer.lifetimeTonnage > 0
+  ) {
+    priority += Math.min(
+      6,
+      customer.lifetimeTonnage /
+        15,
+    );
+  }
+
+  /*
+   * مصالح‌فروش جدید همچنان فرصت مهمی است.
+   */
+  if (
+    customer.opportunityType ===
+      "acquisition" &&
+    isBuildingMaterialStore(
+      customer.customerType,
+    )
+  ) {
+    priority += 2;
+  }
+
+  return Math.min(
+    100,
+    Math.max(
+      0,
+      priority,
+    ),
+  );
+}
+
+/* ==========================================
+   ERROR HANDLING
+   ========================================== */
 
 function getErrorMessage(
   error: unknown,
@@ -752,6 +1754,10 @@ function logAIError(
   );
 }
 
+/* ==========================================
+   AI SERVICE
+   ========================================== */
+
 export const aiService = {
   async getDailyCustomerRecommendations(
     limit = 5,
@@ -771,16 +1777,16 @@ export const aiService = {
       createSupabaseClient();
 
     try {
-      // ==========================================
-      // CURRENT MONTH
-      // ==========================================
+      /* ==========================================
+         CURRENT MONTH
+         ========================================== */
 
       const currentPeriod =
         getCurrentGregorianPeriod();
 
-      // ==========================================
-      // CUSTOMERS
-      // ==========================================
+      /* ==========================================
+         CUSTOMERS
+         ========================================== */
 
       const {
         data: customers,
@@ -834,9 +1840,9 @@ export const aiService = {
         return [];
       }
 
-      // ==========================================
-      // CONFIRMED ORDERS
-      // ==========================================
+      /* ==========================================
+         CONFIRMED ORDERS
+         ========================================== */
 
       const {
         data: orders,
@@ -878,11 +1884,12 @@ export const aiService = {
       }
 
       const orderRows =
-        (orders ?? []) as OrderRow[];
+        (orders ??
+          []) as OrderRow[];
 
-      // ==========================================
-      // CALLS
-      // ==========================================
+      /* ==========================================
+         CALLS
+         ========================================== */
 
       const {
         data: calls,
@@ -919,11 +1926,12 @@ export const aiService = {
       }
 
       const callRows =
-        (calls ?? []) as CallRow[];
+        (calls ??
+          []) as CallRow[];
 
-      // ==========================================
-      // FOLLOW UPS
-      // ==========================================
+      /* ==========================================
+         FOLLOW UPS
+         ========================================== */
 
       const {
         data: followUps,
@@ -964,9 +1972,9 @@ export const aiService = {
         (followUps ??
           []) as FollowUpRow[];
 
-      // ==========================================
-      // MONTHLY REGION TARGETS
-      // ==========================================
+      /* ==========================================
+         MONTHLY TARGETS
+         ========================================== */
 
       const {
         data: monthlyTargets,
@@ -1002,6 +2010,10 @@ export const aiService = {
 
         throw monthlyTargetsError;
       }
+
+      /* ==========================================
+         MONTHLY PROGRESS
+         ========================================== */
 
       const {
         data: monthlyProgress,
@@ -1052,9 +2064,9 @@ export const aiService = {
           monthlyProgressRows,
         );
 
-      // ==========================================
-      // INDEX
-      // ==========================================
+      /* ==========================================
+         INDEX
+         ========================================== */
 
       const ordersByCustomer =
         new Map<
@@ -1103,7 +2115,8 @@ export const aiService = {
       }
 
       for (
-        const followUp of followUpRows
+        const followUp of
+        followUpRows
       ) {
         const list =
           followUpsByCustomer.get(
@@ -1118,9 +2131,19 @@ export const aiService = {
         );
       }
 
-      // ==========================================
-      // CALCULATE
-      // ==========================================
+      /* ==========================================
+         PEER TONNAGE INDEX
+         ========================================== */
+
+      const peerTonnageMaps =
+        buildPeerTonnageMaps(
+          customerRows,
+          ordersByCustomer,
+        );
+
+      /* ==========================================
+         CALCULATE
+         ========================================== */
 
       const recommendations =
         customerRows.map(
@@ -1213,16 +2236,15 @@ export const aiService = {
                     0,
               );
 
-            const activityDates =
-              [
-                lastOrderDate,
-                lastCallDate,
-              ].filter(
-                (
-                  value,
-                ): value is string =>
-                  Boolean(value),
-              );
+            const activityDates = [
+              lastOrderDate,
+              lastCallDate,
+            ].filter(
+              (
+                value,
+              ): value is string =>
+                Boolean(value),
+            );
 
             const lastActivityDate =
               activityDates.length >
@@ -1267,8 +2289,7 @@ export const aiService = {
               );
 
             const regionId =
-              customer.city
-                ?.region_id ??
+              customer.city?.region_id ??
               null;
 
             const regionPerformance =
@@ -1283,14 +2304,34 @@ export const aiService = {
                 regionPerformance,
               );
 
+            const peerAverageOrderTonnage =
+              opportunityType ===
+              "acquisition"
+                ? getCustomerPeerAverageTonnage(
+                    customer,
+                    peerTonnageMaps,
+                  )
+                : 0;
+
+            const suggestedOrderTonnage =
+              getSuggestedOrderTonnage(
+                opportunityType,
+                averageOrderTonnage,
+                customer.customer_type,
+                Boolean(
+                  customer.is_vip,
+                ),
+                peerAverageOrderTonnage,
+              );
+
             const reasons: AIRecommendationReason[] =
               [];
 
             let score = 0;
 
-            // ==========================================
-            // PURCHASE HISTORY
-            // ==========================================
+            /* ==========================================
+               PURCHASE HISTORY
+               ========================================== */
 
             if (orderCount >= 5) {
               score += 20;
@@ -1322,8 +2363,7 @@ export const aiService = {
               reasons.push({
                 code:
                   "purchase_history_2",
-                title:
-                  `${orderCount} سفارش تأییدشده`,
+                title: `${orderCount} سفارش تأییدشده`,
                 points: 14,
               });
             } else if (
@@ -1340,9 +2380,9 @@ export const aiService = {
               });
             }
 
-            // ==========================================
-            // LIFETIME TONNAGE
-            // ==========================================
+            /* ==========================================
+               LIFETIME TONNAGE
+               ========================================== */
 
             if (
               lifetimeTonnage >=
@@ -1353,10 +2393,9 @@ export const aiService = {
               reasons.push({
                 code:
                   "lifetime_100",
-                title:
-                  `سابقه خرید ${formatTonnage(
-                    lifetimeTonnage,
-                  )}`,
+                title: `سابقه خرید ${formatTonnage(
+                  lifetimeTonnage,
+                )}`,
                 points: 28,
               });
             } else if (
@@ -1368,10 +2407,9 @@ export const aiService = {
               reasons.push({
                 code:
                   "lifetime_50",
-                title:
-                  `سابقه خرید ${formatTonnage(
-                    lifetimeTonnage,
-                  )}`,
+                title: `سابقه خرید ${formatTonnage(
+                  lifetimeTonnage,
+                )}`,
                 points: 23,
               });
             } else if (
@@ -1383,10 +2421,9 @@ export const aiService = {
               reasons.push({
                 code:
                   "lifetime_20",
-                title:
-                  `سابقه خرید ${formatTonnage(
-                    lifetimeTonnage,
-                  )}`,
+                title: `سابقه خرید ${formatTonnage(
+                  lifetimeTonnage,
+                )}`,
                 points: 20,
               });
             } else if (
@@ -1398,10 +2435,9 @@ export const aiService = {
               reasons.push({
                 code:
                   "lifetime_10",
-                title:
-                  `سابقه خرید ${formatTonnage(
-                    lifetimeTonnage,
-                  )}`,
+                title: `سابقه خرید ${formatTonnage(
+                  lifetimeTonnage,
+                )}`,
                 points: 14,
               });
             } else if (
@@ -1412,17 +2448,16 @@ export const aiService = {
               reasons.push({
                 code:
                   "lifetime_positive",
-                title:
-                  `سابقه خرید ${formatTonnage(
-                    lifetimeTonnage,
-                  )}`,
+                title: `سابقه خرید ${formatTonnage(
+                  lifetimeTonnage,
+                )}`,
                 points: 8,
               });
             }
 
-            // ==========================================
-            // PURCHASE CADENCE
-            // ==========================================
+            /* ==========================================
+               PURCHASE CADENCE
+               ========================================== */
 
             if (isOrderDue) {
               score += 25;
@@ -1466,9 +2501,9 @@ export const aiService = {
               });
             }
 
-            // ==========================================
-            // RECENCY GAP
-            // ==========================================
+            /* ==========================================
+               RECENCY GAP
+               ========================================== */
 
             if (
               orderCount > 0
@@ -1528,9 +2563,9 @@ export const aiService = {
               }
             }
 
-            // ==========================================
-            // AVERAGE ORDER TONNAGE
-            // ==========================================
+            /* ==========================================
+               AVERAGE ORDER TONNAGE
+               ========================================== */
 
             if (
               averageOrderTonnage >=
@@ -1541,10 +2576,9 @@ export const aiService = {
               reasons.push({
                 code:
                   "avg_order_20",
-                title:
-                  `میانگین سفارش ${formatTonnage(
-                    averageOrderTonnage,
-                  )}`,
+                title: `میانگین سفارش ${formatTonnage(
+                  averageOrderTonnage,
+                )}`,
                 points: 12,
               });
             } else if (
@@ -1556,17 +2590,36 @@ export const aiService = {
               reasons.push({
                 code:
                   "avg_order_10",
-                title:
-                  `میانگین سفارش ${formatTonnage(
-                    averageOrderTonnage,
-                  )}`,
+                title: `میانگین سفارش ${formatTonnage(
+                  averageOrderTonnage,
+                )}`,
                 points: 8,
               });
             }
 
-            // ==========================================
-            // VIP
-            // ==========================================
+            /* ==========================================
+               CUSTOMER TYPE
+               ========================================== */
+
+            if (
+              isBuildingMaterialStore(
+                customer.customer_type,
+              )
+            ) {
+              score += 15;
+
+              reasons.push({
+                code:
+                  "building_material_store",
+                title:
+                  "مصالح‌فروش؛ مشتری اصلی شرکت",
+                points: 15,
+              });
+            }
+
+            /* ==========================================
+               VIP
+               ========================================== */
 
             if (customer.is_vip) {
               score += 12;
@@ -1580,9 +2633,9 @@ export const aiService = {
               });
             }
 
-            // ==========================================
-            // FOLLOW-UP
-            // ==========================================
+            /* ==========================================
+               FOLLOW-UP
+               ========================================== */
 
             if (
               hasPendingFollowUp
@@ -1598,9 +2651,9 @@ export const aiService = {
               });
             }
 
-            // ==========================================
-            // TODAY CALL STATUS
-            // ==========================================
+            /* ==========================================
+               TODAY CALL STATUS
+               ========================================== */
 
             if (calledToday) {
               score -= 35;
@@ -1624,9 +2677,9 @@ export const aiService = {
               });
             }
 
-            // ==========================================
-            // OPPORTUNITY TYPE
-            // ==========================================
+            /* ==========================================
+               OPPORTUNITY TYPE
+               ========================================== */
 
             if (
               opportunityType ===
@@ -1674,9 +2727,9 @@ export const aiService = {
               });
             }
 
-            // ==========================================
-            // REGION MONTHLY TARGET
-            // ==========================================
+            /* ==========================================
+               REGION MONTHLY TARGET
+               ========================================== */
 
             if (
               regionTargetScore.points >
@@ -1694,9 +2747,9 @@ export const aiService = {
               }
             }
 
-            // ==========================================
-            // VERY RECENT ORDER
-            // ==========================================
+            /* ==========================================
+               VERY RECENT ORDER
+               ========================================== */
 
             if (
               orderCount > 0 &&
@@ -1759,11 +2812,75 @@ export const aiService = {
             const priority =
               getPriority(score);
 
-            const suggestedOrderTonnage =
-              getSuggestedOrderTonnage(
-                opportunityType,
-                averageOrderTonnage,
+            const estimatedPurchaseProbability =
+              estimatePurchaseProbability(
+                {
+                  opportunityType,
+                  orderCount,
+                  lifetimeTonnage,
+                  averageOrderTonnage,
+                  averageOrderIntervalDays,
+                  daysSinceLastOrder,
+                  daysUntilExpectedOrder,
+                  isOrderDue,
+                  isVip:
+                    Boolean(
+                      customer.is_vip,
+                    ),
+                  hasPendingFollowUp,
+                  calledToday,
+                  inactivityDays,
+                  customerType:
+                    customer.customer_type,
+                },
               );
+
+            const expectedSalesTonnage =
+              roundSuggestedTonnage(
+                suggestedOrderTonnage *
+                  estimatedPurchaseProbability,
+              );
+
+            /*
+             * دلایل مهم فروش مورد انتظار
+             */
+            if (
+              estimatedPurchaseProbability >=
+              0.75
+            ) {
+              reasons.push({
+                code:
+                  "high_purchase_probability",
+                title:
+                  "احتمال تبدیل تماس به سفارش بالاست",
+                points: 12,
+              });
+            } else if (
+              estimatedPurchaseProbability >=
+              0.55
+            ) {
+              reasons.push({
+                code:
+                  "medium_purchase_probability",
+                title:
+                  "احتمال مناسبی برای تبدیل تماس به سفارش دارد",
+                points: 8,
+              });
+            }
+
+            if (
+              expectedSalesTonnage >=
+              10
+            ) {
+              reasons.push({
+                code:
+                  "high_expected_sales",
+                title: `فروش مورد انتظار حدود ${formatTonnage(
+                  expectedSalesTonnage,
+                )}`,
+                points: 10,
+              });
+            }
 
             const suggestedAction =
               getSuggestedAction(
@@ -1803,6 +2920,7 @@ export const aiService = {
                 customer.city,
 
               score,
+
               priority,
 
               opportunityType,
@@ -1812,14 +2930,17 @@ export const aiService = {
               lifetimeTonnage,
 
               orderCount,
+
               callCount,
 
               lastOrderDate,
+
               lastCallDate,
 
               daysSinceLastOrder,
 
               hasPendingFollowUp,
+
               calledToday,
 
               averageOrderTonnage,
@@ -1833,6 +2954,10 @@ export const aiService = {
               isOrderDue,
 
               suggestedOrderTonnage,
+
+              estimatedPurchaseProbability,
+
+              expectedSalesTonnage,
 
               suggestedAction:
                 suggestedAction.action,
@@ -1857,93 +2982,285 @@ export const aiService = {
           },
         );
 
-      return recommendations
-        .filter(
+      /* ==========================================
+         FINAL SALES-FOCUSED RANKING
+         ========================================== */
+
+      const eligibleRecommendations =
+        recommendations.filter(
           (customer) =>
             !customer.calledToday,
-        )
-        .sort(
-          (a, b) => {
-            if (
-              b.score !==
-              a.score
-            ) {
+        );
+
+      const salesCandidates =
+        eligibleRecommendations
+          .filter(
+            (customer) =>
+              customer
+                .suggestedOrderTonnage >
+              0,
+          )
+          .sort(
+            (a, b) => {
+              const aRegionPriority =
+                getRegionNeedPriority(
+                  a.city?.region_id
+                    ? regionPerformanceMap.get(
+                        a.city
+                          .region_id,
+                      )
+                    : undefined,
+                );
+
+              const bRegionPriority =
+                getRegionNeedPriority(
+                  b.city?.region_id
+                    ? regionPerformanceMap.get(
+                        b.city
+                          .region_id,
+                      )
+                    : undefined,
+                );
+
+              const aSalesPriority =
+                calculateSalesPriority(
+                  a,
+                  aRegionPriority,
+                );
+
+              const bSalesPriority =
+                calculateSalesPriority(
+                  b,
+                  bRegionPriority,
+                );
+
+              if (
+                bSalesPriority !==
+                aSalesPriority
+              ) {
+                return (
+                  bSalesPriority -
+                  aSalesPriority
+                );
+              }
+
+              /*
+               * اگر امتیاز نهایی نزدیک باشد،
+               * فروش مورد انتظار معیار اصلی دوم است.
+               */
+              if (
+                b.expectedSalesTonnage !==
+                a.expectedSalesTonnage
+              ) {
+                return (
+                  b.expectedSalesTonnage -
+                  a.expectedSalesTonnage
+                );
+              }
+
+              if (
+                b.isOrderDue !==
+                a.isOrderDue
+              ) {
+                return b.isOrderDue
+                  ? -1
+                  : 1;
+              }
+
+              if (
+                b.orderCount !==
+                a.orderCount
+              ) {
+                return (
+                  b.orderCount -
+                  a.orderCount
+                );
+              }
+
+              if (
+                b.lifetimeTonnage !==
+                a.lifetimeTonnage
+              ) {
+                return (
+                  b.lifetimeTonnage -
+                  a.lifetimeTonnage
+                );
+              }
+
+              if (
+                Number(b.isVip) !==
+                Number(a.isVip)
+              ) {
+                return (
+                  Number(b.isVip) -
+                  Number(a.isVip)
+                );
+              }
+
+              if (
+                b.suggestedOrderTonnage !==
+                a.suggestedOrderTonnage
+              ) {
+                return (
+                  b.suggestedOrderTonnage -
+                  a.suggestedOrderTonnage
+                );
+              }
+
               return (
-                b.score -
+                b.inactivityDays -
+                a.inactivityDays
+              );
+            },
+          );
+
+      const salesCandidateIds =
+        new Set(
+          salesCandidates.map(
+            (customer) =>
+              customer.customerId,
+          ),
+        );
+
+      const supportCandidates =
+        eligibleRecommendations
+          .filter(
+            (customer) =>
+              !salesCandidateIds.has(
+                customer.customerId,
+              ),
+          )
+          .sort(
+            (a, b) => {
+              const aRegionPriority =
+                getRegionNeedPriority(
+                  a.city?.region_id
+                    ? regionPerformanceMap.get(
+                        a.city
+                          .region_id,
+                      )
+                    : undefined,
+                );
+
+              const bRegionPriority =
+                getRegionNeedPriority(
+                  b.city?.region_id
+                    ? regionPerformanceMap.get(
+                        b.city
+                          .region_id,
+                      )
+                    : undefined,
+                );
+
+              if (
+                bRegionPriority !==
+                aRegionPriority
+              ) {
+                return (
+                  bRegionPriority -
+                  aRegionPriority
+                );
+              }
+
+              const aStore =
+                isBuildingMaterialStore(
+                  a.customerType,
+                );
+
+              const bStore =
+                isBuildingMaterialStore(
+                  b.customerType,
+                );
+
+              if (
+                aStore !== bStore
+              ) {
+                return aStore
+                  ? -1
+                  : 1;
+              }
+
+              if (
+                Number(b.isVip) !==
+                Number(a.isVip)
+              ) {
+                return (
+                  Number(b.isVip) -
+                  Number(a.isVip)
+                );
+              }
+
+              if (
+                Number(
+                  b.hasPendingFollowUp,
+                ) !==
+                Number(
+                  a.hasPendingFollowUp,
+                )
+              ) {
+                return (
+                  Number(
+                    b.hasPendingFollowUp,
+                  ) -
+                  Number(
+                    a.hasPendingFollowUp,
+                  )
+                );
+              }
+
+              if (
+                b.expectedSalesTonnage !==
+                a.expectedSalesTonnage
+              ) {
+                return (
+                  b.expectedSalesTonnage -
+                  a.expectedSalesTonnage
+                );
+              }
+
+              if (
+                b.score !==
                 a.score
-              );
-            }
+              ) {
+                return (
+                  b.score -
+                  a.score
+                );
+              }
 
-            const aDue =
-              a.isOrderDue
-                ? 1
-                : 0;
+              if (
+                b.isOrderDue !==
+                a.isOrderDue
+              ) {
+                return b.isOrderDue
+                  ? -1
+                  : 1;
+              }
 
-            const bDue =
-              b.isOrderDue
-                ? 1
-                : 0;
+              if (
+                b.inactivityDays !==
+                a.inactivityDays
+              ) {
+                return (
+                  b.inactivityDays -
+                  a.inactivityDays
+                );
+              }
 
-            if (
-              bDue !==
-              aDue
-            ) {
-              return (
-                bDue -
-                aDue
-              );
-            }
-
-            if (
-              b.lifetimeTonnage !==
-              a.lifetimeTonnage
-            ) {
               return (
                 b.lifetimeTonnage -
                 a.lifetimeTonnage
               );
-            }
+            },
+          );
 
-            if (
-              b.orderCount !==
-              a.orderCount
-            ) {
-              return (
-                b.orderCount -
-                a.orderCount
-              );
-            }
-
-            if (
-              b.daysSinceLastOrder !==
-              a.daysSinceLastOrder
-            ) {
-              return (
-                b.daysSinceLastOrder -
-                a.daysSinceLastOrder
-              );
-            }
-
-            if (
-              Number(b.isVip) !==
-              Number(a.isVip)
-            ) {
-              return (
-                Number(b.isVip) -
-                Number(a.isVip)
-              );
-            }
-
-            return (
-              b.inactivityDays -
-              a.inactivityDays
-            );
-          },
-        )
-        .slice(
-          0,
-          safeLimit,
-        );
+      return [
+        ...salesCandidates,
+        ...supportCandidates,
+      ].slice(
+        0,
+        safeLimit,
+      );
     } catch (error) {
       logAIError(
         "RECOMMENDATIONS",
