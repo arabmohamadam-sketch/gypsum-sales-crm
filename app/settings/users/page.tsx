@@ -1,11 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   ArrowRight,
@@ -17,9 +13,7 @@ import {
   UserX,
 } from "lucide-react";
 
-import {
-  usePermissions,
-} from "@/src/lib/hooks/usePermissions";
+import { usePermissions } from "@/src/lib/hooks/usePermissions";
 
 import {
   userManagementService,
@@ -44,9 +38,7 @@ function getErrorMessage(error: unknown): string {
   return "خطا در انجام عملیات.";
 }
 
-function formatLastLogin(
-  value: string | null
-): string {
+function formatLastLogin(value: string | null): string {
   if (!value) {
     return "هنوز وارد نشده";
   }
@@ -64,6 +56,17 @@ function formatLastLogin(
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+/*
+ * این تابع pure است و هیچ stateای را تغییر نمی‌دهد.
+ * بنابراین می‌تواند از داخل useEffect استفاده شود.
+ */
+function fetchUserManagementData() {
+  return Promise.all([
+    userManagementService.getUsers(),
+    userManagementService.getRoles(),
+  ]);
 }
 
 export default function SettingsUsersPage() {
@@ -89,11 +92,62 @@ export default function SettingsUsersPage() {
     "all" | "active" | "inactive"
   >("all");
 
+  /*
+   * بارگذاری اولیه.
+   * useEffect مستقیماً state را تغییر نمی‌دهد؛
+   * تمام setStateها داخل then/catch/finally اجرا می‌شوند.
+   */
+  useEffect(() => {
+    if (permissionsLoading || !canReadUsers) {
+      return;
+    }
+
+    let cancelled = false;
+
+    fetchUserManagementData()
+      .then(([usersData, rolesData]) => {
+        if (cancelled) {
+          return;
+        }
+
+        setUsers(usersData);
+        setRoles(rolesData);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) {
+          return;
+        }
+
+        console.error(
+          "Failed to load user management:",
+          err
+        );
+
+        setError(getErrorMessage(err));
+        setUsers([]);
+        setRoles([]);
+      })
+      .finally(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [permissionsLoading, canReadUsers]);
+
+  /*
+   * بروزرسانی دستی.
+   * چون از event handler فراخوانی می‌شود،
+   * تغییر state در این تابع مجاز است.
+   */
   async function loadData() {
     if (!canReadUsers) {
-      setUsers([]);
-      setRoles([]);
-      setLoading(false);
       return;
     }
 
@@ -101,10 +155,8 @@ export default function SettingsUsersPage() {
       setLoading(true);
       setError(null);
 
-      const [usersData, rolesData] = await Promise.all([
-        userManagementService.getUsers(),
-        userManagementService.getRoles(),
-      ]);
+      const [usersData, rolesData] =
+        await fetchUserManagementData();
 
       setUsers(usersData);
       setRoles(rolesData);
@@ -119,12 +171,6 @@ export default function SettingsUsersPage() {
       setLoading(false);
     }
   }
-
-  useEffect(() => {
-    if (!permissionsLoading) {
-      void loadData();
-    }
-  }, [permissionsLoading, canReadUsers]);
 
   const filteredUsers = useMemo(() => {
     const normalizedSearch = search
@@ -159,11 +205,7 @@ export default function SettingsUsersPage() {
         matchesStatus
       );
     });
-  }, [
-    users,
-    search,
-    statusFilter,
-  ]);
+  }, [users, search, statusFilter]);
 
   const activeUsersCount = useMemo(
     () =>
@@ -270,7 +312,10 @@ export default function SettingsUsersPage() {
     }
   }
 
-  if (permissionsLoading || loading) {
+  if (
+    permissionsLoading ||
+    loading
+  ) {
     return (
       <main
         dir="rtl"
@@ -363,9 +408,17 @@ export default function SettingsUsersPage() {
             onClick={() => {
               void loadData();
             }}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+            disabled={loading}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <RefreshCw size={17} />
+            <RefreshCw
+              size={17}
+              className={
+                loading
+                  ? "animate-spin"
+                  : ""
+              }
+            />
             بروزرسانی
           </button>
         </div>

@@ -24,16 +24,6 @@ import {
 
 import { formatJalaliDate } from "@/src/lib/utils/jalali";
 
-function formatNumber(value: number): string {
-  if (!Number.isFinite(value)) {
-    return "۰";
-  }
-
-  return new Intl.NumberFormat("fa-IR", {
-    maximumFractionDigits: 2,
-  }).format(value);
-}
-
 function toPersianDigits(value: string | number): string {
   const digits = "۰۱۲۳۴۵۶۷۸۹";
 
@@ -272,13 +262,17 @@ export default function CallDetailsPage() {
     useState<CallWithRelations | null>(null);
 
   const [loading, setLoading] =
-    useState(true);
+    useState(callId.length > 0);
 
   const [refreshing, setRefreshing] =
     useState(false);
 
   const [error, setError] =
-    useState("");
+    useState(
+      callId.length > 0
+        ? ""
+        : "شناسه تماس معتبر نیست."
+    );
 
   async function loadCall(
     showRefresh = false
@@ -326,7 +320,51 @@ export default function CallDetailsPage() {
   }
 
   useEffect(() => {
-    void loadCall();
+    if (!callId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    activitiesService
+      .getCallById(callId)
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+
+        setCall(result);
+        setError("");
+      })
+      .catch((err) => {
+        if (cancelled) {
+          return;
+        }
+
+        console.error(
+          "GET CALL DETAILS:",
+          err
+        );
+
+        setCall(null);
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "خطا در دریافت اطلاعات تماس."
+        );
+      })
+      .finally(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [callId]);
 
   if (loading) {

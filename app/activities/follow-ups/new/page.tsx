@@ -2,17 +2,21 @@
 
 import {
   FormEvent,
-  useEffect,
+  Suspense,
   useMemo,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
+import {
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import Link from "next/link";
-import { toGregorian } from "jalaali-js";
 
 import { useActivities } from "@/src/lib/hooks/useActivities";
 import { useCustomers } from "@/src/lib/hooks/useCustomers";
 import { useUsers } from "@/src/lib/hooks/useUsers";
+
+import { toGregorian } from "jalaali-js";
 
 function toPersianDigits(
   value: string | number
@@ -58,12 +62,14 @@ function getTodayJalali() {
           part.type === "year"
       )?.value ?? ""
     ),
+
     month: convertDigits(
       parts.find(
         (part) =>
           part.type === "month"
       )?.value ?? ""
     ),
+
     day: convertDigits(
       parts.find(
         (part) =>
@@ -77,26 +83,22 @@ function getDaysInJalaliMonth(
   year: number,
   month: number
 ): number {
-  if (month >= 1 && month <= 6) {
+  if (month <= 6) {
     return 31;
   }
 
-  if (month >= 7 && month <= 11) {
+  if (month <= 11) {
     return 30;
-  }
-
-  if (month !== 12) {
-    return 31;
   }
 
   try {
     const firstDay = toGregorian(
       year,
-      12,
+      month,
       1
     );
 
-    const nextYear = toGregorian(
+    const nextMonth = toGregorian(
       year + 1,
       1,
       1
@@ -109,9 +111,9 @@ function getDaysInJalaliMonth(
     );
 
     const nextDate = new Date(
-      nextYear.gy,
-      nextYear.gm - 1,
-      nextYear.gd
+      nextMonth.gy,
+      nextMonth.gm - 1,
+      nextMonth.gd
     );
 
     return Math.round(
@@ -167,97 +169,11 @@ function getErrorMessage(
   return "خطایی در انجام عملیات رخ داد.";
 }
 
-function SectionHeader({
-  number,
-  title,
-  description,
-  icon,
-}: {
-  number: string;
-  title: string;
-  description: string;
-  icon: string;
-}) {
-  return (
-    <div className="mb-6 flex items-start gap-4">
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-600 text-lg text-white shadow-sm">
-        {icon}
-      </div>
-
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-black text-emerald-600">
-            مرحله {number}
-          </span>
-
-          <span className="h-1 w-1 rounded-full bg-slate-300" />
-
-          <h2 className="text-xl font-black text-slate-900">
-            {title}
-          </h2>
-        </div>
-
-        <p className="mt-1 text-sm leading-6 text-slate-500">
-          {description}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function PriorityCard({
-  label,
-  icon,
-  active,
-  onClick,
-}: {
-  value:
-    | "low"
-    | "medium"
-    | "high"
-    | "urgent";
-  label: string;
-  icon: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-2xl border p-4 text-right transition ${
-        active
-          ? "border-emerald-500 bg-emerald-50 ring-4 ring-emerald-50"
-          : "border-slate-200 bg-white hover:bg-slate-50"
-      }`}
-    >
-      <div className="flex items-center gap-3">
-        <div
-          className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg ${
-            active
-              ? "bg-emerald-600 text-white"
-              : "bg-slate-100 text-slate-600"
-          }`}
-        >
-          {icon}
-        </div>
-
-        <span
-          className={`text-sm font-black ${
-            active
-              ? "text-emerald-800"
-              : "text-slate-700"
-          }`}
-        >
-          {label}
-        </span>
-      </div>
-    </button>
-  );
-}
-
-export default function NewFollowUpPage() {
+function NewFollowUpForm() {
   const router = useRouter();
+
+  const searchParams =
+    useSearchParams();
 
   const {
     createFollowUp,
@@ -280,10 +196,16 @@ export default function NewFollowUpPage() {
     []
   );
 
+  const customerIdFromUrl =
+    searchParams.get("customerId") ??
+    "";
+
   const [
     customerId,
     setCustomerId,
-  ] = useState("");
+  ] = useState(
+    customerIdFromUrl
+  );
 
   const [userId, setUserId] =
     useState("");
@@ -322,49 +244,20 @@ export default function NewFollowUpPage() {
     "urgent"
   >("medium");
 
-  const [saving, setSaving] =
-    useState(false);
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
 
-  const [error, setError] =
-    useState<string | null>(null);
+  const [
+    error,
+    setError,
+  ] = useState<string | null>(
+    null
+  );
 
-  useEffect(() => {
-    const customerIdFromUrl =
-      new URLSearchParams(
-        window.location.search
-      ).get("customerId");
-
-    if (!customerIdFromUrl) {
-      return;
-    }
-
-    const customerExists =
-      customers.some(
-        (customer) =>
-          customer.id ===
-          customerIdFromUrl
-      );
-
-    if (customerExists) {
-      setCustomerId(
-        customerIdFromUrl
-      );
-    }
-  }, [customers]);
-
-  useEffect(() => {
-    if (
-      users.length === 1 &&
-      !userId
-    ) {
-      setUserId(
-        users[0].id
-      );
-    }
-  }, [users, userId]);
-
-  const daysInMonth =
-    useMemo(() => {
+  const daysInMonth = useMemo(
+    () => {
       const year =
         Number(jalaliYear);
 
@@ -384,48 +277,38 @@ export default function NewFollowUpPage() {
         year,
         month
       );
-    }, [
+    },
+    [
       jalaliYear,
       jalaliMonth,
-    ]);
+    ]
+  );
 
-  useEffect(() => {
-    const day =
-      Number(jalaliDay);
-
-    if (
-      Number.isInteger(day) &&
-      day > daysInMonth
-    ) {
-      setJalaliDay(
-        String(daysInMonth)
-      );
-    }
-  }, [
-    jalaliDay,
-    daysInMonth,
-  ]);
-
-  const selectedCustomer =
-    customers.find(
+  const validCustomerId =
+    customers.some(
       (customer) =>
-        customer.id ===
-        customerId
-    );
+        customer.id === customerId
+    )
+      ? customerId
+      : "";
 
-  const selectedUser =
-    users.find(
-      (user) =>
-        user.id === userId
-    );
+  const effectiveUserId =
+    userId ||
+    (users.length === 1
+      ? users[0].id
+      : "");
 
-  const selectedPriorityLabel =
-    {
-      low: "کم",
-      medium: "متوسط",
-      high: "زیاد",
-      urgent: "فوری",
-    }[priority];
+  const numericDay =
+    Number(jalaliDay);
+
+  const safeJalaliDay =
+    Number.isInteger(numericDay) &&
+    numericDay >= 1
+      ? Math.min(
+          numericDay,
+          daysInMonth
+        )
+      : 1;
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>
@@ -434,14 +317,14 @@ export default function NewFollowUpPage() {
 
     setError(null);
 
-    if (!customerId) {
+    if (!validCustomerId) {
       setError(
         "لطفاً مشتری را انتخاب کنید."
       );
       return;
     }
 
-    if (!userId) {
+    if (!effectiveUserId) {
       setError(
         "لطفاً مسئول پیگیری را انتخاب کنید."
       );
@@ -462,7 +345,7 @@ export default function NewFollowUpPage() {
       Number(jalaliMonth);
 
     const day =
-      Number(jalaliDay);
+      safeJalaliDay;
 
     if (
       !Number.isInteger(year) ||
@@ -488,27 +371,29 @@ export default function NewFollowUpPage() {
       return;
     }
 
-    const [
-      hour,
-      minute,
-    ] = time
-      .split(":")
-      .map(Number);
-
-    if (
-      hour < 0 ||
-      hour > 23 ||
-      minute < 0 ||
-      minute > 59
-    ) {
-      setError(
-        "ساعت پیگیری معتبر نیست."
-      );
-      return;
-    }
-
     try {
       setSaving(true);
+
+      const [
+        hour,
+        minute,
+      ] = time
+        .split(":")
+        .map(Number);
+
+      if (
+        !Number.isInteger(hour) ||
+        !Number.isInteger(minute) ||
+        hour < 0 ||
+        hour > 23 ||
+        minute < 0 ||
+        minute > 59
+      ) {
+        setError(
+          "ساعت پیگیری معتبر نیست."
+        );
+        return;
+      }
 
       const gregorian =
         toGregorian(
@@ -530,26 +415,18 @@ export default function NewFollowUpPage() {
 
       await createFollowUp({
         customer_id:
-          customerId,
-
+          validCustomerId,
         user_id:
-          userId,
-
+          effectiveUserId,
         subject:
           subject.trim(),
-
         notes:
-          notes.trim() ||
-          null,
-
+          notes.trim() || null,
         scheduled_at:
           scheduledAt,
-
         priority,
-
         status:
           "pending",
-
         source:
           "manual",
       });
@@ -573,578 +450,434 @@ export default function NewFollowUpPage() {
     }
   }
 
-  if (
-    customersLoading ||
-    usersLoading
+  function handleMonthChange(
+    value: string
   ) {
-    return (
-      <main
-        dir="rtl"
-        className="min-h-screen bg-slate-50 p-4 md:p-6"
-      >
-        <div className="mx-auto max-w-5xl">
-          <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-            <div className="h-1.5 bg-gradient-to-r from-slate-900 via-emerald-600 to-teal-600" />
+    setJalaliMonth(value);
 
-            <div className="p-12 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-2xl">
-                📌
-              </div>
+    const year =
+      Number(jalaliYear);
 
-              <p className="mt-4 font-bold text-slate-700">
-                در حال بارگذاری اطلاعات پیگیری...
-              </p>
+    const month =
+      Number(value);
 
-              <div className="mx-auto mt-4 h-2 w-48 overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full w-1/2 animate-pulse rounded-full bg-emerald-500" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
+    const currentDay =
+      Number(jalaliDay);
+
+    if (
+      Number.isInteger(year) &&
+      Number.isInteger(month) &&
+      Number.isInteger(currentDay)
+    ) {
+      const newDaysInMonth =
+        getDaysInJalaliMonth(
+          year,
+          month
+        );
+
+      if (
+        currentDay >
+        newDaysInMonth
+      ) {
+        setJalaliDay(
+          String(newDaysInMonth)
+        );
+      }
+    }
+  }
+
+  function handleYearChange(
+    value: string
+  ) {
+    setJalaliYear(value);
+
+    const year =
+      Number(value);
+
+    const month =
+      Number(jalaliMonth);
+
+    const currentDay =
+      Number(jalaliDay);
+
+    if (
+      Number.isInteger(year) &&
+      Number.isInteger(month) &&
+      Number.isInteger(currentDay)
+    ) {
+      const newDaysInMonth =
+        getDaysInJalaliMonth(
+          year,
+          month
+        );
+
+      if (
+        currentDay >
+        newDaysInMonth
+      ) {
+        setJalaliDay(
+          String(newDaysInMonth)
+        );
+      }
+    }
   }
 
   return (
     <main
       dir="rtl"
-      className="min-h-screen bg-slate-50 p-4 md:p-6"
+      className="min-h-screen bg-gray-50 p-4 md:p-6"
     >
-      <div className="mx-auto max-w-5xl space-y-6">
-        {/* Header */}
-        <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-          <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-slate-900 via-emerald-600 to-teal-600" />
+      <div className="mx-auto max-w-4xl">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              ثبت پیگیری جدید
+            </h1>
 
-          <div className="absolute -left-20 -top-24 h-64 w-64 rounded-full bg-emerald-100/40 blur-3xl" />
-
-          <div className="absolute -bottom-24 right-0 h-64 w-64 rounded-full bg-teal-100/30 blur-3xl" />
-
-          <div className="relative p-6 md:p-8">
-            <Link
-              href="/activities/follow-ups"
-              className="text-sm font-bold text-slate-500 transition hover:text-slate-900"
-            >
-              ← بازگشت به پیگیری‌ها
-            </Link>
-
-            <div className="mt-6 flex items-center gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-600 text-2xl text-white shadow-lg shadow-emerald-100">
-                📌
-              </div>
-
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-2xl font-black tracking-tight text-slate-900 md:text-3xl">
-                    ثبت پیگیری جدید
-                  </h1>
-
-                  {selectedCustomer && (
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                      {selectedCustomer.name}
-                    </span>
-                  )}
-                </div>
-
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  زمان، مسئول، اولویت و توضیحات پیگیری مشتری را ثبت کنید.
-                </p>
-              </div>
-            </div>
+            <p className="mt-1 text-sm text-gray-500">
+              ثبت زمان و اطلاعات پیگیری مشتری
+            </p>
           </div>
-        </section>
 
-        {/* Error */}
+          <Link
+            href="/activities/follow-ups"
+            className="inline-flex items-center justify-center rounded-xl border bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+          >
+            بازگشت به پیگیری‌ها
+          </Link>
+        </div>
+
         {error && (
-          <section className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
-            <div className="h-1 bg-red-500" />
-
-            <div className="flex items-start gap-3 p-5">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
-                !
-              </div>
-
-              <div>
-                <p className="font-black text-red-800">
-                  خطا
-                </p>
-
-                <p className="mt-1 text-sm leading-6 text-red-600">
-                  {error}
-                </p>
-              </div>
-            </div>
-          </section>
+          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {error}
+          </div>
         )}
 
         <form
-          onSubmit={
-            handleSubmit
-          }
+          onSubmit={handleSubmit}
           className="space-y-6"
         >
-          {/* Customer and user */}
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
-            <SectionHeader
-              number="۱"
-              title="مشتری و مسئول"
-              description="مشتری و کاربر مسئول این پیگیری را مشخص کنید."
-              icon="👤"
-            />
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-5 text-lg font-bold text-gray-900">
+              اطلاعات پیگیری
+            </h2>
 
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* Customer */}
-              <div>
-                <label
-                  htmlFor="customer"
-                  className="mb-2 block text-sm font-bold text-slate-700"
-                >
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-medium text-gray-700">
                   مشتری
                 </label>
 
-                {selectedCustomer ? (
-                  <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-sm font-black text-white">
-                        {selectedCustomer.name?.charAt(
-                          0
-                        ) || "م"}
-                      </div>
-
-                      <div className="min-w-0">
-                        <p className="truncate font-black text-slate-900">
-                          {
-                            selectedCustomer.name
-                          }
-                        </p>
-
-                        {selectedCustomer.phone && (
-                          <p
-                            dir="ltr"
-                            className="mt-1 text-xs text-slate-500"
-                          >
-                            {
-                              selectedCustomer.phone
-                            }
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex gap-2">
-                      <Link
-                        href={`/customers/${selectedCustomer.id}`}
-                        className="flex-1 rounded-xl bg-white px-3 py-2 text-center text-xs font-bold text-blue-700 ring-1 ring-blue-100 transition hover:bg-blue-50"
-                      >
-                        مشاهده پروفایل
-                      </Link>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCustomerId(
-                            ""
-                          )
-                        }
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
-                      >
-                        تغییر
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <select
-                    id="customer"
-                    value={customerId}
-                    onChange={(
-                      event
-                    ) =>
-                      setCustomerId(
-                        event.target.value
-                      )
-                    }
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-800 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-50"
-                    required
-                  >
-                    <option value="">
-                      انتخاب مشتری
-                    </option>
-
-                    {customers.map(
-                      (customer) => (
-                        <option
-                          key={
-                            customer.id
-                          }
-                          value={
-                            customer.id
-                          }
-                        >
-                          {getCustomerLabel(
-                            customer
-                          )}
-                        </option>
-                      )
-                    )}
-                  </select>
-                )}
-              </div>
-
-              {/* User */}
-              <div>
-                <label
-                  htmlFor="user"
-                  className="mb-2 block text-sm font-bold text-slate-700"
-                >
-                  مسئول پیگیری
-                </label>
-
                 <select
-                  id="user"
-                  value={userId}
-                  onChange={(event) =>
-                    setUserId(
-                      event.target.value
+                  value={
+                    validCustomerId
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setCustomerId(
+                      event.target
+                        .value
                     )
                   }
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-800 outline-none transition focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-50"
-                  required
+                  disabled={
+                    customersLoading
+                  }
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 >
                   <option value="">
-                    انتخاب مسئول
+                    {customersLoading
+                      ? "در حال دریافت مشتریان..."
+                      : "انتخاب مشتری"}
                   </option>
 
-                  {users.map(
-                    (user) => (
+                  {customers.map(
+                    (customer) => (
                       <option
-                        key={user.id}
-                        value={user.id}
+                        key={
+                          customer.id
+                        }
+                        value={
+                          customer.id
+                        }
                       >
                         {
-                          user.full_name
+                          customer.name
                         }
-                        {user.job_title
-                          ? ` - ${user.job_title}`
+
+                        {customer.phone
+                          ? ` - ${toPersianDigits(
+                              customer.phone
+                            )}`
                           : ""}
                       </option>
                     )
                   )}
                 </select>
-
-                {selectedUser && (
-                  <div className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
-                    مسئول انتخاب‌شده:{" "}
-                    <span className="font-bold text-slate-800">
-                      {
-                        selectedUser.full_name
-                      }
-                    </span>
-                  </div>
-                )}
               </div>
-            </div>
-          </section>
 
-          {/* Subject and priority */}
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
-            <SectionHeader
-              number="۲"
-              title="موضوع و اولویت"
-              description="موضوع پیگیری و میزان اهمیت آن را مشخص کنید."
-              icon="🎯"
-            />
-
-            <div className="space-y-6">
               <div>
-                <label
-                  htmlFor="subject"
-                  className="mb-2 block text-sm font-bold text-slate-700"
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  مسئول پیگیری
+                </label>
+
+                <select
+                  value={
+                    effectiveUserId
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setUserId(
+                      event.target
+                        .value
+                    )
+                  }
+                  disabled={
+                    usersLoading
+                  }
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 >
+                  <option value="">
+                    {usersLoading
+                      ? "در حال دریافت کاربران..."
+                      : "انتخاب مسئول"}
+                  </option>
+
+                  {users.map(
+                    (user) => (
+                      <option
+                        key={
+                          user.id
+                        }
+                        value={
+                          user.id
+                        }
+                      >
+                        {
+                          user.full_name
+                        }
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
                   موضوع پیگیری
                 </label>
 
                 <input
-                  id="subject"
                   type="text"
                   value={subject}
-                  onChange={(event) =>
+                  onChange={(
+                    event
+                  ) =>
                     setSubject(
-                      event.target.value
+                      event.target
+                        .value
                     )
                   }
-                  placeholder="مثلاً پیگیری سفارش، پیگیری پرداخت، تماس مجدد..."
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-50"
-                  required
+                  placeholder="مثلاً پیگیری سفارش"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 />
               </div>
 
               <div>
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <label className="text-sm font-bold text-slate-700">
-                    اولویت پیگیری
-                  </label>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  اولویت
+                </label>
 
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                    {selectedPriorityLabel}
-                  </span>
-                </div>
+                <select
+                  value={priority}
+                  onChange={(
+                    event
+                  ) =>
+                    setPriority(
+                      event.target
+                        .value as
+                        | "low"
+                        | "medium"
+                        | "high"
+                        | "urgent"
+                    )
+                  }
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                >
+                  <option value="low">
+                    کم
+                  </option>
 
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <PriorityCard
-                    value="low"
-                    label="کم"
-                    icon="↓"
-                    active={
-                      priority ===
-                      "low"
-                    }
-                    onClick={() =>
-                      setPriority(
-                        "low"
-                      )
-                    }
-                  />
+                  <option value="medium">
+                    متوسط
+                  </option>
 
-                  <PriorityCard
-                    value="medium"
-                    label="متوسط"
-                    icon="•"
-                    active={
-                      priority ===
-                      "medium"
-                    }
-                    onClick={() =>
-                      setPriority(
-                        "medium"
-                      )
-                    }
-                  />
+                  <option value="high">
+                    زیاد
+                  </option>
 
-                  <PriorityCard
-                    value="high"
-                    label="زیاد"
-                    icon="↑"
-                    active={
-                      priority ===
-                      "high"
-                    }
-                    onClick={() =>
-                      setPriority(
-                        "high"
-                      )
-                    }
-                  />
-
-                  <PriorityCard
-                    value="urgent"
-                    label="فوری"
-                    icon="!"
-                    active={
-                      priority ===
-                      "urgent"
-                    }
-                    onClick={() =>
-                      setPriority(
-                        "urgent"
-                      )
-                    }
-                  />
-                </div>
+                  <option value="urgent">
+                    فوری
+                  </option>
+                </select>
               </div>
             </div>
           </section>
 
-          {/* Date and time */}
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
-            <SectionHeader
-              number="۳"
-              title="زمان پیگیری"
-              description="تاریخ جلالی و ساعت انجام پیگیری را مشخص کنید."
-              icon="🗓️"
-            />
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-5 text-lg font-bold text-gray-900">
+              زمان پیگیری
+            </h2>
 
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-5">
-              <div className="grid gap-4 md:grid-cols-4">
-                <div>
-                  <label
-                    htmlFor="jalaliYear"
-                    className="mb-2 block text-xs font-bold text-slate-500"
-                  >
-                    سال
-                  </label>
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  سال
+                </label>
 
-                  <input
-                    id="jalaliYear"
-                    type="number"
-                    min="1300"
-                    max="1500"
-                    value={
-                      jalaliYear
-                    }
-                    onChange={(event) =>
-                      setJalaliYear(
-                        event.target.value
-                      )
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="jalaliMonth"
-                    className="mb-2 block text-xs font-bold text-slate-500"
-                  >
-                    ماه
-                  </label>
-
-                  <select
-                    id="jalaliMonth"
-                    value={
-                      jalaliMonth
-                    }
-                    onChange={(event) =>
-                      setJalaliMonth(
-                        event.target.value
-                      )
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
-                    required
-                  >
-                    {Array.from(
-                      {
-                        length: 12,
-                      },
-                      (_, index) => {
-                        const value =
-                          String(
-                            index + 1
-                          );
-
-                        return (
-                          <option
-                            key={
-                              value
-                            }
-                            value={
-                              value
-                            }
-                          >
-                            {toPersianDigits(
-                              value
-                            )}
-                          </option>
-                        );
-                      }
-                    )}
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="jalaliDay"
-                    className="mb-2 block text-xs font-bold text-slate-500"
-                  >
-                    روز
-                  </label>
-
-                  <select
-                    id="jalaliDay"
-                    value={
-                      jalaliDay
-                    }
-                    onChange={(event) =>
-                      setJalaliDay(
-                        event.target.value
-                      )
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
-                    required
-                  >
-                    {Array.from(
-                      {
-                        length:
-                          daysInMonth,
-                      },
-                      (_, index) => {
-                        const value =
-                          String(
-                            index + 1
-                          );
-
-                        return (
-                          <option
-                            key={
-                              value
-                            }
-                            value={
-                              value
-                            }
-                          >
-                            {toPersianDigits(
-                              value
-                            )}
-                          </option>
-                        );
-                      }
-                    )}
-                  </select>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="time"
-                    className="mb-2 block text-xs font-bold text-slate-500"
-                  >
-                    ساعت
-                  </label>
-
-                  <input
-                    id="time"
-                    type="time"
-                    value={time}
-                    onChange={(event) =>
-                      setTime(
-                        event.target.value
-                      )
-                    }
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
-                    required
-                  />
-                </div>
+                <input
+                  type="number"
+                  value={jalaliYear}
+                  onChange={(
+                    event
+                  ) =>
+                    handleYearChange(
+                      event.target
+                        .value
+                    )
+                  }
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                />
               </div>
 
-              <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                <span className="rounded-lg bg-white px-3 py-2 ring-1 ring-slate-100">
-                  امروز:{" "}
-                  {toPersianDigits(
-                    today.year
-                  )}
-                  /
-                  {toPersianDigits(
-                    today.month
-                  )}
-                  /
-                  {toPersianDigits(
-                    today.day
-                  )}
-                </span>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  ماه
+                </label>
 
-                <span>
-                  زمان پیگیری با تقویم جلالی ثبت می‌شود.
-                </span>
+                <select
+                  value={jalaliMonth}
+                  onChange={(
+                    event
+                  ) =>
+                    handleMonthChange(
+                      event.target
+                        .value
+                    )
+                  }
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                >
+                  {Array.from(
+                    {
+                      length: 12,
+                    },
+                    (
+                      _,
+                      index
+                    ) => {
+                      const month =
+                        String(
+                          index + 1
+                        );
+
+                      return (
+                        <option
+                          key={
+                            month
+                          }
+                          value={
+                            month
+                          }
+                        >
+                          {toPersianDigits(
+                            month
+                          )}
+                        </option>
+                      );
+                    }
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  روز
+                </label>
+
+                <select
+                  value={String(
+                    safeJalaliDay
+                  )}
+                  onChange={(
+                    event
+                  ) =>
+                    setJalaliDay(
+                      event.target
+                        .value
+                    )
+                  }
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                >
+                  {Array.from(
+                    {
+                      length:
+                        daysInMonth,
+                    },
+                    (
+                      _,
+                      index
+                    ) => {
+                      const day =
+                        String(
+                          index + 1
+                        );
+
+                      return (
+                        <option
+                          key={
+                            day
+                          }
+                          value={
+                            day
+                          }
+                        >
+                          {toPersianDigits(
+                            day
+                          )}
+                        </option>
+                      );
+                    }
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700">
+                  ساعت
+                </label>
+
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(
+                    event
+                  ) =>
+                    setTime(
+                      event.target
+                        .value
+                    )
+                  }
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                />
               </div>
             </div>
           </section>
 
-          {/* Notes */}
-          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
-            <SectionHeader
-              number="۴"
-              title="توضیحات"
-              description="اطلاعات تکمیلی درباره پیگیری را ثبت کنید."
-              icon="📝"
-            />
+          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <h2 className="mb-5 text-lg font-bold text-gray-900">
+              یادداشت
+            </h2>
 
             <textarea
               value={notes}
@@ -1153,83 +886,16 @@ export default function NewFollowUpPage() {
                   event.target.value
                 )
               }
-              rows={6}
-              placeholder="مثلاً مشتری اعلام کرد تا پایان هفته پاسخ می‌دهد..."
-              className="w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-50"
+              rows={5}
+              placeholder="توضیحات مربوط به پیگیری..."
+              className="w-full resize-y rounded-lg border border-gray-300 px-3 py-2.5 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
             />
           </section>
 
-          {/* Preview */}
-          <section className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 text-white shadow-lg">
-            <div className="p-6 md:p-7">
-              <div className="mb-6 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-bold text-slate-400">
-                    پیش‌نمایش
-                  </p>
-
-                  <h2 className="mt-1 text-xl font-black">
-                    خلاصه پیگیری
-                  </h2>
-                </div>
-
-                <span className="rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-slate-300">
-                  آماده ثبت
-                </span>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-xs text-slate-400">
-                    مشتری
-                  </p>
-
-                  <p className="mt-2 truncate font-bold">
-                    {selectedCustomer?.name ??
-                      "انتخاب نشده"}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-xs text-slate-400">
-                    موضوع
-                  </p>
-
-                  <p className="mt-2 truncate font-bold">
-                    {subject ||
-                      "بدون موضوع"}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-xs text-slate-400">
-                    مسئول
-                  </p>
-
-                  <p className="mt-2 truncate font-bold">
-                    {selectedUser?.full_name ??
-                      "انتخاب نشده"}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-xs text-slate-400">
-                    اولویت
-                  </p>
-
-                  <p className="mt-2 font-bold">
-                    {selectedPriorityLabel}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Actions */}
-          <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <Link
               href="/activities/follow-ups"
-              className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+              className="rounded-lg bg-gray-100 px-5 py-2.5 text-center text-sm font-medium text-gray-700 transition hover:bg-gray-200"
             >
               انصراف
             </Link>
@@ -1238,16 +904,13 @@ export default function NewFollowUpPage() {
               type="submit"
               disabled={
                 saving ||
-                customers.length === 0 ||
-                users.length === 0 ||
-                !customerId ||
-                !userId ||
-                !subject.trim()
+                customersLoading ||
+                usersLoading
               }
-              className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-8 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving
-                ? "در حال ثبت پیگیری..."
+                ? "در حال ثبت..."
                 : "ثبت پیگیری"}
             </button>
           </div>
@@ -1257,18 +920,29 @@ export default function NewFollowUpPage() {
   );
 }
 
-function getCustomerLabel(
-  customer: {
-    name?: string | null;
-    phone?: string | null;
-  }
-): string {
-  if (customer.phone) {
-    return `${customer.name ?? "بدون نام"} - ${customer.phone}`;
-  }
-
+export default function NewFollowUpPage() {
   return (
-    customer.name ??
-    "بدون نام"
+    <Suspense
+      fallback={
+        <main
+          dir="rtl"
+          className="min-h-screen bg-gray-50 p-4 md:p-6"
+        >
+          <div className="mx-auto max-w-4xl">
+            <div className="rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+              <div className="text-lg font-bold text-gray-900">
+                در حال بارگذاری...
+              </div>
+
+              <p className="mt-2 text-sm text-gray-500">
+                لطفاً کمی صبر کنید.
+              </p>
+            </div>
+          </div>
+        </main>
+      }
+    >
+      <NewFollowUpForm />
+    </Suspense>
   );
 }

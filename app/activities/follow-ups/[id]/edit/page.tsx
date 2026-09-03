@@ -1,21 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import {
-  FormEvent,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-import {
-  useParams,
-  useRouter,
-} from "next/navigation";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 
 import { useActivities } from "@/src/lib/hooks/useActivities";
 import { useCustomers } from "@/src/lib/hooks/useCustomers";
 import { useUsers } from "@/src/lib/hooks/useUsers";
-
 import {
   gregorianToJalali,
   jalaliToGregorian,
@@ -60,24 +51,16 @@ const statusOptions = [
   },
 ] as const;
 
-function toPersianDigits(
-  value: string | number
-): string {
-  const persianDigits =
-    "۰۱۲۳۴۵۶۷۸۹";
+function toPersianDigits(value: string | number): string {
+  const persianDigits = "۰۱۲۳۴۵۶۷۸۹";
 
   return String(value).replace(
     /\d/g,
-    (digit) =>
-      persianDigits[
-        Number(digit)
-      ]
+    (digit) => persianDigits[Number(digit)]
   );
 }
 
-function getErrorMessage(
-  error: unknown
-): string {
+function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
@@ -86,17 +69,9 @@ function getErrorMessage(
     typeof error === "object" &&
     error !== null &&
     "message" in error &&
-    typeof (
-      error as {
-        message?: unknown;
-      }
-    ).message === "string"
+    typeof (error as { message?: unknown }).message === "string"
   ) {
-    return (
-      error as {
-        message: string;
-      }
-    ).message;
+    return (error as { message: string }).message;
   }
 
   return "خطایی در انجام عملیات رخ داد.";
@@ -104,8 +79,7 @@ function getErrorMessage(
 
 function getTodayJalali() {
   const today = new Date();
-  const jalali =
-    gregorianToJalali(today);
+  const jalali = gregorianToJalali(today);
 
   if (!jalali) {
     return {
@@ -122,61 +96,35 @@ function getTodayJalali() {
   };
 }
 
-function getDaysInJalaliMonth(
-  year: number,
-  month: number
-): number {
-  if (
-    month >= 1 &&
-    month <= 6
-  ) {
+function getDaysInJalaliMonth(year: number, month: number): number {
+  if (month >= 1 && month <= 6) {
     return 31;
   }
 
-  if (
-    month >= 7 &&
-    month <= 11
-  ) {
+  if (month >= 7 && month <= 11) {
     return 30;
   }
 
   if (month === 12) {
     try {
-      const firstDay =
-        jalaliToGregorian(
-          year,
-          12,
-          1
-        );
+      const firstDay = jalaliToGregorian(year, 12, 1);
+      const nextYearFirstDay = jalaliToGregorian(year + 1, 1, 1);
 
-      const nextYearFirstDay =
-        jalaliToGregorian(
-          year + 1,
-          1,
-          1
-        );
+      const firstDate = new Date(
+        firstDay.gy,
+        firstDay.gm - 1,
+        firstDay.gd
+      );
 
-      const firstDate =
-        new Date(
-          firstDay.gy,
-          firstDay.gm - 1,
-          firstDay.gd
-        );
-
-      const nextDate =
-        new Date(
-          nextYearFirstDay.gy,
-          nextYearFirstDay.gm - 1,
-          nextYearFirstDay.gd
-        );
+      const nextDate = new Date(
+        nextYearFirstDay.gy,
+        nextYearFirstDay.gm - 1,
+        nextYearFirstDay.gd
+      );
 
       return Math.round(
-        (nextDate.getTime() -
-          firstDate.getTime()) /
-          (1000 *
-            60 *
-            60 *
-            24)
+        (nextDate.getTime() - firstDate.getTime()) /
+          (1000 * 60 * 60 * 24)
       );
     } catch {
       return 29;
@@ -200,9 +148,7 @@ function buildGregorianIso(
       day,
     })
   ) {
-    throw new Error(
-      "تاریخ جلالی واردشده معتبر نیست."
-    );
+    throw new Error("تاریخ جلالی واردشده معتبر نیست.");
   }
 
   if (
@@ -213,17 +159,10 @@ function buildGregorianIso(
     minute < 0 ||
     minute > 59
   ) {
-    throw new Error(
-      "ساعت یا دقیقه واردشده معتبر نیست."
-    );
+    throw new Error("ساعت یا دقیقه واردشده معتبر نیست.");
   }
 
-  const gregorian =
-    jalaliToGregorian(
-      year,
-      month,
-      day
-    );
+  const gregorian = jalaliToGregorian(year, month, day);
 
   const date = new Date(
     gregorian.gy,
@@ -235,14 +174,8 @@ function buildGregorianIso(
     0
   );
 
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    throw new Error(
-      "تاریخ یا زمان واردشده معتبر نیست."
-    );
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("تاریخ یا زمان واردشده معتبر نیست.");
   }
 
   return date.toISOString();
@@ -320,9 +253,7 @@ function ChoiceCard({
 
         <span
           className={`text-sm font-black ${
-            active
-              ? "text-emerald-800"
-              : "text-slate-700"
+            active ? "text-emerald-800" : "text-slate-700"
           }`}
         >
           {label}
@@ -335,162 +266,97 @@ function ChoiceCard({
 export default function EditFollowUpPage() {
   const router = useRouter();
 
-  const params =
-    useParams<{
-      id: string;
-    }>();
+  const params = useParams<{
+    id: string;
+  }>();
 
   const followUpId =
-    typeof params?.id ===
-    "string"
-      ? params.id
-      : "";
+    typeof params?.id === "string" ? params.id : "";
 
-  const {
-    followUpsLoading,
-    updateFollowUp,
-  } = useActivities();
+  const { followUpsLoading, updateFollowUp } = useActivities();
 
   const {
     customers,
-    loading:
-      customersLoading,
+    loading: customersLoading,
   } = useCustomers();
 
   const {
     users,
-    loading:
-      usersLoading,
+    loading: usersLoading,
   } = useUsers();
 
-  const [loading, setLoading] =
-    useState(true);
+  const today = useMemo(() => getTodayJalali(), []);
 
-  const [saving, setSaving] =
-    useState(false);
+  const [loading, setLoading] = useState(Boolean(followUpId));
 
-  const [error, setError] =
-    useState<
-      string | null
-    >(null);
+  const [saving, setSaving] = useState(false);
 
-  const [success, setSuccess] =
-    useState<
-      string | null
-    >(null);
+  const [error, setError] = useState<string | null>(
+    followUpId ? null : "شناسه پیگیری معتبر نیست."
+  );
 
-  const [customerId, setCustomerId] =
-    useState("");
+  const [success, setSuccess] = useState<string | null>(null);
 
-  const [userId, setUserId] =
-    useState("");
+  const [customerId, setCustomerId] = useState("");
 
-  const [subject, setSubject] =
-    useState("");
+  const [userId, setUserId] = useState("");
 
-  const [notes, setNotes] =
-    useState("");
+  const [subject, setSubject] = useState("");
 
-  const [
-    jalaliYear,
-    setJalaliYear,
-  ] = useState("");
+  const [notes, setNotes] = useState("");
 
-  const [
-    jalaliMonth,
-    setJalaliMonth,
-  ] = useState("");
+  const [jalaliYear, setJalaliYear] = useState(
+    String(today.year)
+  );
 
-  const [
-    jalaliDay,
-    setJalaliDay,
-  ] = useState("");
+  const [jalaliMonth, setJalaliMonth] = useState(
+    String(today.month).padStart(2, "0")
+  );
 
-  const [hour, setHour] =
-    useState("00");
+  const [jalaliDay, setJalaliDay] = useState(
+    String(today.day).padStart(2, "0")
+  );
 
-  const [minute, setMinute] =
-    useState("00");
+  const [hour, setHour] = useState("00");
 
-  const [
-    priority,
-    setPriority,
-  ] = useState<
-    "low" |
-    "medium" |
-    "high" |
-    "urgent"
+  const [minute, setMinute] = useState("00");
+
+  const [priority, setPriority] = useState<
+    "low" | "medium" | "high" | "urgent"
   >("medium");
 
-  const [
-    status,
-    setStatus,
-  ] = useState<
-    "pending" |
-    "completed" |
-    "cancelled"
+  const [status, setStatus] = useState<
+    "pending" | "completed" | "cancelled"
   >("pending");
-
-  const today = useMemo(
-    () => getTodayJalali(),
-    []
-  );
 
   useEffect(() => {
     if (!followUpId) {
-      setError(
-        "شناسه پیگیری معتبر نیست."
-      );
-
-      setLoading(false);
       return;
     }
 
-    let mounted = true;
+    let cancelled = false;
 
-    async function loadFollowUp() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const {
-          activitiesService,
-        } = await import(
-          "@/src/lib/services/activities"
-        );
-
-        const data =
-          await activitiesService.getFollowUpById(
-            followUpId
-          );
-
-        if (!mounted) {
+    import("@/src/lib/services/activities")
+      .then(({ activitiesService }) =>
+        activitiesService.getFollowUpById(followUpId)
+      )
+      .then((data) => {
+        if (cancelled) {
           return;
         }
 
         setCustomerId(
-          data.customer_id ??
-            data.customer?.id ??
-            ""
+          data.customer_id ?? data.customer?.id ?? ""
         );
 
-        setUserId(
-          data.user_id ??
-            data.user?.id ??
-            ""
-        );
+        setUserId(data.user_id ?? data.user?.id ?? "");
 
-        setSubject(
-          data.subject ?? ""
-        );
+        setSubject(data.subject ?? "");
 
-        setNotes(
-          data.notes ?? ""
-        );
+        setNotes(data.notes ?? "");
 
         setPriority(
-          (data.priority ??
-            "medium") as
+          (data.priority ?? "medium") as
             | "low"
             | "medium"
             | "high"
@@ -498,62 +364,55 @@ export default function EditFollowUpPage() {
         );
 
         setStatus(
-          (data.status ??
-            "pending") as
+          (data.status ?? "pending") as
             | "pending"
             | "completed"
             | "cancelled"
         );
 
-        const scheduledDate =
-          new Date(
-            data.scheduled_at
-          );
+        const scheduledDate = new Date(data.scheduled_at);
 
-        if (
-          !Number.isNaN(
-            scheduledDate.getTime()
-          )
-        ) {
-          const jalali =
-            gregorianToJalali(
-              scheduledDate
-            );
+        if (!Number.isNaN(scheduledDate.getTime())) {
+          const jalali = gregorianToJalali(scheduledDate);
 
           if (jalali) {
-            setJalaliYear(
-              String(
-                jalali.year
-              )
+            const loadedYear = jalali.year;
+            const loadedMonth = jalali.month;
+            const loadedDaysInMonth =
+              getDaysInJalaliMonth(
+                loadedYear,
+                loadedMonth
+              );
+
+            const loadedDay = Math.min(
+              jalali.day,
+              loadedDaysInMonth
             );
 
+            setJalaliYear(String(loadedYear));
+
             setJalaliMonth(
-              String(
-                jalali.month
-              ).padStart(2, "0")
+              String(loadedMonth).padStart(2, "0")
             );
 
             setJalaliDay(
-              String(
-                jalali.day
-              ).padStart(2, "0")
+              String(loadedDay).padStart(2, "0")
             );
           }
 
           setHour(
-            String(
-              scheduledDate.getHours()
-            ).padStart(2, "0")
+            String(scheduledDate.getHours()).padStart(2, "0")
           );
 
           setMinute(
-            String(
-              scheduledDate.getMinutes()
-            ).padStart(2, "0")
+            String(scheduledDate.getMinutes()).padStart(2, "0")
           );
         }
-      } catch (err) {
-        if (!mounted) {
+
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) {
           return;
         }
 
@@ -562,111 +421,96 @@ export default function EditFollowUpPage() {
           err
         );
 
-        setError(
-          getErrorMessage(err)
-        );
-      } finally {
-        if (mounted) {
-          setLoading(false);
+        setError(getErrorMessage(err));
+      })
+      .finally(() => {
+        if (cancelled) {
+          return;
         }
-      }
-    }
 
-    void loadFollowUp();
+        setLoading(false);
+      });
 
     return () => {
-      mounted = false;
+      cancelled = true;
     };
   }, [followUpId]);
 
-  const selectedCustomer =
-    customers.find(
-      (customer) =>
-        customer.id ===
-        customerId
-    );
+  const selectedCustomer = customers.find(
+    (customer) => customer.id === customerId
+  );
 
-  const selectedUser =
-    users.find(
-      (user) =>
-        user.id === userId
-    );
+  const selectedUser = users.find(
+    (user) => user.id === userId
+  );
 
-  const selectedYear =
-    Number(jalaliYear);
+  const selectedYear = Number(jalaliYear);
 
-  const selectedMonth =
-    Number(jalaliMonth);
+  const selectedMonth = Number(jalaliMonth);
 
-  const daysInMonth =
-    useMemo(() => {
-      if (
-        !Number.isInteger(
-          selectedYear
-        ) ||
-        !Number.isInteger(
-          selectedMonth
-        )
-      ) {
-        return 31;
-      }
+  const daysInMonth = useMemo(() => {
+    if (
+      !Number.isInteger(selectedYear) ||
+      !Number.isInteger(selectedMonth)
+    ) {
+      return 31;
+    }
 
-      return getDaysInJalaliMonth(
-        selectedYear,
-        selectedMonth
-      );
-    }, [
+    return getDaysInJalaliMonth(
       selectedYear,
-      selectedMonth,
-    ]);
+      selectedMonth
+    );
+  }, [selectedYear, selectedMonth]);
 
-  useEffect(() => {
-    if (
-      !jalaliYear ||
-      !jalaliMonth ||
-      !jalaliDay
-    ) {
-      setJalaliYear(
-        String(today.year)
-      );
+  function handleYearChange(value: string) {
+    setJalaliYear(value);
 
-      setJalaliMonth(
-        String(
-          today.month
-        ).padStart(2, "0")
-      );
-
-      setJalaliDay(
-        String(
-          today.day
-        ).padStart(2, "0")
-      );
-    }
-  }, [
-    jalaliYear,
-    jalaliMonth,
-    jalaliDay,
-    today,
-  ]);
-
-  useEffect(() => {
-    const day =
-      Number(jalaliDay);
+    const year = Number(value);
+    const month = Number(jalaliMonth);
+    const day = Number(jalaliDay);
 
     if (
-      Number.isInteger(day) &&
-      day > daysInMonth
+      Number.isInteger(year) &&
+      Number.isInteger(month) &&
+      Number.isInteger(day)
     ) {
-      setJalaliDay(
-        String(
-          daysInMonth
-        ).padStart(2, "0")
+      const nextDaysInMonth = getDaysInJalaliMonth(
+        year,
+        month
       );
+
+      if (day > nextDaysInMonth) {
+        setJalaliDay(
+          String(nextDaysInMonth).padStart(2, "0")
+        );
+      }
     }
-  }, [
-    jalaliDay,
-    daysInMonth,
-  ]);
+  }
+
+  function handleMonthChange(value: string) {
+    setJalaliMonth(value);
+
+    const year = Number(jalaliYear);
+    const month = Number(value);
+    const day = Number(jalaliDay);
+
+    if (
+      Number.isInteger(year) &&
+      Number.isInteger(month) &&
+      Number.isInteger(day)
+    ) {
+      const nextDaysInMonth = getDaysInJalaliMonth(
+        year,
+        month
+      );
+
+      if (day > nextDaysInMonth) {
+        setJalaliDay(
+          String(nextDaysInMonth).padStart(2, "0")
+        );
+      }
+    }
+  }
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>
@@ -677,75 +521,43 @@ export default function EditFollowUpPage() {
     setSuccess(null);
 
     if (!followUpId) {
-      setError(
-        "شناسه پیگیری معتبر نیست."
-      );
+      setError("شناسه پیگیری معتبر نیست.");
       return;
     }
 
     if (!customerId) {
-      setError(
-        "انتخاب مشتری الزامی است."
-      );
+      setError("انتخاب مشتری الزامی است.");
       return;
     }
 
     if (!userId) {
-      setError(
-        "انتخاب مسئول پیگیری الزامی است."
-      );
+      setError("انتخاب مسئول پیگیری الزامی است.");
       return;
     }
 
     if (!subject.trim()) {
-      setError(
-        "موضوع پیگیری را وارد کنید."
-      );
+      setError("موضوع پیگیری را وارد کنید.");
       return;
     }
 
-    const year =
-      Number(jalaliYear);
-
-    const month =
-      Number(jalaliMonth);
-
-    const day =
-      Number(jalaliDay);
-
-    const selectedHour =
-      Number(hour);
-
-    const selectedMinute =
-      Number(minute);
+    const year = Number(jalaliYear);
+    const month = Number(jalaliMonth);
+    const day = Number(jalaliDay);
+    const selectedHour = Number(hour);
+    const selectedMinute = Number(minute);
 
     if (
-      !Number.isInteger(
-        year
-      ) ||
-      !Number.isInteger(
-        month
-      ) ||
-      !Number.isInteger(
-        day
-      ) ||
-      !Number.isInteger(
-        selectedHour
-      ) ||
-      !Number.isInteger(
-        selectedMinute
-      )
+      !Number.isInteger(year) ||
+      !Number.isInteger(month) ||
+      !Number.isInteger(day) ||
+      !Number.isInteger(selectedHour) ||
+      !Number.isInteger(selectedMinute)
     ) {
-      setError(
-        "تاریخ یا زمان واردشده معتبر نیست."
-      );
+      setError("تاریخ یا زمان واردشده معتبر نیست.");
       return;
     }
 
-    if (
-      day < 1 ||
-      day > daysInMonth
-    ) {
+    if (day < 1 || day > daysInMonth) {
       setError(
         "روز انتخاب‌شده برای این ماه معتبر نیست."
       );
@@ -755,81 +567,47 @@ export default function EditFollowUpPage() {
     let scheduledAt: string;
 
     try {
-      scheduledAt =
-        buildGregorianIso(
-          year,
-          month,
-          day,
-          selectedHour,
-          selectedMinute
-        );
-    } catch (err) {
-      setError(
-        getErrorMessage(err)
+      scheduledAt = buildGregorianIso(
+        year,
+        month,
+        day,
+        selectedHour,
+        selectedMinute
       );
+    } catch (err) {
+      setError(getErrorMessage(err));
       return;
     }
 
     try {
       setSaving(true);
 
-      await updateFollowUp(
-        followUpId,
-        {
-          customer_id:
-            customerId,
+      await updateFollowUp(followUpId, {
+        customer_id: customerId,
+        user_id: userId,
+        scheduled_at: scheduledAt,
+        status,
+        priority,
+        subject: subject.trim(),
+        notes: notes.trim() || null,
+      });
 
-          user_id:
-            userId,
+      setSuccess("پیگیری با موفقیت ویرایش شد.");
 
-          scheduled_at:
-            scheduledAt,
-
-          status,
-
-          priority,
-
-          subject:
-            subject.trim(),
-
-          notes:
-            notes.trim() ||
-            null,
-        }
-      );
-
-      setSuccess(
-        "پیگیری با موفقیت ویرایش شد."
-      );
-
-      window.setTimeout(
-        () => {
-          router.push(
-            "/activities/follow-ups"
-          );
-
-          router.refresh();
-        },
-        700
-      );
+      window.setTimeout(() => {
+        router.push("/activities/follow-ups");
+        router.refresh();
+      }, 700);
     } catch (err) {
-      console.error(
-        "خطا در ویرایش پیگیری:",
-        err
-      );
+      console.error("خطا در ویرایش پیگیری:", err);
 
-      setError(
-        getErrorMessage(err)
-      );
+      setError(getErrorMessage(err));
     } finally {
       setSaving(false);
     }
   }
 
-  if (
-    loading ||
-    followUpsLoading
-  ) {
+  if (loading || followUpsLoading) {
     return (
       <main
         dir="rtl"
@@ -896,7 +674,6 @@ export default function EditFollowUpPage() {
       className="min-h-screen bg-slate-50 p-4 md:p-6"
     >
       <div className="mx-auto max-w-5xl space-y-6">
-
         {/* Header */}
         <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-slate-900 via-emerald-600 to-teal-600" />
@@ -996,10 +773,7 @@ export default function EditFollowUpPage() {
           </section>
         )}
 
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-6"
-        >
+        <form onSubmit={handleSubmit} className="space-y-6">
           {/* Customer / User */}
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
             <SectionHeader
@@ -1010,7 +784,6 @@ export default function EditFollowUpPage() {
             />
 
             <div className="grid gap-6 md:grid-cols-2">
-
               <div>
                 <label
                   htmlFor="customer"
@@ -1023,16 +796,12 @@ export default function EditFollowUpPage() {
                   <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
                     <div className="flex items-center gap-3">
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-sm font-black text-white">
-                        {selectedCustomer.name?.charAt(
-                          0
-                        ) || "م"}
+                        {selectedCustomer.name?.charAt(0) || "م"}
                       </div>
 
                       <div className="min-w-0">
                         <p className="truncate font-black text-slate-900">
-                          {
-                            selectedCustomer.name
-                          }
+                          {selectedCustomer.name}
                         </p>
 
                         {selectedCustomer.phone && (
@@ -1040,9 +809,7 @@ export default function EditFollowUpPage() {
                             dir="ltr"
                             className="mt-1 text-xs text-slate-500"
                           >
-                            {
-                              selectedCustomer.phone
-                            }
+                            {selectedCustomer.phone}
                           </p>
                         )}
                       </div>
@@ -1058,20 +825,11 @@ export default function EditFollowUpPage() {
                 ) : (
                   <select
                     id="customer"
-                    value={
-                      customerId
+                    value={customerId}
+                    onChange={(event) =>
+                      setCustomerId(event.target.value)
                     }
-                    onChange={(
-                      event
-                    ) =>
-                      setCustomerId(
-                        event.target
-                          .value
-                      )
-                    }
-                    disabled={
-                      customersLoading
-                    }
+                    disabled={customersLoading}
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-800 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-50"
                     required
                   >
@@ -1081,22 +839,14 @@ export default function EditFollowUpPage() {
                         : "انتخاب مشتری"}
                     </option>
 
-                    {customers.map(
-                      (
-                        customer
-                      ) => (
-                        <option
-                          key={
-                            customer.id
-                          }
-                          value={
-                            customer.id
-                          }
-                        >
-                          {customer.name}
-                        </option>
-                      )
-                    )}
+                    {customers.map((customer) => (
+                      <option
+                        key={customer.id}
+                        value={customer.id}
+                      >
+                        {customer.name}
+                      </option>
+                    ))}
                   </select>
                 )}
               </div>
@@ -1111,20 +861,11 @@ export default function EditFollowUpPage() {
 
                 <select
                   id="user"
-                  value={
-                    userId
+                  value={userId}
+                  onChange={(event) =>
+                    setUserId(event.target.value)
                   }
-                  onChange={(
-                    event
-                  ) =>
-                    setUserId(
-                      event.target
-                        .value
-                    )
-                  }
-                  disabled={
-                    usersLoading
-                  }
+                  disabled={usersLoading}
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-800 outline-none transition focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-50"
                   required
                 >
@@ -1134,31 +875,21 @@ export default function EditFollowUpPage() {
                       : "انتخاب مسئول"}
                   </option>
 
-                  {users.map(
-                    (user) => (
-                      <option
-                        key={
-                          user.id
-                        }
-                        value={
-                          user.id
-                        }
-                      >
-                        {
-                          user.full_name
-                        }
-                      </option>
-                    )
-                  )}
+                  {users.map((user) => (
+                    <option
+                      key={user.id}
+                      value={user.id}
+                    >
+                      {user.full_name}
+                    </option>
+                  ))}
                 </select>
 
                 {selectedUser && (
                   <div className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-500">
                     مسئول فعلی:{" "}
                     <span className="font-black text-slate-800">
-                      {
-                        selectedUser.full_name
-                      }
+                      {selectedUser.full_name}
                     </span>
                   </div>
                 )}
@@ -1187,16 +918,9 @@ export default function EditFollowUpPage() {
                 <input
                   id="subject"
                   type="text"
-                  value={
-                    subject
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    setSubject(
-                      event.target
-                        .value
-                    )
+                  value={subject}
+                  onChange={(event) =>
+                    setSubject(event.target.value)
                   }
                   placeholder="مثلاً پیگیری سفارش، پرداخت یا تماس مجدد"
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-50"
@@ -1211,42 +935,24 @@ export default function EditFollowUpPage() {
                   </label>
 
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                    {
-                      priorityOptions.find(
-                        (item) =>
-                          item.value ===
-                          priority
-                      )?.label ??
-                        priority
-                    }
+                    {priorityOptions.find(
+                      (item) => item.value === priority
+                    )?.label ?? priority}
                   </span>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {priorityOptions.map(
-                    (option) => (
-                      <ChoiceCard
-                        key={
-                          option.value
-                        }
-                        label={
-                          option.label
-                        }
-                        icon={
-                          option.icon
-                        }
-                        active={
-                          priority ===
-                          option.value
-                        }
-                        onClick={() =>
-                          setPriority(
-                            option.value
-                          )
-                        }
-                      />
-                    )
-                  )}
+                  {priorityOptions.map((option) => (
+                    <ChoiceCard
+                      key={option.value}
+                      label={option.label}
+                      icon={option.icon}
+                      active={priority === option.value}
+                      onClick={() =>
+                        setPriority(option.value)
+                      }
+                    />
+                  ))}
                 </div>
               </div>
 
@@ -1260,15 +966,10 @@ export default function EditFollowUpPage() {
 
                 <select
                   id="status"
-                  value={
-                    status
-                  }
-                  onChange={(
-                    event
-                  ) =>
+                  value={status}
+                  onChange={(event) =>
                     setStatus(
-                      event.target
-                        .value as
+                      event.target.value as
                         | "pending"
                         | "completed"
                         | "cancelled"
@@ -1276,22 +977,14 @@ export default function EditFollowUpPage() {
                   }
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 font-medium text-slate-800 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-4 focus:ring-emerald-50"
                 >
-                  {statusOptions.map(
-                    (option) => (
-                      <option
-                        key={
-                          option.value
-                        }
-                        value={
-                          option.value
-                        }
-                      >
-                        {
-                          option.label
-                        }
-                      </option>
-                    )
-                  )}
+                  {statusOptions.map((option) => (
+                    <option
+                      key={option.value}
+                      value={option.value}
+                    >
+                      {option.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -1321,16 +1014,9 @@ export default function EditFollowUpPage() {
                     type="number"
                     min="1300"
                     max="1500"
-                    value={
-                      jalaliYear
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setJalaliYear(
-                        event.target
-                          .value
-                      )
+                    value={jalaliYear}
+                    onChange={(event) =>
+                      handleYearChange(event.target.value)
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
                     required
@@ -1347,45 +1033,26 @@ export default function EditFollowUpPage() {
 
                   <select
                     id="jalaliMonth"
-                    value={
-                      jalaliMonth
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setJalaliMonth(
-                        event.target
-                          .value
-                      )
+                    value={jalaliMonth}
+                    onChange={(event) =>
+                      handleMonthChange(event.target.value)
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
                     required
                   >
                     {Array.from(
-                      {
-                        length: 12,
-                      },
+                      { length: 12 },
                       (_, index) => {
-                        const value =
-                          String(
-                            index + 1
-                          ).padStart(
-                            2,
-                            "0"
-                          );
+                        const value = String(
+                          index + 1
+                        ).padStart(2, "0");
 
                         return (
                           <option
-                            key={
-                              value
-                            }
-                            value={
-                              value
-                            }
+                            key={value}
+                            value={value}
                           >
-                            {toPersianDigits(
-                              value
-                            )}
+                            {toPersianDigits(value)}
                           </option>
                         );
                       }
@@ -1403,46 +1070,26 @@ export default function EditFollowUpPage() {
 
                   <select
                     id="jalaliDay"
-                    value={
-                      jalaliDay
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setJalaliDay(
-                        event.target
-                          .value
-                      )
+                    value={jalaliDay}
+                    onChange={(event) =>
+                      setJalaliDay(event.target.value)
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
                     required
                   >
                     {Array.from(
-                      {
-                        length:
-                          daysInMonth,
-                      },
+                      { length: daysInMonth },
                       (_, index) => {
-                        const value =
-                          String(
-                            index + 1
-                          ).padStart(
-                            2,
-                            "0"
-                          );
+                        const value = String(
+                          index + 1
+                        ).padStart(2, "0");
 
                         return (
                           <option
-                            key={
-                              value
-                            }
-                            value={
-                              value
-                            }
+                            key={value}
+                            value={value}
                           >
-                            {toPersianDigits(
-                              value
-                            )}
+                            {toPersianDigits(value)}
                           </option>
                         );
                       }
@@ -1460,45 +1107,26 @@ export default function EditFollowUpPage() {
 
                   <select
                     id="hour"
-                    value={
-                      hour
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setHour(
-                        event.target
-                          .value
-                      )
+                    value={hour}
+                    onChange={(event) =>
+                      setHour(event.target.value)
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
                     required
                   >
                     {Array.from(
-                      {
-                        length: 24,
-                      },
+                      { length: 24 },
                       (_, index) => {
-                        const value =
-                          String(
-                            index
-                          ).padStart(
-                            2,
-                            "0"
-                          );
+                        const value = String(
+                          index
+                        ).padStart(2, "0");
 
                         return (
                           <option
-                            key={
-                              value
-                            }
-                            value={
-                              value
-                            }
+                            key={value}
+                            value={value}
                           >
-                            {toPersianDigits(
-                              value
-                            )}
+                            {toPersianDigits(value)}
                           </option>
                         );
                       }
@@ -1513,45 +1141,26 @@ export default function EditFollowUpPage() {
                 </span>
 
                 <select
-                  value={
-                    minute
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    setMinute(
-                      event.target
-                        .value
-                    )
+                  value={minute}
+                  onChange={(event) =>
+                    setMinute(event.target.value)
                   }
                   className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:border-emerald-500"
                   required
                 >
                   {Array.from(
-                    {
-                      length: 60,
-                    },
+                    { length: 60 },
                     (_, index) => {
-                      const value =
-                        String(
-                          index
-                        ).padStart(
-                          2,
-                          "0"
-                        );
+                      const value = String(
+                        index
+                      ).padStart(2, "0");
 
                       return (
                         <option
-                          key={
-                            value
-                          }
-                          value={
-                            value
-                          }
+                          key={value}
+                          value={value}
                         >
-                          {toPersianDigits(
-                            value
-                          )}
+                          {toPersianDigits(value)}
                         </option>
                       );
                     }
@@ -1566,16 +1175,14 @@ export default function EditFollowUpPage() {
               <div className="mt-4 rounded-xl bg-white px-4 py-3 text-xs text-slate-500 ring-1 ring-slate-100">
                 امروز:{" "}
                 <span className="font-bold text-slate-800">
+                  {toPersianDigits(today.year)}
+                  /
                   {toPersianDigits(
-                    today.year
+                    String(today.month).padStart(2, "0")
                   )}
                   /
                   {toPersianDigits(
-                    today.month
-                  )}
-                  /
-                  {toPersianDigits(
-                    today.day
+                    String(today.day).padStart(2, "0")
                   )}
                 </span>
               </div>
@@ -1592,16 +1199,9 @@ export default function EditFollowUpPage() {
             />
 
             <textarea
-              value={
-                notes
-              }
-              onChange={(
-                event
-              ) =>
-                setNotes(
-                  event.target
-                    .value
-                )
+              value={notes}
+              onChange={(event) =>
+                setNotes(event.target.value)
               }
               rows={6}
               placeholder="مثلاً مشتری اعلام کرد تا پایان هفته پاسخ می‌دهد..."
@@ -1635,8 +1235,7 @@ export default function EditFollowUpPage() {
                   </p>
 
                   <p className="mt-2 truncate font-bold">
-                    {selectedCustomer?.name ??
-                      "انتخاب نشده"}
+                    {selectedCustomer?.name ?? "انتخاب نشده"}
                   </p>
                 </div>
 
@@ -1646,8 +1245,7 @@ export default function EditFollowUpPage() {
                   </p>
 
                   <p className="mt-2 truncate font-bold">
-                    {subject ||
-                      "بدون موضوع"}
+                    {subject || "بدون موضوع"}
                   </p>
                 </div>
 
@@ -1657,8 +1255,7 @@ export default function EditFollowUpPage() {
                   </p>
 
                   <p className="mt-2 truncate font-bold">
-                    {selectedUser?.full_name ??
-                      "انتخاب نشده"}
+                    {selectedUser?.full_name ?? "انتخاب نشده"}
                   </p>
                 </div>
 
@@ -1668,14 +1265,9 @@ export default function EditFollowUpPage() {
                   </p>
 
                   <p className="mt-2 font-bold">
-                    {
-                      priorityOptions.find(
-                        (item) =>
-                          item.value ===
-                          priority
-                      )?.label ??
-                        priority
-                    }
+                    {priorityOptions.find(
+                      (item) => item.value === priority
+                    )?.label ?? priority}
                   </p>
                 </div>
 
@@ -1685,14 +1277,9 @@ export default function EditFollowUpPage() {
                   </p>
 
                   <p className="mt-2 font-bold">
-                    {
-                      statusOptions.find(
-                        (item) =>
-                          item.value ===
-                          status
-                      )?.label ??
-                        status
-                    }
+                    {statusOptions.find(
+                      (item) => item.value === status
+                    )?.label ?? status}
                   </p>
                 </div>
               </div>

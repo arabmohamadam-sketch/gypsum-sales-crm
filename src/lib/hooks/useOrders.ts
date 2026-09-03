@@ -37,9 +37,18 @@ export function useOrders() {
   /*
    * سرور و اولین render مرورگر باید دقیقاً
    * یک خروجی داشته باشند.
+   *
+   * setMounted داخل callback زمان‌بندی‌شده اجرا می‌شود
+   * تا در بدنه مستقیم effect باعث cascading render نشود.
    */
   useEffect(() => {
-    setMounted(true);
+    const timer = window.setTimeout(() => {
+      setMounted(true);
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, []);
 
   const fetchOrders =
@@ -111,7 +120,6 @@ export function useOrders() {
   }, [
     mounted,
     authLoading,
-    isAuthenticated,
     fetchOrders,
   ]);
 

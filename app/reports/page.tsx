@@ -22,6 +22,7 @@ import {
   FormEvent,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -745,10 +746,18 @@ export default function ReportsPage() {
     }
   }
 
+  const loadReportRef =
+    useRef(loadReport);
+
+  useEffect(() => {
+    loadReportRef.current =
+      loadReport;
+  });
+
   useEffect(() => {
     const timer =
       window.setTimeout(() => {
-        void loadReport();
+        void loadReportRef.current();
       }, 0);
 
     return () => {

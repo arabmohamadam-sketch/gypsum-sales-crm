@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import {
   activitiesService,
@@ -162,7 +168,11 @@ function StatCard({
   title: string;
   value: string;
   icon: string;
-  tone: "slate" | "blue" | "emerald" | "violet";
+  tone:
+    | "slate"
+    | "blue"
+    | "emerald"
+    | "violet";
 }) {
   const styles = {
     slate: {
@@ -215,10 +225,7 @@ export default function CallsPage() {
     useState<CallWithRelations[]>([]);
 
   const [loading, setLoading] =
-    useState(false);
-
-  const [mounted, setMounted] =
-    useState(false);
+    useState(true);
 
   const [error, setError] =
     useState<string | null>(null);
@@ -231,6 +238,13 @@ export default function CallsPage() {
   const [search, setSearch] =
     useState("");
 
+  const fetchCalls =
+    useCallback(
+      () =>
+        activitiesService.getCalls(),
+      []
+    );
+
   const loadCalls =
     useCallback(async () => {
       try {
@@ -238,7 +252,7 @@ export default function CallsPage() {
         setError(null);
 
         const data =
-          await activitiesService.getCalls();
+          await fetchCalls();
 
         setCalls(data);
       } catch (err) {
@@ -253,13 +267,46 @@ export default function CallsPage() {
       } finally {
         setLoading(false);
       }
-    }, []);
+    }, [fetchCalls]);
 
   useEffect(() => {
-    setMounted(true);
+    let cancelled = false;
 
-    void loadCalls();
-  }, [loadCalls]);
+    fetchCalls()
+      .then((data) => {
+        if (cancelled) {
+          return;
+        }
+
+        setCalls(data);
+        setError(null);
+      })
+      .catch((err) => {
+        if (cancelled) {
+          return;
+        }
+
+        console.error(
+          "خطا در دریافت لیست تماس‌ها:",
+          err
+        );
+
+        setError(
+          getErrorMessage(err)
+        );
+      })
+      .finally(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchCalls]);
 
   const filteredCalls = useMemo(() => {
     const query =
@@ -375,7 +422,6 @@ export default function CallsPage() {
       className="min-h-screen bg-slate-50 p-4 md:p-6"
     >
       <div className="mx-auto max-w-7xl space-y-6">
-        {/* Header */}
         <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-slate-900 via-blue-600 to-violet-600" />
 
@@ -424,7 +470,6 @@ export default function CallsPage() {
           </div>
         </section>
 
-        {/* Error */}
         {error && (
           <section className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
             <div className="h-1 bg-red-500" />
@@ -447,7 +492,6 @@ export default function CallsPage() {
           </section>
         )}
 
-        {/* Stats */}
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             title="کل تماس‌ها"
@@ -486,7 +530,6 @@ export default function CallsPage() {
           />
         </section>
 
-        {/* Search */}
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-4">
             <h2 className="font-black text-slate-900">
@@ -530,7 +573,6 @@ export default function CallsPage() {
           </div>
         </section>
 
-        {/* Loading */}
         {loading && (
           <section className="rounded-3xl border border-slate-200 bg-white p-10 shadow-sm">
             <div className="mx-auto max-w-sm text-center">
@@ -549,7 +591,6 @@ export default function CallsPage() {
           </section>
         )}
 
-        {/* Empty */}
         {!loading &&
           !error &&
           filteredCalls.length === 0 && (
@@ -581,7 +622,6 @@ export default function CallsPage() {
             </section>
           )}
 
-        {/* List */}
         {!loading &&
           !error &&
           filteredCalls.length > 0 && (
@@ -606,10 +646,7 @@ export default function CallsPage() {
                   onClick={() =>
                     void loadCalls()
                   }
-                  disabled={
-                    !mounted ||
-                    loading
-                  }
+                  disabled={loading}
                   className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {loading
@@ -618,7 +655,6 @@ export default function CallsPage() {
                 </button>
               </div>
 
-              {/* Desktop */}
               <div className="hidden overflow-x-auto md:block">
                 <table className="min-w-full text-right text-sm">
                   <thead className="border-b border-slate-100 bg-white">
@@ -662,11 +698,11 @@ export default function CallsPage() {
                           }
                           className="transition hover:bg-slate-50/70"
                         >
-                          {/* Customer */}
                           <td className="px-5 py-4">
                             <Link
                               href={
-                                call.customer?.id
+                                call.customer
+                                  ?.id
                                   ? `/customers/${call.customer.id}`
                                   : "#"
                               }
@@ -692,7 +728,8 @@ export default function CallsPage() {
                                     className="mt-1 text-xs text-slate-400"
                                   >
                                     {
-                                      call.customer
+                                      call
+                                        .customer
                                         .phone
                                     }
                                   </p>
@@ -701,7 +738,6 @@ export default function CallsPage() {
                             </Link>
                           </td>
 
-                          {/* User */}
                           <td className="px-5 py-4">
                             <p className="font-medium text-slate-800">
                               {call.user
@@ -720,14 +756,12 @@ export default function CallsPage() {
                             )}
                           </td>
 
-                          {/* Date */}
                           <td className="whitespace-nowrap px-5 py-4 font-medium text-slate-700">
                             {formatJalaliDateTime(
                               call.call_date
                             )}
                           </td>
 
-                          {/* Direction */}
                           <td className="px-5 py-4">
                             <span
                               className={`inline-flex rounded-full px-3 py-1.5 text-xs font-bold ${getDirectionClass(
@@ -740,7 +774,6 @@ export default function CallsPage() {
                             </span>
                           </td>
 
-                          {/* Outcome */}
                           <td className="px-5 py-4">
                             <span
                               className={`inline-flex rounded-full px-3 py-1.5 text-xs font-bold ${getOutcomeClass(
@@ -753,14 +786,12 @@ export default function CallsPage() {
                             </span>
                           </td>
 
-                          {/* Duration */}
                           <td className="whitespace-nowrap px-5 py-4 text-slate-700">
                             {formatDuration(
                               call.duration_seconds
                             )}
                           </td>
 
-                          {/* Actions */}
                           <td className="px-5 py-4">
                             <div className="flex flex-wrap gap-2">
                               <Link
@@ -797,7 +828,6 @@ export default function CallsPage() {
                 </table>
               </div>
 
-              {/* Mobile */}
               <div className="divide-y divide-slate-100 md:hidden">
                 {filteredCalls.map(
                   (call) => (
@@ -810,7 +840,8 @@ export default function CallsPage() {
                       <div className="flex items-start justify-between gap-3">
                         <Link
                           href={
-                            call.customer?.id
+                            call.customer
+                              ?.id
                               ? `/customers/${call.customer.id}`
                               : "#"
                           }
@@ -836,7 +867,8 @@ export default function CallsPage() {
                                 className="mt-1 text-xs text-slate-400"
                               >
                                 {
-                                  call.customer
+                                  call
+                                    .customer
                                     .phone
                                 }
                               </p>
@@ -917,7 +949,9 @@ export default function CallsPage() {
                             </p>
 
                             <p className="mt-1 text-sm leading-6 text-slate-600">
-                              {call.notes}
+                              {
+                                call.notes
+                              }
                             </p>
                           </div>
                         )}

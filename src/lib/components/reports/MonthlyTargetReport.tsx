@@ -1,7 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Loader2, Target } from "lucide-react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  AlertCircle,
+  Loader2,
+  Target,
+} from "lucide-react";
 
 import {
   reportTargetsService,
@@ -15,23 +24,41 @@ interface MonthlyTargetReportProps {
   enabled: boolean;
 }
 
-function toPersianDigits(value: string | number): string {
-  return String(value).replace(/\d/g, (digit) => "۰۱۲۳۴۵۶۷۸۹"[Number(digit)]);
+function toPersianDigits(
+  value: string | number
+): string {
+  return String(value).replace(
+    /\d/g,
+    (digit) =>
+      "۰۱۲۳۴۵۶۷۸۹"[Number(digit)]
+  );
 }
 
-function formatNumber(value: number): string {
-  return new Intl.NumberFormat("fa-IR", {
-    maximumFractionDigits: 1,
-  }).format(value);
+function formatNumber(
+  value: number
+): string {
+  return new Intl.NumberFormat(
+    "fa-IR",
+    {
+      maximumFractionDigits: 1,
+    }
+  ).format(value);
 }
 
-function formatPercent(value: number): string {
-  return new Intl.NumberFormat("fa-IR", {
-    maximumFractionDigits: 1,
-  }).format(value * 100);
+function formatPercent(
+  value: number
+): string {
+  return new Intl.NumberFormat(
+    "fa-IR",
+    {
+      maximumFractionDigits: 1,
+    }
+  ).format(value * 100);
 }
 
-function getMonthName(month: number): string {
+function getMonthName(
+  month: number
+): string {
   const months = [
     "فروردین",
     "اردیبهشت",
@@ -47,11 +74,18 @@ function getMonthName(month: number): string {
     "اسفند",
   ];
 
-  return months[month - 1] ?? "";
+  return (
+    months[month - 1] ?? ""
+  );
 }
 
-function clampPercent(value: number): number {
-  return Math.min(Math.max(value * 100, 0), 100);
+function clampPercent(
+  value: number
+): number {
+  return Math.min(
+    Math.max(value * 100, 0),
+    100
+  );
 }
 
 export default function MonthlyTargetReport({
@@ -59,77 +93,135 @@ export default function MonthlyTargetReport({
   month,
   enabled,
 }: MonthlyTargetReportProps) {
-  const [report, setReport] = useState<MonthlyTargetReport | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [
+    report,
+    setReport,
+  ] = useState<MonthlyTargetReport | null>(
+    null
+  );
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(false);
+
+  const [
+    error,
+    setError,
+  ] = useState<string | null>(
+    null
+  );
+
+  const validSelection =
+    enabled &&
+    year !== null &&
+    month !== null;
+
+  const reportKey = validSelection
+    ? `${year}-${month}`
+    : "";
+
+  const [loadedReportKey, setLoadedReportKey] =
+    useState("");
 
   useEffect(() => {
-    if (!enabled || year === null || month === null) {
-      setReport(null);
-      setError(null);
-      setLoading(false);
+    if (!validSelection) {
       return;
     }
 
     const selectedYear = year;
     const selectedMonth = month;
+    const selectedReportKey =
+      reportKey;
 
     let cancelled = false;
 
-    async function loadReport() {
-      try {
+    Promise.resolve()
+      .then(() => {
+        if (cancelled) {
+          return null;
+        }
+
         setLoading(true);
         setError(null);
+        setReport(null);
+        setLoadedReportKey("");
 
-        const data = await reportTargetsService.getMonthlyReport(
+        return reportTargetsService.getMonthlyReport(
           selectedYear,
           selectedMonth
         );
-
-        if (cancelled) {
+      })
+      .then((data) => {
+        if (
+          cancelled ||
+          data === null
+        ) {
           return;
         }
 
         setReport(data);
-      } catch (err) {
+        setLoadedReportKey(
+          selectedReportKey
+        );
+      })
+      .catch((err: unknown) => {
         if (cancelled) {
           return;
         }
 
-        console.error("Failed to load monthly target report:", err);
+        console.error(
+          "Failed to load monthly target report:",
+          err
+        );
 
         setReport(null);
+        setLoadedReportKey("");
 
         setError(
           err instanceof Error
             ? err.message
             : "خطا در دریافت گزارش هدف ماهانه"
         );
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
+      })
+      .finally(() => {
+        if (cancelled) {
+          return;
         }
-      }
-    }
 
-    void loadReport();
+        setLoading(false);
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [enabled, year, month]);
+  }, [
+    validSelection,
+    year,
+    month,
+    reportKey,
+  ]);
 
   const monthTitle = useMemo(() => {
-    if (year === null || month === null) {
+    if (
+      year === null ||
+      month === null
+    ) {
       return "";
     }
 
-    return `${getMonthName(month)} ${toPersianDigits(year)}`;
+    return `${getMonthName(
+      month
+    )} ${toPersianDigits(year)}`;
   }, [year, month]);
 
-  if (!enabled || year === null || month === null) {
+  if (!validSelection) {
     return null;
   }
+
+  const showReport =
+    loadedReportKey ===
+    reportKey;
 
   return (
     <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -145,7 +237,8 @@ export default function MonthlyTargetReport({
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              عملکرد نسبت به هدف ثبت‌شده برای {monthTitle}
+              عملکرد نسبت به هدف ثبت‌شده برای{" "}
+              {monthTitle}
             </p>
           </div>
         </div>
@@ -155,7 +248,10 @@ export default function MonthlyTargetReport({
         <div className="flex min-h-[180px] items-center justify-center">
           <div className="flex items-center gap-2 text-slate-500">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <span>در حال دریافت گزارش هدف ماهانه...</span>
+
+            <span>
+              در حال دریافت گزارش هدف ماهانه...
+            </span>
           </div>
         </div>
       ) : error ? (
@@ -163,12 +259,16 @@ export default function MonthlyTargetReport({
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
 
           <div>
-            <p className="font-semibold">خطا در دریافت گزارش</p>
+            <p className="font-semibold">
+              خطا در دریافت گزارش
+            </p>
 
-            <p className="mt-1 text-sm">{error}</p>
+            <p className="mt-1 text-sm">
+              {error}
+            </p>
           </div>
         </div>
-      ) : !report ? (
+      ) : !showReport || !report ? (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
           اطلاعات هدفی برای این ماه ثبت نشده است.
         </div>
@@ -177,31 +277,41 @@ export default function MonthlyTargetReport({
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <SummaryCard
               title="هدف فروش"
-              value={formatNumber(report.targetTonnage)}
+              value={formatNumber(
+                report.targetTonnage
+              )}
               suffix="تن"
             />
 
             <SummaryCard
               title="فروش محقق‌شده"
-              value={formatNumber(report.achievedTonnage)}
+              value={formatNumber(
+                report.achievedTonnage
+              )}
               suffix="تن"
             />
 
             <SummaryCard
               title="باقی‌مانده"
-              value={formatNumber(report.remainingTonnage)}
+              value={formatNumber(
+                report.remainingTonnage
+              )}
               suffix="تن"
             />
 
             <SummaryCard
               title="تعداد سفارش تأییدشده"
-              value={formatNumber(report.orderCount)}
+              value={formatNumber(
+                report.orderCount
+              )}
               suffix="سفارش"
             />
 
             <SummaryCard
               title="درصد تحقق"
-              value={formatPercent(report.achievementRate)}
+              value={formatPercent(
+                report.achievementRate
+              )}
               suffix="%"
             />
           </div>
@@ -214,13 +324,22 @@ export default function MonthlyTargetReport({
                 </p>
 
                 <p className="mt-1 text-xs text-slate-500">
-                  {formatNumber(report.achievedTonnage)} تن از{" "}
-                  {formatNumber(report.targetTonnage)} تن
+                  {formatNumber(
+                    report.achievedTonnage
+                  )}{" "}
+                  تن از{" "}
+                  {formatNumber(
+                    report.targetTonnage
+                  )}{" "}
+                  تن
                 </p>
               </div>
 
               <span className="text-sm font-bold text-slate-700">
-                {formatPercent(report.achievementRate)}%
+                {formatPercent(
+                  report.achievementRate
+                )}
+                %
               </span>
             </div>
 
@@ -228,7 +347,9 @@ export default function MonthlyTargetReport({
               <div
                 className="h-full rounded-full bg-amber-500 transition-all"
                 style={{
-                  width: `${clampPercent(report.achievementRate)}%`,
+                  width: `${clampPercent(
+                    report.achievementRate
+                  )}%`,
                 }}
               />
             </div>
@@ -248,9 +369,13 @@ export default function MonthlyTargetReport({
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {report.regions.map(
-                  (region: MonthlyTargetReportRegion) => (
+                  (
+                    region: MonthlyTargetReportRegion
+                  ) => (
                     <RegionCard
-                      key={region.regionId}
+                      key={
+                        region.regionId
+                      }
                       region={region}
                     />
                   )
@@ -275,7 +400,9 @@ function SummaryCard({
 }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-sm text-slate-500">{title}</p>
+      <p className="text-sm text-slate-500">
+        {title}
+      </p>
 
       <div className="mt-2 flex items-baseline gap-2">
         <span className="text-2xl font-bold text-slate-900">
@@ -295,8 +422,13 @@ function RegionCard({
 }: {
   region: MonthlyTargetReportRegion;
 }) {
-  const achievementRate = region.achievementRate ?? 0;
-  const progressWidth = clampPercent(achievementRate);
+  const achievementRate =
+    region.achievementRate ?? 0;
+
+  const progressWidth =
+    clampPercent(
+      achievementRate
+    );
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -307,29 +439,45 @@ function RegionCard({
           </h4>
 
           <p className="mt-1 text-xs text-slate-500">
-            {formatNumber(region.orderCount)} سفارش تأییدشده
+            {formatNumber(
+              region.orderCount
+            )}{" "}
+            سفارش تأییدشده
           </p>
         </div>
 
         <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">
-          {formatPercent(achievementRate)}%
+          {formatPercent(
+            achievementRate
+          )}
+          %
         </span>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div className="rounded-lg bg-slate-50 p-3">
-          <p className="text-xs text-slate-500">هدف</p>
+          <p className="text-xs text-slate-500">
+            هدف
+          </p>
 
           <p className="mt-1 font-bold text-slate-900">
-            {formatNumber(region.targetTonnage)} تن
+            {formatNumber(
+              region.targetTonnage
+            )}{" "}
+            تن
           </p>
         </div>
 
         <div className="rounded-lg bg-slate-50 p-3">
-          <p className="text-xs text-slate-500">محقق‌شده</p>
+          <p className="text-xs text-slate-500">
+            محقق‌شده
+          </p>
 
           <p className="mt-1 font-bold text-slate-900">
-            {formatNumber(region.achievedTonnage)} تن
+            {formatNumber(
+              region.achievedTonnage
+            )}{" "}
+            تن
           </p>
         </div>
       </div>

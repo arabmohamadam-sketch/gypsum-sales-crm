@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -17,9 +17,7 @@ import {
   XCircle,
 } from "lucide-react";
 
-import {
-  waybillsService,
-} from "@/src/lib/services/waybills";
+import { waybillsService } from "@/src/lib/services/waybills";
 
 import type {
   Loading,
@@ -79,7 +77,9 @@ function getWaybillStatusClass(status: string): string {
   }
 }
 
-function getLoadingStatusLabel(status?: string | null): string {
+function getLoadingStatusLabel(
+  status?: string | null
+): string {
   switch (status) {
     case "pending":
       return "در انتظار بارگیری";
@@ -95,7 +95,9 @@ function getLoadingStatusLabel(status?: string | null): string {
   }
 }
 
-function getLoadingStatusClass(status?: string | null): string {
+function getLoadingStatusClass(
+  status?: string | null
+): string {
   switch (status) {
     case "confirmed":
       return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100";
@@ -119,15 +121,14 @@ function getItemTonnage(item: WaybillItem): number {
   }
 
   return (
-    Number(item.quantity ?? 0) *
-    Number(item.weight_kg_snapshot ?? 0) /
+    (Number(item.quantity ?? 0) *
+      Number(item.weight_kg_snapshot ?? 0)) /
     1000
   );
 }
 
 export default function WaybillDetailsPage() {
   const params = useParams();
-  const router = useRouter();
 
   const waybillId =
     typeof params.id === "string"
@@ -138,7 +139,7 @@ export default function WaybillDetailsPage() {
     useState<Waybill | null>(null);
 
   const [loading, setLoading] =
-    useState(true);
+    useState(Boolean(waybillId));
 
   const [refreshing, setRefreshing] =
     useState(false);
@@ -156,8 +157,6 @@ export default function WaybillDetailsPage() {
     showRefreshing = false
   ) {
     if (!waybillId) {
-      setError("شناسه حواله نامعتبر است.");
-      setLoading(false);
       return;
     }
 
@@ -197,7 +196,52 @@ export default function WaybillDetailsPage() {
   }
 
   useEffect(() => {
-    void loadWaybill();
+    if (!waybillId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    waybillsService
+      .getById(waybillId)
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (!result) {
+          setWaybill(null);
+          setError(
+            "حواله موردنظر پیدا نشد."
+          );
+          return;
+        }
+
+        setWaybill(result);
+        setError("");
+      })
+      .catch((err: unknown) => {
+        if (cancelled) {
+          return;
+        }
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "خطا در دریافت اطلاعات حواله."
+        );
+      })
+      .finally(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [waybillId]);
 
   async function handleConfirmLoading() {
@@ -262,9 +306,7 @@ export default function WaybillDetailsPage() {
       return;
     }
 
-    if (
-      waybill.status !== "issued"
-    ) {
+    if (waybill.status !== "issued") {
       setError(
         "فقط حواله صادرشده امکان لغو بارگیری دارد."
       );
@@ -344,6 +386,48 @@ export default function WaybillDetailsPage() {
   const loadingRecord:
     Loading | null =
     waybill?.loading ?? null;
+
+  /*
+   * شناسه حواله نامعتبر:
+   * به جای setState داخل effect، مستقیماً از مقدار waybillId
+   * وضعیت را مشخص می‌کنیم.
+   */
+  if (!waybillId) {
+    return (
+      <main
+        dir="rtl"
+        className="mx-auto max-w-[1300px]"
+      >
+        <section className="overflow-hidden rounded-3xl border border-red-200 bg-white shadow-sm">
+          <div className="h-1.5 bg-red-500" />
+
+          <div className="p-8">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-600">
+              <XCircle size={25} />
+            </div>
+
+            <h1 className="mt-5 text-2xl font-black text-slate-900">
+              شناسه حواله نامعتبر است
+            </h1>
+
+            <p className="mt-2 text-sm leading-7 text-red-600">
+              شناسه حواله برای نمایش اطلاعات معتبر نیست.
+            </p>
+
+            <div className="mt-6">
+              <Link
+                href="/waybills"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50"
+              >
+                <ArrowRight size={16} />
+                بازگشت به حواله‌ها
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   if (loading) {
     return (

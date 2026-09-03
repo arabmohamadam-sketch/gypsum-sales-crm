@@ -7,15 +7,19 @@ import {
   useEffect,
   useState,
 } from "react";
+
 import { useSearchParams } from "next/navigation";
 
 import { activitiesService } from "@/src/lib/services/activities";
 import { customersService } from "@/src/lib/services/customers";
+
 import {
   usersService,
   type SalesUser,
 } from "@/src/lib/services/users";
+
 import type { Customer } from "@/src/lib/types/customer";
+
 import {
   gregorianToJalali,
   jalaliToGregorian,
@@ -83,10 +87,7 @@ function getCustomerTypeLabel(
     return "";
   }
 
-  return (
-    customerTypeLabels[type] ??
-    type
-  );
+  return customerTypeLabels[type] ?? type;
 }
 
 function getCustomerLabel(
@@ -149,6 +150,7 @@ function toPersianDigits(
 
 function getCurrentJalaliDate() {
   const now = new Date();
+
   const jalali =
     gregorianToJalali(now);
 
@@ -192,6 +194,19 @@ function buildGregorianIso(
   ) {
     throw new Error(
       "تاریخ جلالی واردشده معتبر نیست."
+    );
+  }
+
+  if (
+    !Number.isInteger(hour) ||
+    hour < 0 ||
+    hour > 23 ||
+    !Number.isInteger(minute) ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    throw new Error(
+      "ساعت یا دقیقه واردشده معتبر نیست."
     );
   }
 
@@ -281,9 +296,7 @@ function NewCallForm() {
     useState<SalesUser[]>([]);
 
   const [customerId, setCustomerId] =
-    useState(
-      customerIdFromUrl
-    );
+    useState(customerIdFromUrl);
 
   const [userId, setUserId] =
     useState("");
@@ -319,8 +332,10 @@ function NewCallForm() {
   const [outcome, setOutcome] =
     useState("answered");
 
-  const [durationMinutes, setDurationMinutes] =
-    useState("");
+  const [
+    durationMinutes,
+    setDurationMinutes,
+  ] = useState("");
 
   const [notes, setNotes] =
     useState("");
@@ -336,12 +351,6 @@ function NewCallForm() {
 
   const [success, setSuccess] =
     useState<string | null>(null);
-
-  useEffect(() => {
-    setCustomerId(
-      customerIdFromUrl
-    );
-  }, [customerIdFromUrl]);
 
   useEffect(() => {
     let mounted = true;
@@ -377,13 +386,19 @@ function NewCallForm() {
                 customerIdFromUrl
             );
 
-          if (!customerExists) {
+          if (customerExists) {
+            setCustomerId(
+              customerIdFromUrl
+            );
+          } else {
             setCustomerId("");
 
             setError(
               "مشتری انتخاب‌شده در فهرست مشتریان پیدا نشد."
             );
           }
+        } else {
+          setCustomerId("");
         }
 
         if (
@@ -529,9 +544,9 @@ function NewCallForm() {
           selectedHour,
           selectedMinute
         );
-    } catch {
+    } catch (err) {
       setError(
-        "تاریخ جلالی واردشده معتبر نیست."
+        getErrorMessage(err)
       );
       return;
     }
@@ -572,8 +587,7 @@ function NewCallForm() {
       await activitiesService.createCall({
         customer_id:
           customerId,
-        user_id:
-          userId,
+        user_id: userId,
         call_date:
           callDateIso,
         direction,
@@ -653,7 +667,8 @@ function NewCallForm() {
   const selectedCustomer =
     customers.find(
       (customer) =>
-        customer.id === customerId
+        customer.id ===
+        customerId
     );
 
   const selectedUser =
@@ -668,7 +683,6 @@ function NewCallForm() {
       className="min-h-screen bg-slate-50 p-4 md:p-6"
     >
       <div className="mx-auto max-w-5xl space-y-6">
-        {/* Header */}
         <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-slate-900 via-blue-600 to-violet-600" />
 
@@ -713,7 +727,6 @@ function NewCallForm() {
           </div>
         </section>
 
-        {/* Alerts */}
         {error && (
           <section className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
             <div className="h-1 bg-red-500" />
@@ -759,12 +772,9 @@ function NewCallForm() {
         )}
 
         <form
-          onSubmit={
-            handleSubmit
-          }
+          onSubmit={handleSubmit}
           className="space-y-6"
         >
-          {/* Customer */}
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
             <SectionHeader
               number="۱"
@@ -822,9 +832,7 @@ function NewCallForm() {
                     <button
                       type="button"
                       onClick={() => {
-                        setCustomerId(
-                          ""
-                        );
+                        setCustomerId("");
                       }}
                       className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
                     >
@@ -890,7 +898,6 @@ function NewCallForm() {
             )}
           </section>
 
-          {/* User */}
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
             <SectionHeader
               number="۲"
@@ -974,12 +981,8 @@ function NewCallForm() {
                   {users.map(
                     (user) => (
                       <option
-                        key={
-                          user.id
-                        }
-                        value={
-                          user.id
-                        }
+                        key={user.id}
+                        value={user.id}
                       >
                         {
                           user.full_name
@@ -995,7 +998,6 @@ function NewCallForm() {
             )}
           </section>
 
-          {/* Date / Time */}
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
             <SectionHeader
               number="۳"
@@ -1064,12 +1066,8 @@ function NewCallForm() {
 
                         return (
                           <option
-                            key={
-                              value
-                            }
-                            value={
-                              value
-                            }
+                            key={value}
+                            value={value}
                           >
                             {toPersianDigits(
                               value
@@ -1115,12 +1113,8 @@ function NewCallForm() {
 
                         return (
                           <option
-                            key={
-                              value
-                            }
-                            value={
-                              value
-                            }
+                            key={value}
+                            value={value}
                           >
                             {toPersianDigits(
                               value
@@ -1168,12 +1162,8 @@ function NewCallForm() {
 
                         return (
                           <option
-                            key={
-                              value
-                            }
-                            value={
-                              value
-                            }
+                            key={value}
+                            value={value}
                           >
                             {toPersianDigits(
                               value
@@ -1219,12 +1209,8 @@ function NewCallForm() {
 
                         return (
                           <option
-                            key={
-                              value
-                            }
-                            value={
-                              value
-                            }
+                            key={value}
+                            value={value}
                           >
                             {toPersianDigits(
                               value
@@ -1239,7 +1225,6 @@ function NewCallForm() {
             </div>
           </section>
 
-          {/* Call Details */}
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
             <SectionHeader
               number="۴"
@@ -1249,7 +1234,6 @@ function NewCallForm() {
             />
 
             <div className="grid gap-6 md:grid-cols-2">
-              {/* Direction */}
               <div>
                 <label className="mb-3 block text-sm font-bold text-slate-700">
                   جهت تماس
@@ -1311,7 +1295,6 @@ function NewCallForm() {
                 </div>
               </div>
 
-              {/* Outcome */}
               <div>
                 <label
                   htmlFor="outcome"
@@ -1349,7 +1332,6 @@ function NewCallForm() {
                 </select>
               </div>
 
-              {/* Duration */}
               <div>
                 <label
                   htmlFor="duration"
@@ -1385,7 +1367,6 @@ function NewCallForm() {
                 </div>
               </div>
 
-              {/* Notes */}
               <div className="md:col-span-2">
                 <label
                   htmlFor="notes"
@@ -1410,7 +1391,6 @@ function NewCallForm() {
             </div>
           </section>
 
-          {/* Preview */}
           <section className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 text-white shadow-lg">
             <div className="p-6 md:p-7">
               <div className="mb-6 flex items-center justify-between gap-3">
@@ -1484,7 +1464,6 @@ function NewCallForm() {
             </div>
           </section>
 
-          {/* Actions */}
           <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-6 sm:flex-row sm:justify-between">
             <Link
               href="/activities/calls"

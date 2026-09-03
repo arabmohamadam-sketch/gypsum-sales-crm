@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 
 import {
   ArrowLeft,
@@ -30,54 +35,36 @@ import {
   jalaliToGregorianDate,
 } from "@/src/lib/utils/jalali";
 
-import {
-  useOrders,
-} from "@/src/lib/hooks/useOrders";
+import { useOrders } from "@/src/lib/hooks/useOrders";
 
-import {
-  waybillsService,
-} from "@/src/lib/services/waybills";
+import { waybillsService } from "@/src/lib/services/waybills";
 
-import type {
-  Waybill,
-} from "@/src/lib/types/waybill";
+import type { Waybill } from "@/src/lib/types/waybill";
 
 import type {
   OrderWithRelations,
   UpdateOrderInput,
 } from "@/src/lib/services/orders";
 
-import type {
-  OrderItem,
-} from "@/src/lib/types/order";
+import type { OrderItem } from "@/src/lib/types/order";
 
 type OrderStatus =
   | "draft"
   | "confirmed"
   | "cancelled";
 
-function formatNumber(
-  value: number
-): string {
+function formatNumber(value: number): string {
   if (!Number.isFinite(value)) {
     return "۰";
   }
 
-  return new Intl.NumberFormat(
-    "fa-IR",
-    {
-      maximumFractionDigits: 2,
-    }
-  ).format(value);
+  return new Intl.NumberFormat("fa-IR", {
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
-function getStatusLabel(
-  status: string
-): string {
-  const labels: Record<
-    string,
-    string
-  > = {
+function getStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
     draft: "پیش‌نویس",
     confirmed: "تأیید شده",
     cancelled: "لغو شده",
@@ -86,9 +73,7 @@ function getStatusLabel(
   return labels[status] ?? status;
 }
 
-function getStatusClass(
-  status: string
-): string {
+function getStatusClass(status: string): string {
   switch (status) {
     case "confirmed":
       return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100";
@@ -102,44 +87,24 @@ function getStatusClass(
   }
 }
 
-function getStatusIcon(
-  status: string
-) {
+function getStatusIcon(status: string) {
   switch (status) {
     case "confirmed":
-      return (
-        <CheckCircle2
-          size={15}
-        />
-      );
+      return <CheckCircle2 size={15} />;
 
     case "cancelled":
-      return (
-        <XCircle
-          size={15}
-        />
-      );
+      return <XCircle size={15} />;
 
     case "draft":
     default:
-      return (
-        <FileText
-          size={15}
-        />
-      );
+      return <FileText size={15} />;
   }
 }
 
 function getSourceLabel(
-  source:
-    | string
-    | null
-    | undefined
+  source: string | null | undefined
 ): string {
-  const labels: Record<
-    string,
-    string
-  > = {
+  const labels: Record<string, string> = {
     manual: "ثبت دستی",
     mobile_app: "اپلیکیشن موبایل",
     whatsapp: "واتساپ",
@@ -156,52 +121,30 @@ function getSourceLabel(
 }
 
 function getCustomerTypeLabel(
-  value:
-    | string
-    | null
-    | undefined
+  value: string | null | undefined
 ): string {
   if (!value) {
     return "—";
   }
 
-  const labels: Record<
-    string,
-    string
-  > = {
-    building_material_store:
-      "مصالح‌فروشی",
-    building_material_stores:
-      "مصالح‌فروشی",
-    contractor:
-      "پیمانکار",
-    contractor_company:
-      "پیمانکار",
-    employer:
-      "کارفرما",
-    employers:
-      "کارفرما",
-    plasterer:
-      "گچ‌کار",
-    plaster_worker:
-      "گچ‌کار",
-    plasterer_company:
-      "گچ‌کار",
-    distributor:
-      "توزیع‌کننده",
-    retailer:
-      "خرده‌فروشی",
+  const labels: Record<string, string> = {
+    building_material_store: "مصالح‌فروشی",
+    building_material_stores: "مصالح‌فروشی",
+    contractor: "پیمانکار",
+    contractor_company: "پیمانکار",
+    employer: "کارفرما",
+    employers: "کارفرما",
+    plasterer: "گچ‌کار",
+    plaster_worker: "گچ‌کار",
+    plasterer_company: "گچ‌کار",
+    distributor: "توزیع‌کننده",
+    retailer: "خرده‌فروشی",
   };
 
-  return (
-    labels[value] ??
-    value
-  );
+  return labels[value] ?? value;
 }
 
-function getWaybillStatusLabel(
-  status: string
-): string {
+function getWaybillStatusLabel(status: string): string {
   switch (status) {
     case "draft":
       return "پیش‌نویس";
@@ -220,9 +163,7 @@ function getWaybillStatusLabel(
   }
 }
 
-function getWaybillStatusClass(
-  status: string
-): string {
+function getWaybillStatusClass(status: string): string {
   switch (status) {
     case "issued":
       return "bg-blue-50 text-blue-700 ring-1 ring-blue-100";
@@ -240,10 +181,7 @@ function getWaybillStatusClass(
 }
 
 function getLoadingStatusLabel(
-  status:
-    | string
-    | null
-    | undefined
+  status: string | null | undefined
 ): string {
   switch (status) {
     case "confirmed":
@@ -276,14 +214,10 @@ function InfoCard({
     | "violet";
 }) {
   const toneClasses = {
-    slate:
-      "bg-slate-100 text-slate-700",
-    blue:
-      "bg-blue-50 text-blue-700",
-    emerald:
-      "bg-emerald-50 text-emerald-700",
-    violet:
-      "bg-violet-50 text-violet-700",
+    slate: "bg-slate-100 text-slate-700",
+    blue: "bg-blue-50 text-blue-700",
+    emerald: "bg-emerald-50 text-emerald-700",
+    violet: "bg-violet-50 text-violet-700",
   };
 
   return (
@@ -346,31 +280,22 @@ function ProductItemCard({
   item: OrderItem;
   index: number;
 }) {
-  const quantity =
-    Number(
-      item.quantity ?? 0
-    );
+  const quantity = Number(item.quantity ?? 0);
 
-  const weight =
-    Number(
-      item.weight_kg_snapshot ??
-        item.bag_weight_kg ??
-        0
-    );
+  const weight = Number(
+    item.weight_kg_snapshot ??
+      item.bag_weight_kg ??
+      0
+  );
 
-  const tonnage =
-    Number(
-      item.tonnage ?? 0
-    );
+  const tonnage = Number(item.tonnage ?? 0);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 transition hover:bg-white hover:shadow-sm">
       <div className="flex flex-col gap-5">
         <div className="flex items-start gap-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 text-sm font-black text-white shadow-sm">
-            {formatNumber(
-              index + 1
-            )}
+            {formatNumber(index + 1)}
           </div>
 
           <div className="min-w-0 flex-1">
@@ -396,9 +321,7 @@ function ProductItemCard({
             </p>
 
             <p className="mt-1 text-lg font-black text-slate-900">
-              {formatNumber(
-                quantity
-              )}{" "}
+              {formatNumber(quantity)}{" "}
               <span className="text-xs font-bold text-slate-400">
                 کیسه
               </span>
@@ -411,9 +334,7 @@ function ProductItemCard({
             </p>
 
             <p className="mt-1 text-lg font-black text-slate-900">
-              {formatNumber(
-                weight
-              )}{" "}
+              {formatNumber(weight)}{" "}
               <span className="text-xs font-bold text-slate-400">
                 کیلو
               </span>
@@ -427,8 +348,7 @@ function ProductItemCard({
 
             <p className="mt-1 text-lg font-black text-blue-800">
               {formatNumber(
-                quantity *
-                  weight
+                quantity * weight
               )}{" "}
               <span className="text-xs font-bold">
                 کیلو
@@ -442,9 +362,7 @@ function ProductItemCard({
             </p>
 
             <p className="mt-1 text-lg font-black text-emerald-800">
-              {formatNumber(
-                tonnage
-              )}{" "}
+              {formatNumber(tonnage)}{" "}
               <span className="text-xs font-bold">
                 تن
               </span>
@@ -454,23 +372,15 @@ function ProductItemCard({
 
         <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-slate-400">
-            محاسبه:
-            {" "}
-            {formatNumber(
-              quantity
-            )}
+            محاسبه:{" "}
+            {formatNumber(quantity)}
             {" × "}
-            {formatNumber(
-              weight
-            )}
+            {formatNumber(weight)}
             {" ÷ ۱۰۰۰"}
           </p>
 
           <p className="text-sm font-black text-emerald-700">
-            {formatNumber(
-              tonnage
-            )}{" "}
-            تن
+            {formatNumber(tonnage)} تن
           </p>
         </div>
       </div>
@@ -479,15 +389,11 @@ function ProductItemCard({
 }
 
 export default function OrderDetailsPage() {
-  const params =
-    useParams();
-
-  const router =
-    useRouter();
+  const params = useParams();
+  const router = useRouter();
 
   const orderId =
-    typeof params.id ===
-    "string"
+    typeof params.id === "string"
       ? params.id
       : "";
 
@@ -501,15 +407,12 @@ export default function OrderDetailsPage() {
   } = useOrders();
 
   const order =
-    (
-      orders.find(
-        (item) =>
-          item.id ===
-          orderId
-      ) as
-        | OrderWithRelations
-        | undefined
-    ) ?? null;
+    (orders.find(
+      (item) =>
+        item.id === orderId
+    ) as
+      | OrderWithRelations
+      | undefined) ?? null;
 
   const currentJalaliDate =
     order
@@ -524,11 +427,15 @@ export default function OrderDetailsPage() {
   const [deleting, setDeleting] =
     useState(false);
 
-  const [waybillLoading, setWaybillLoading] =
-    useState(false);
+  const [
+    waybillLoading,
+    setWaybillLoading,
+  ] = useState(Boolean(orderId));
 
-  const [waybillCreating, setWaybillCreating] =
-    useState(false);
+  const [
+    waybillCreating,
+    setWaybillCreating,
+  ] = useState(false);
 
   const [waybills, setWaybills] =
     useState<Waybill[]>([]);
@@ -558,10 +465,10 @@ export default function OrderDetailsPage() {
     status,
     setStatus,
   ] = useState<
-    | ""
-    | "draft"
-    | "confirmed"
-    | "cancelled"
+    "" |
+      "draft" |
+      "confirmed" |
+      "cancelled"
   >("");
 
   const [
@@ -572,25 +479,19 @@ export default function OrderDetailsPage() {
   const displayJalaliYear =
     jalaliYear ||
     (currentJalaliDate
-      ? String(
-          currentJalaliDate.year
-        )
+      ? String(currentJalaliDate.year)
       : "");
 
   const displayJalaliMonth =
     jalaliMonth ||
     (currentJalaliDate
-      ? String(
-          currentJalaliDate.month
-        )
+      ? String(currentJalaliDate.month)
       : "1");
 
   const displayJalaliDay =
     jalaliDay ||
     (currentJalaliDate
-      ? String(
-          currentJalaliDate.day
-        )
+      ? String(currentJalaliDate.day)
       : "1");
 
   const displayStatus =
@@ -603,25 +504,19 @@ export default function OrderDetailsPage() {
   const displayNotes =
     notes !== ""
       ? notes
-      : order?.notes ??
-        "";
+      : order?.notes ?? "";
 
-  const orderItems =
-    (
-      order?.items ??
-      []
-    ).filter(
-      (item) =>
-        !item.deleted_at
-    );
+  const orderItems = (
+    order?.items ?? []
+  ).filter(
+    (item) => !item.deleted_at
+  );
 
   const calculatedItemsTonnage =
     orderItems.reduce(
       (sum, item) =>
         sum +
-        Number(
-          item.tonnage ?? 0
-        ),
+        Number(item.tonnage ?? 0),
       0
     );
 
@@ -630,46 +525,90 @@ export default function OrderDetailsPage() {
       order &&
         order.status ===
           "confirmed" &&
-        orderItems.length >
-          0 &&
+        orderItems.length > 0 &&
         waybills.length === 0
     );
 
-  async function loadOrderWaybills() {
-    if (!orderId) {
-      return;
-    }
+  const fetchOrderWaybills =
+    useCallback(async () => {
+      if (!orderId) {
+        return [];
+      }
 
-    setWaybillLoading(
-      true
-    );
+      return waybillsService.getByOrderId(
+        orderId
+      );
+    }, [orderId]);
 
-    try {
-      const result =
-        await waybillsService.getByOrderId(
-          orderId
+  const loadOrderWaybills =
+    useCallback(async () => {
+      if (!orderId) {
+        return;
+      }
+
+      setWaybillLoading(true);
+
+      try {
+        const result =
+          await fetchOrderWaybills();
+
+        setWaybills(result);
+      } catch (err) {
+        console.error(
+          "ORDER WAYBILLS LOAD:",
+          err
         );
 
-      setWaybills(
-        result
-      );
-    } catch (err) {
-      console.error(
-        "ORDER WAYBILLS LOAD:",
-        err
-      );
-
-      setWaybills([]);
-    } finally {
-      setWaybillLoading(
-        false
-      );
-    }
-  }
+        setWaybills([]);
+      } finally {
+        setWaybillLoading(false);
+      }
+    }, [
+      orderId,
+      fetchOrderWaybills,
+    ]);
 
   useEffect(() => {
-    void loadOrderWaybills();
-  }, [orderId]);
+    let cancelled = false;
+
+    if (!orderId) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    fetchOrderWaybills()
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+
+        setWaybills(result);
+      })
+      .catch((err) => {
+        if (cancelled) {
+          return;
+        }
+
+        console.error(
+          "ORDER WAYBILLS LOAD:",
+          err
+        );
+
+        setWaybills([]);
+      })
+      .finally(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setWaybillLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [orderId, fetchOrderWaybills]);
 
   async function handleIssueWaybill() {
     if (!order) {
@@ -706,9 +645,7 @@ export default function OrderDetailsPage() {
       return;
     }
 
-    setWaybillCreating(
-      true
-    );
+    setWaybillCreating(true);
     setMessage("");
     setFormError("");
 
@@ -717,19 +654,16 @@ export default function OrderDetailsPage() {
         getTodayJalali();
 
       const waybill =
-        await waybillsService.create(
-          {
-            order_id:
-              order.id,
-            waybill_date:
-              jalaliToGregorianDate(
-                today
-              ),
-            notes:
-              displayNotes.trim() ||
-              null,
-          }
-        );
+        await waybillsService.create({
+          order_id: order.id,
+          waybill_date:
+            jalaliToGregorianDate(
+              today
+            ),
+          notes:
+            displayNotes.trim() ||
+            null,
+        });
 
       setMessage(
         `حواله شماره ${formatNumber(
@@ -741,12 +675,9 @@ export default function OrderDetailsPage() {
 
       await loadOrderWaybills();
 
-      window.setTimeout(
-        () => {
-          setMessage("");
-        },
-        4000
-      );
+      window.setTimeout(() => {
+        setMessage("");
+      }, 4000);
     } catch (err) {
       console.error(
         "ORDER ISSUE WAYBILL:",
@@ -759,9 +690,7 @@ export default function OrderDetailsPage() {
           : "خطا در صدور حواله."
       );
     } finally {
-      setWaybillCreating(
-        false
-      );
+      setWaybillCreating(false);
     }
   }
 
@@ -775,20 +704,17 @@ export default function OrderDetailsPage() {
     setFormError("");
 
     try {
-      const year =
-        Number(
-          displayJalaliYear
-        );
+      const year = Number(
+        displayJalaliYear
+      );
 
-      const month =
-        Number(
-          displayJalaliMonth
-        );
+      const month = Number(
+        displayJalaliMonth
+      );
 
-      const day =
-        Number(
-          displayJalaliDay
-        );
+      const day = Number(
+        displayJalaliDay
+      );
 
       const jalaliDate = {
         year,
@@ -796,11 +722,7 @@ export default function OrderDetailsPage() {
         day,
       };
 
-      if (
-        !isValidJalaliDate(
-          jalaliDate
-        )
-      ) {
+      if (!isValidJalaliDate(jalaliDate)) {
         throw new Error(
           "تاریخ جلالی واردشده معتبر نیست."
         );
@@ -811,17 +733,15 @@ export default function OrderDetailsPage() {
           jalaliDate
         );
 
-      const payload:
-        UpdateOrderInput =
-        {
-          order_date:
-            gregorianDate,
-          status:
-            displayStatus,
-          notes:
-            displayNotes.trim() ||
-            null,
-        };
+      const payload: UpdateOrderInput = {
+        order_date:
+          gregorianDate,
+        status:
+          displayStatus,
+        notes:
+          displayNotes.trim() ||
+          null,
+      };
 
       await updateOrder(
         order.id,
@@ -840,12 +760,9 @@ export default function OrderDetailsPage() {
 
       await loadOrderWaybills();
 
-      window.setTimeout(
-        () => {
-          setMessage("");
-        },
-        3000
-      );
+      window.setTimeout(() => {
+        setMessage("");
+      }, 3000);
     } catch (err) {
       setFormError(
         err instanceof Error
@@ -875,13 +792,8 @@ export default function OrderDetailsPage() {
     setFormError("");
 
     try {
-      await deleteOrder(
-        order.id
-      );
-
-      router.push(
-        "/orders"
-      );
+      await deleteOrder(order.id);
+      router.push("/orders");
     } catch (err) {
       setFormError(
         err instanceof Error
@@ -1007,8 +919,6 @@ export default function OrderDetailsPage() {
       dir="rtl"
       className="mx-auto max-w-[1300px] space-y-6 pb-14"
     >
-      {/* Header */}
-
       <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-slate-900 via-violet-600 to-blue-600" />
 
@@ -1053,9 +963,7 @@ export default function OrderDetailsPage() {
                 </div>
 
                 <p className="mt-2 break-all text-xs text-slate-400">
-                  شناسه سفارش:
-                  {" "}
-                  {order.id}
+                  شناسه سفارش: {order.id}
                 </p>
               </div>
             </div>
@@ -1122,8 +1030,6 @@ export default function OrderDetailsPage() {
         </div>
       </section>
 
-      {/* Messages */}
-
       {message && (
         <section className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
           <div className="h-1 bg-emerald-500" />
@@ -1168,8 +1074,6 @@ export default function OrderDetailsPage() {
         </section>
       )}
 
-      {/* Customer / Sales */}
-
       <section className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
           <SectionTitle
@@ -1181,9 +1085,8 @@ export default function OrderDetailsPage() {
           <div className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/80 to-white p-5">
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-lg font-black text-white">
-                {order.customer?.name?.charAt(
-                  0
-                ) || "م"}
+                {order.customer?.name?.charAt(0) ||
+                  "م"}
               </div>
 
               <div className="min-w-0 flex-1">
@@ -1196,10 +1099,12 @@ export default function OrderDetailsPage() {
                       "مشتری نامشخص"}
                   </Link>
 
-                  {order.customer?.customer_type && (
+                  {order.customer
+                    ?.customer_type && (
                     <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
                       {getCustomerTypeLabel(
-                        order.customer.customer_type
+                        order.customer
+                          .customer_type
                       )}
                     </span>
                   )}
@@ -1228,20 +1133,26 @@ export default function OrderDetailsPage() {
           <div className="rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50/80 to-white p-5">
             <div className="flex items-start gap-4">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-600 text-lg font-black text-white">
-                {order.sales_user?.full_name?.charAt(
-                  0
-                ) || "ب"}
+                {order.sales_user
+                  ?.full_name?.charAt(
+                    0
+                  ) || "ب"}
               </div>
 
               <div className="min-w-0">
                 <p className="text-lg font-black text-slate-900">
-                  {order.sales_user?.full_name ??
+                  {order.sales_user
+                    ?.full_name ??
                     "بازاریاب نامشخص"}
                 </p>
 
-                {order.sales_user?.job_title && (
+                {order.sales_user
+                  ?.job_title && (
                   <p className="mt-1 text-sm text-slate-500">
-                    {order.sales_user.job_title}
+                    {
+                      order.sales_user
+                        .job_title
+                    }
                   </p>
                 )}
 
@@ -1259,8 +1170,6 @@ export default function OrderDetailsPage() {
         </section>
       </section>
 
-      {/* Main summary */}
-
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
         <SectionTitle
           eyebrow="خلاصه سفارش"
@@ -1275,9 +1184,7 @@ export default function OrderDetailsPage() {
               order.order_date
             )}
             icon={
-              <CalendarDays
-                size={19}
-              />
+              <CalendarDays size={19} />
             }
             tone="blue"
           />
@@ -1302,9 +1209,7 @@ export default function OrderDetailsPage() {
               )
             )} تن`}
             icon={
-              <CheckCircle2
-                size={19}
-              />
+              <CheckCircle2 size={19} />
             }
             tone="emerald"
           />
@@ -1321,8 +1226,6 @@ export default function OrderDetailsPage() {
           />
         </div>
       </section>
-
-      {/* Order items */}
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1363,20 +1266,11 @@ export default function OrderDetailsPage() {
         ) : (
           <div className="space-y-4">
             {orderItems.map(
-              (
-                item,
-                index
-              ) => (
+              (item, index) => (
                 <ProductItemCard
-                  key={
-                    item.id
-                  }
-                  item={
-                    item
-                  }
-                  index={
-                    index
-                  }
+                  key={item.id}
+                  item={item}
+                  index={index}
                 />
               )
             )}
@@ -1391,10 +1285,7 @@ export default function OrderDetailsPage() {
                   <p className="mt-1 text-base font-black">
                     {formatNumber(
                       orderItems.reduce(
-                        (
-                          sum,
-                          item
-                        ) =>
+                        (sum, item) =>
                           sum +
                           Number(
                             item.quantity ??
@@ -1434,8 +1325,6 @@ export default function OrderDetailsPage() {
         )}
       </section>
 
-      {/* Waybills */}
-
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <SectionTitle
@@ -1447,6 +1336,7 @@ export default function OrderDetailsPage() {
           {waybills.length > 0 && (
             <span className="inline-flex w-fit items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700">
               <Truck size={14} />
+
               {formatNumber(
                 waybills.length
               )}{" "}
@@ -1513,22 +1403,18 @@ export default function OrderDetailsPage() {
             {waybills.map(
               (waybill) => {
                 const loadingStatus =
-                  waybill.loading?.status ??
-                  null;
+                  waybill.loading
+                    ?.status ?? null;
 
                 return (
                   <div
-                    key={
-                      waybill.id
-                    }
+                    key={waybill.id}
                     className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5"
                   >
                     <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                       <div className="flex items-start gap-4">
                         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm">
-                          <Truck
-                            size={21}
-                          />
+                          <Truck size={21} />
                         </div>
 
                         <div className="min-w-0">
@@ -1554,8 +1440,7 @@ export default function OrderDetailsPage() {
                           </div>
 
                           <p className="mt-2 text-sm text-slate-500">
-                            تاریخ حواله:
-                            {" "}
+                            تاریخ حواله:{" "}
                             <span className="font-black text-slate-700">
                               {formatJalaliDate(
                                 waybill.waybill_date
@@ -1564,8 +1449,7 @@ export default function OrderDetailsPage() {
                           </p>
 
                           <p className="mt-1 text-sm text-slate-500">
-                            وضعیت بارگیری:
-                            {" "}
+                            وضعیت بارگیری:{" "}
                             <span className="font-black text-slate-700">
                               {getLoadingStatusLabel(
                                 loadingStatus
@@ -1573,13 +1457,15 @@ export default function OrderDetailsPage() {
                             </span>
                           </p>
 
-                          {waybill.loading?.loading_date && (
+                          {waybill.loading
+                            ?.loading_date && (
                             <p className="mt-1 text-sm text-slate-500">
-                              تاریخ بارگیری:
-                              {" "}
+                              تاریخ بارگیری:{" "}
                               <span className="font-black text-slate-700">
                                 {formatJalaliDate(
-                                  waybill.loading.loading_date
+                                  waybill
+                                    .loading
+                                    .loading_date
                                 )}
                               </span>
                             </p>
@@ -1593,9 +1479,7 @@ export default function OrderDetailsPage() {
                           className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-600"
                         >
                           جزئیات حواله
-                          <ArrowLeft
-                            size={16}
-                          />
+                          <ArrowLeft size={16} />
                         </Link>
 
                         <Link
@@ -1603,9 +1487,7 @@ export default function OrderDetailsPage() {
                           className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
                         >
                           سفارش
-                          <Package
-                            size={15}
-                          />
+                          <Package size={15} />
                         </Link>
                       </div>
                     </div>
@@ -1617,8 +1499,6 @@ export default function OrderDetailsPage() {
         )}
       </section>
 
-      {/* Edit order */}
-
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
         <SectionTitle
           eyebrow="ویرایش"
@@ -1627,8 +1507,6 @@ export default function OrderDetailsPage() {
         />
 
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Date */}
-
           <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-5">
             <div className="mb-5 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-700">
@@ -1659,19 +1537,13 @@ export default function OrderDetailsPage() {
                   id="jalali-year"
                   type="text"
                   inputMode="numeric"
-                  value={
-                    displayJalaliYear
-                  }
-                  onChange={(
-                    event
-                  ) => {
+                  value={displayJalaliYear}
+                  onChange={(event) => {
                     const value =
                       event.target.value
                         .replace(
                           /[۰-۹]/g,
-                          (
-                            digit
-                          ) =>
+                          (digit) =>
                             String(
                               "۰۱۲۳۴۵۶۷۸۹".indexOf(
                                 digit
@@ -1683,9 +1555,7 @@ export default function OrderDetailsPage() {
                           ""
                         );
 
-                    setJalaliYear(
-                      value
-                    );
+                    setJalaliYear(value);
                   }}
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-center text-sm font-black text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                 />
@@ -1701,12 +1571,8 @@ export default function OrderDetailsPage() {
 
                 <select
                   id="jalali-month"
-                  value={
-                    displayJalaliMonth
-                  }
-                  onChange={(
-                    event
-                  ) =>
+                  value={displayJalaliMonth}
+                  onChange={(event) =>
                     setJalaliMonth(
                       event.target.value
                     )
@@ -1714,24 +1580,15 @@ export default function OrderDetailsPage() {
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-black text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                 >
                   {Array.from(
-                    {
-                      length: 12,
-                    },
-                    (
-                      _,
-                      index
-                    ) => {
+                    { length: 12 },
+                    (_, index) => {
                       const value =
                         index + 1;
 
                       return (
                         <option
-                          key={
-                            value
-                          }
-                          value={
-                            value
-                          }
+                          key={value}
+                          value={value}
                         >
                           {formatNumber(
                             value
@@ -1753,12 +1610,8 @@ export default function OrderDetailsPage() {
 
                 <select
                   id="jalali-day"
-                  value={
-                    displayJalaliDay
-                  }
-                  onChange={(
-                    event
-                  ) =>
+                  value={displayJalaliDay}
+                  onChange={(event) =>
                     setJalaliDay(
                       event.target.value
                     )
@@ -1769,21 +1622,14 @@ export default function OrderDetailsPage() {
                     {
                       length: 31,
                     },
-                    (
-                      _,
-                      index
-                    ) => {
+                    (_, index) => {
                       const value =
                         index + 1;
 
                       return (
                         <option
-                          key={
-                            value
-                          }
-                          value={
-                            value
-                          }
+                          key={value}
+                          value={value}
                         >
                           {formatNumber(
                             value
@@ -1797,8 +1643,6 @@ export default function OrderDetailsPage() {
             </div>
           </div>
 
-          {/* Status */}
-
           <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-5">
             <label
               htmlFor="order-status"
@@ -1809,12 +1653,8 @@ export default function OrderDetailsPage() {
 
             <select
               id="order-status"
-              value={
-                displayStatus
-              }
-              onChange={(
-                event
-              ) =>
+              value={displayStatus}
+              onChange={(event) =>
                 setStatus(
                   event.target
                     .value as OrderStatus
@@ -1844,15 +1684,12 @@ export default function OrderDetailsPage() {
                 displayStatus
               )}
 
-              وضعیت فعلی:
-              {" "}
+              وضعیت فعلی:{" "}
               {getStatusLabel(
                 displayStatus
               )}
             </div>
           </div>
-
-          {/* Tonnage */}
 
           <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-5">
             <div className="flex items-center gap-3">
@@ -1890,8 +1727,6 @@ export default function OrderDetailsPage() {
             </div>
           </div>
 
-          {/* Source */}
-
           <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-5">
             <label className="mb-3 block text-sm font-bold text-slate-700">
               منبع سفارش
@@ -1910,8 +1745,6 @@ export default function OrderDetailsPage() {
           </div>
         </div>
 
-        {/* Notes */}
-
         <div className="mt-6">
           <label
             htmlFor="order-notes"
@@ -1922,12 +1755,8 @@ export default function OrderDetailsPage() {
 
           <textarea
             id="order-notes"
-            value={
-              displayNotes
-            }
-            onChange={(
-              event
-            ) =>
+            value={displayNotes}
+            onChange={(event) =>
               setNotes(
                 event.target.value
               )
@@ -1938,14 +1767,10 @@ export default function OrderDetailsPage() {
           />
         </div>
 
-        {/* Actions */}
-
         <div className="mt-8 flex flex-col-reverse gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <button
             type="button"
-            onClick={
-              handleDelete
-            }
+            onClick={handleDelete}
             disabled={
               deleting ||
               saving
@@ -1958,13 +1783,13 @@ export default function OrderDetailsPage() {
                   size={16}
                   className="animate-spin"
                 />
+
                 در حال حذف...
               </>
             ) : (
               <>
-                <Trash2
-                  size={16}
-                />
+                <Trash2 size={16} />
+
                 حذف سفارش
               </>
             )}
@@ -1980,9 +1805,7 @@ export default function OrderDetailsPage() {
 
             <button
               type="button"
-              onClick={
-                handleSave
-              }
+              onClick={handleSave}
               disabled={
                 saving ||
                 deleting
@@ -1995,6 +1818,7 @@ export default function OrderDetailsPage() {
                     size={16}
                     className="animate-spin"
                   />
+
                   در حال ذخیره...
                 </>
               ) : (
@@ -2002,6 +1826,7 @@ export default function OrderDetailsPage() {
                   <CheckCircle2
                     size={17}
                   />
+
                   ذخیره تغییرات
                 </>
               )}
@@ -2009,8 +1834,6 @@ export default function OrderDetailsPage() {
           </div>
         </div>
       </section>
-
-      {/* System info */}
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
         <SectionTitle
@@ -2026,9 +1849,7 @@ export default function OrderDetailsPage() {
               order.created_at
             )}
             icon={
-              <CalendarDays
-                size={19}
-              />
+              <CalendarDays size={19} />
             }
             tone="slate"
           />
@@ -2039,9 +1860,7 @@ export default function OrderDetailsPage() {
               order.updated_at
             )}
             icon={
-              <RefreshCw
-                size={19}
-              />
+              <RefreshCw size={19} />
             }
             tone="blue"
           />
@@ -2050,14 +1869,11 @@ export default function OrderDetailsPage() {
             label="نسخه همگام‌سازی"
             value={formatNumber(
               Number(
-                order.sync_version ??
-                  0
+                order.sync_version ?? 0
               )
             )}
             icon={
-              <ClipboardList
-                size={19}
-              />
+              <ClipboardList size={19} />
             }
             tone="violet"
           />

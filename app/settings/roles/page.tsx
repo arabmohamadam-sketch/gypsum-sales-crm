@@ -1,11 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   ArrowRight,
@@ -17,9 +13,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import {
-  usePermissions,
-} from "@/src/lib/hooks/usePermissions";
+import { usePermissions } from "@/src/lib/hooks/usePermissions";
 
 import {
   rolePermissionsService,
@@ -27,10 +21,7 @@ import {
   type RolePermissionRole,
 } from "@/src/lib/services/role-permissions";
 
-const RESOURCE_LABELS: Record<
-  string,
-  string
-> = {
+const RESOURCE_LABELS: Record<string, string> = {
   admin: "مدیریت سیستم",
   customers: "مشتریان",
   orders: "سفارش‌ها",
@@ -41,10 +32,7 @@ const RESOURCE_LABELS: Record<
   users: "کاربران",
 };
 
-const ACTION_LABELS: Record<
-  string,
-  string
-> = {
+const ACTION_LABELS: Record<string, string> = {
   full_access: "دسترسی کامل",
   read: "مشاهده",
   write: "ایجاد و ویرایش",
@@ -74,172 +62,197 @@ export default function SettingsRolesPage() {
     hasPermission,
   } = usePermissions();
 
-  const canReadSettings =
-    hasPermission("settings.read");
+  const canReadSettings = hasPermission("settings.read");
+  const canManageSettings = hasPermission("settings.write");
 
-  const canManageSettings =
-    hasPermission("settings.write");
+  const [roles, setRoles] = useState<RolePermissionRole[]>([]);
+  const [permissions, setPermissions] = useState<RolePermissionItem[]>([]);
+  const [rolePermissionIds, setRolePermissionIds] = useState<
+    Record<string, string[]>
+  >({});
 
-  const [roles, setRoles] = useState<
-    RolePermissionRole[]
+  const [selectedRoleId, setSelectedRoleId] = useState<string>("");
+  const [selectedPermissionIds, setSelectedPermissionIds] = useState<
+    string[]
   >([]);
 
-  const [permissions, setPermissions] =
-    useState<RolePermissionItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  const [rolePermissionIds, setRolePermissionIds] =
-    useState<Record<string, string[]>>({});
+  /*
+   * این تابع فقط داده را دریافت می‌کند و خودش state را تغییر نمی‌دهد.
+   * بنابراین می‌توان آن را مستقیماً داخل useEffect اجرا کرد.
+   */
+  function fetchRoleData() {
+    return rolePermissionsService.getData();
+  }
 
-  const [selectedRoleId, setSelectedRoleId] =
-    useState<string>("");
+  /*
+   * بارگذاری اولیه داده‌ها.
+   * تمام setStateها داخل callbackهای Promise انجام می‌شوند.
+   */
+  useEffect(() => {
+    if (permissionsLoading || !canReadSettings) {
+      return;
+    }
 
-  const [selectedPermissionIds, setSelectedPermissionIds] =
-    useState<string[]>([]);
+    let cancelled = false;
 
-  const [loading, setLoading] =
-    useState(true);
+    fetchRoleData()
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
 
-  const [saving, setSaving] =
-    useState(false);
+        setRoles(result.roles);
+        setPermissions(result.permissions);
+        setRolePermissionIds(result.rolePermissionIds);
+        setError(null);
 
-  const [error, setError] =
-    useState<string | null>(null);
+        const currentRoleExists =
+          selectedRoleId &&
+          result.roles.some((role) => role.id === selectedRoleId);
 
-  const [success, setSuccess] =
-    useState<string | null>(null);
+        const nextRoleId = currentRoleExists
+          ? selectedRoleId
+          : result.roles[0]?.id ?? "";
 
+        setSelectedRoleId(nextRoleId);
+
+        setSelectedPermissionIds(
+          nextRoleId
+            ? result.rolePermissionIds[nextRoleId] ?? []
+            : []
+        );
+
+        setSuccess(null);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) {
+          return;
+        }
+
+        console.error(
+          "Failed to load role permissions:",
+          err
+        );
+
+        setError(getErrorMessage(err));
+        setRoles([]);
+        setPermissions([]);
+        setRolePermissionIds({});
+        setSelectedRoleId("");
+        setSelectedPermissionIds([]);
+      })
+      .finally(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [permissionsLoading, canReadSettings, selectedRoleId]);
+
+  /*
+   * بروزرسانی دستی.
+   * چون این تابع از event handler صدا زده می‌شود،
+   * استفاده از setState در آن مشکلی ایجاد نمی‌کند.
+   */
   async function loadData() {
     if (!canReadSettings) {
-      setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
       setError(null);
+      setSuccess(null);
 
-      const result =
-        await rolePermissionsService.getData();
+      const result = await rolePermissionsService.getData();
 
       setRoles(result.roles);
       setPermissions(result.permissions);
-      setRolePermissionIds(
-        result.rolePermissionIds
-      );
+      setRolePermissionIds(result.rolePermissionIds);
 
-      if (result.roles.length > 0) {
-        setSelectedRoleId(
-          (current) =>
-            current &&
-            result.roles.some(
-              (role) =>
-                role.id === current
-            )
-              ? current
-              : result.roles[0].id
-        );
-      } else {
-        setSelectedRoleId("");
-      }
+      const currentRoleExists =
+        selectedRoleId &&
+        result.roles.some((role) => role.id === selectedRoleId);
+
+      const nextRoleId = currentRoleExists
+        ? selectedRoleId
+        : result.roles[0]?.id ?? "";
+
+      setSelectedRoleId(nextRoleId);
+
+      setSelectedPermissionIds(
+        nextRoleId
+          ? result.rolePermissionIds[nextRoleId] ?? []
+          : []
+      );
     } catch (err) {
       console.error(
         "Failed to load role permissions:",
         err
       );
 
-      setError(
-        getErrorMessage(err)
-      );
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    if (!permissionsLoading) {
-      void loadData();
-    }
-  }, [
-    permissionsLoading,
-    canReadSettings,
-  ]);
+  const selectedRole = useMemo(
+    () =>
+      roles.find((role) => role.id === selectedRoleId) ?? null,
+    [roles, selectedRoleId]
+  );
 
-  useEffect(() => {
-    if (!selectedRoleId) {
-      setSelectedPermissionIds([]);
-      return;
+  const groupedPermissions = useMemo(() => {
+    const groups: Record<string, RolePermissionItem[]> = {};
+
+    for (const permission of permissions) {
+      if (permission.slug === "admin.full_access") {
+        continue;
+      }
+
+      if (!groups[permission.resource]) {
+        groups[permission.resource] = [];
+      }
+
+      groups[permission.resource].push(permission);
     }
+
+    return groups;
+  }, [permissions]);
+
+  function handleRoleSelect(roleId: string) {
+    setSelectedRoleId(roleId);
 
     setSelectedPermissionIds(
-      rolePermissionIds[
-        selectedRoleId
-      ] ?? []
+      rolePermissionIds[roleId] ?? []
     );
 
     setSuccess(null);
     setError(null);
-  }, [
-    selectedRoleId,
-    rolePermissionIds,
-  ]);
+  }
 
-  const selectedRole = useMemo(
-    () =>
-      roles.find(
-        (role) =>
-          role.id ===
-          selectedRoleId
-      ) ?? null,
-    [roles, selectedRoleId]
-  );
-
-  const groupedPermissions =
-    useMemo(() => {
-      const groups: Record<
-        string,
-        RolePermissionItem[]
-      > = {};
-
-      for (const permission of permissions) {
-        if (
-          permission.slug ===
-          "admin.full_access"
-        ) {
-          continue;
-        }
-
-        if (!groups[permission.resource]) {
-          groups[permission.resource] = [];
-        }
-
-        groups[
-          permission.resource
-        ].push(permission);
-      }
-
-      return groups;
-    }, [permissions]);
-
-  function togglePermission(
-    permissionId: string
-  ) {
+  function togglePermission(permissionId: string) {
     if (!canManageSettings) {
       return;
     }
 
     setSuccess(null);
 
-    setSelectedPermissionIds(
-      (current) =>
-        current.includes(permissionId)
-          ? current.filter(
-              (id) =>
-                id !== permissionId
-            )
-          : [
-              ...current,
-              permissionId,
-            ]
+    setSelectedPermissionIds((current) =>
+      current.includes(permissionId)
+        ? current.filter((id) => id !== permissionId)
+        : [...current, permissionId]
     );
   }
 
@@ -262,32 +275,23 @@ export default function SettingsRolesPage() {
         selectedPermissionIds
       );
 
-      setRolePermissionIds(
-        (current) => ({
-          ...current,
-          [selectedRoleId]:
-            selectedPermissionIds,
-        })
-      );
+      setRolePermissionIds((current) => ({
+        ...current,
+        [selectedRoleId]: selectedPermissionIds,
+      }));
 
       setSuccess(
         `دسترسی‌های نقش «${selectedRole.name}» با موفقیت ذخیره شد.`
       );
     } catch (err) {
-      setError(
-        getErrorMessage(err)
-      );
+      setError(getErrorMessage(err));
     } finally {
       setSaving(false);
     }
   }
 
-  function isPermissionSelected(
-    permissionId: string
-  ) {
-    return selectedPermissionIds.includes(
-      permissionId
-    );
+  function isPermissionSelected(permissionId: string) {
+    return selectedPermissionIds.includes(permissionId);
   }
 
   if (
@@ -386,10 +390,13 @@ export default function SettingsRolesPage() {
             onClick={() => {
               void loadData();
             }}
-            disabled={saving}
+            disabled={saving || loading}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
           >
-            <RefreshCw size={17} />
+            <RefreshCw
+              size={17}
+              className={loading ? "animate-spin" : ""}
+            />
             بروزرسانی
           </button>
         </div>
@@ -428,24 +435,18 @@ export default function SettingsRolesPage() {
 
           <div className="space-y-2">
             {roles.map((role) => {
-              const active =
-                role.id === selectedRoleId;
+              const active = role.id === selectedRoleId;
 
-              const permissionCount =
-                (
-                  rolePermissionIds[
-                    role.id
-                  ] ?? []
-                ).length;
+              const permissionCount = (
+                rolePermissionIds[role.id] ?? []
+              ).length;
 
               return (
                 <button
                   key={role.id}
                   type="button"
                   onClick={() => {
-                    setSelectedRoleId(
-                      role.id
-                    );
+                    handleRoleSelect(role.id);
                   }}
                   className={`w-full rounded-2xl border p-4 text-right transition ${
                     active
@@ -479,9 +480,7 @@ export default function SettingsRolesPage() {
                   </p>
 
                   <div className="mt-3 text-xs font-bold text-slate-500">
-                    {permissionCount.toLocaleString(
-                      "fa-IR"
-                    )}{" "}
+                    {permissionCount.toLocaleString("fa-IR")}{" "}
                     دسترسی فعال
                   </div>
                 </button>
@@ -538,8 +537,7 @@ export default function SettingsRolesPage() {
                 )}
               </div>
 
-              {selectedRole.slug ===
-                "company_admin" && (
+              {selectedRole.slug === "company_admin" && (
                 <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
                   <p className="text-xs font-bold leading-6 text-amber-800">
                     این نقش مدیریتی است. دسترسی
@@ -551,93 +549,66 @@ export default function SettingsRolesPage() {
               )}
 
               <div className="mt-6 space-y-6">
-                {Object.entries(
-                  groupedPermissions
-                ).map(
-                  ([
-                    resource,
-                    resourcePermissions,
-                  ]) => (
+                {Object.entries(groupedPermissions).map(
+                  ([resource, resourcePermissions]) => (
                     <div
                       key={resource}
-                      className="rounded-2xl border border-slate-200 overflow-hidden"
+                      className="overflow-hidden rounded-2xl border border-slate-200"
                     >
                       <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
                         <h3 className="text-sm font-black text-slate-800">
-                          {RESOURCE_LABELS[
-                            resource
-                          ] ||
-                            resource}
+                          {RESOURCE_LABELS[resource] || resource}
                         </h3>
                       </div>
 
                       <div className="grid gap-3 p-4 md:grid-cols-2">
-                        {resourcePermissions.map(
-                          (permission) => {
-                            const selected =
-                              isPermissionSelected(
-                                permission.id
-                              );
+                        {resourcePermissions.map((permission) => {
+                          const selected =
+                            isPermissionSelected(permission.id);
 
-                            return (
-                              <label
-                                key={
-                                  permission.id
-                                }
-                                className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-4 transition ${
-                                  selected
-                                    ? "border-blue-200 bg-blue-50"
-                                    : "border-slate-200 bg-white hover:bg-slate-50"
-                                } ${
-                                  canManageSettings
-                                    ? ""
-                                    : "cursor-default"
-                                }`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={
-                                    selected
-                                  }
-                                  disabled={
-                                    !canManageSettings
-                                  }
-                                  onChange={() => {
-                                    togglePermission(
-                                      permission.id
-                                    );
-                                  }}
-                                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                                />
+                          return (
+                            <label
+                              key={permission.id}
+                              className={`flex items-center gap-3 rounded-2xl border p-4 transition ${
+                                selected
+                                  ? "border-blue-200 bg-blue-50"
+                                  : "border-slate-200 bg-white"
+                              } ${
+                                canManageSettings
+                                  ? "cursor-pointer hover:bg-slate-50"
+                                  : "cursor-default"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                disabled={!canManageSettings}
+                                onChange={() => {
+                                  togglePermission(permission.id);
+                                }}
+                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                              />
 
-                                <div className="min-w-0">
-                                  <p className="text-sm font-black text-slate-800">
-                                    {ACTION_LABELS[
-                                      permission
-                                        .action
-                                    ] ||
-                                      permission.action}
-                                  </p>
+                              <div className="min-w-0">
+                                <p className="text-sm font-black text-slate-800">
+                                  {ACTION_LABELS[permission.action] ||
+                                    permission.action}
+                                </p>
 
-                                  <p className="mt-1 text-xs text-slate-400">
-                                    {
-                                      permission.description
-                                    }
-                                  </p>
+                                <p className="mt-1 text-xs text-slate-400">
+                                  {permission.description}
+                                </p>
 
-                                  <p
-                                    dir="ltr"
-                                    className="mt-1 text-[10px] text-slate-400"
-                                  >
-                                    {
-                                      permission.slug
-                                    }
-                                  </p>
-                                </div>
-                              </label>
-                            );
-                          }
-                        )}
+                                <p
+                                  dir="ltr"
+                                  className="mt-1 text-[10px] text-slate-400"
+                                >
+                                  {permission.slug}
+                                </p>
+                              </div>
+                            </label>
+                          );
+                        })}
                       </div>
                     </div>
                   )

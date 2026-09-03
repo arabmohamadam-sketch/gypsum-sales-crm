@@ -181,7 +181,7 @@ function getLoadingStatusClass(
 ): string {
   if (
     waybill.status ===
-    "loading_confirmed" ||
+      "loading_confirmed" ||
     waybill.loading?.status ===
       "confirmed"
   ) {
@@ -482,8 +482,125 @@ export default function WaybillsPage() {
     }
   }
 
+  /*
+   * بارگذاری اولیه بدون فراخوانی مستقیم
+   * تابعی که در بدنه خودش setState دارد.
+   */
   useEffect(() => {
-    void loadWaybills();
+    let cancelled = false;
+
+    waybillsService
+      .getAll()
+      .then(async (result) => {
+        if (cancelled) {
+          return;
+        }
+
+        setWaybills(result);
+        setError("");
+
+        const orderIds =
+          Array.from(
+            new Set(
+              result
+                .map(
+                  (waybill) =>
+                    waybill.order_id
+                )
+                .filter(Boolean)
+            )
+          );
+
+        if (
+          orderIds.length === 0
+        ) {
+          setOrdersById({});
+          return;
+        }
+
+        setRelationsLoading(
+          true
+        );
+
+        const entries =
+          await Promise.all(
+            orderIds.map(
+              async (orderId) => {
+                try {
+                  const order =
+                    await ordersService.getById(
+                      orderId
+                    );
+
+                  return [
+                    orderId,
+                    order,
+                  ] as const;
+                } catch (err) {
+                  console.error(
+                    "WAYBILL ORDER LOAD ERROR:",
+                    orderId,
+                    err
+                  );
+
+                  return null;
+                }
+              }
+            )
+          );
+
+        if (cancelled) {
+          return;
+        }
+
+        const nextOrders: OrderMap =
+          {};
+
+        for (
+          const entry of entries
+        ) {
+          if (!entry) {
+            continue;
+          }
+
+          nextOrders[
+            entry[0]
+          ] = entry[1];
+        }
+
+        setOrdersById(
+          nextOrders
+        );
+      })
+      .catch((err: unknown) => {
+        if (cancelled) {
+          return;
+        }
+
+        console.error(
+          "WAYBILLS LOAD ERROR:",
+          err
+        );
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "خطا در دریافت حواله‌ها."
+        );
+      })
+      .finally(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setLoading(false);
+        setRefreshing(false);
+        setRelationsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filteredWaybills =
@@ -533,11 +650,15 @@ export default function WaybillsPage() {
               "",
             order?.total_tonnage ??
               "",
-            ...(waybill.items ??
+            ...(
+              waybill.items ??
               []
             ).map(
               (item) =>
-                `${item.product_name_snapshot ?? ""} ${
+                `${
+                  item.product_name_snapshot ??
+                  ""
+                } ${
                   item.product_id
                 }`
             ),
@@ -694,10 +815,7 @@ export default function WaybillsPage() {
               href="/orders"
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-600"
             >
-              <Package
-                size={17}
-              />
-
+              <Package size={17} />
               سفارش‌ها
             </Link>
           </div>
@@ -713,9 +831,7 @@ export default function WaybillsPage() {
           )}
           description="حواله نمایش داده‌شده"
           icon={
-            <FileText
-              size={20}
-            />
+            <FileText size={20} />
           }
           className="bg-slate-100 text-slate-700"
         />
@@ -727,9 +843,7 @@ export default function WaybillsPage() {
           )}
           description="تناژ حواله‌ها"
           icon={
-            <Package
-              size={20}
-            />
+            <Package size={20} />
           }
           className="bg-blue-50 text-blue-700"
         />
@@ -767,9 +881,7 @@ export default function WaybillsPage() {
           )}
           description="تناژ نهایی بارگیری"
           icon={
-            <Truck
-              size={20}
-            />
+            <Truck size={20} />
           }
           className="bg-violet-50 text-violet-700"
         />
@@ -782,9 +894,7 @@ export default function WaybillsPage() {
           )}
           description="وضعیت‌های غیرنهایی"
           icon={
-            <Clock3
-              size={20}
-            />
+            <Clock3 size={20} />
           }
           className="bg-amber-50 text-amber-700"
         />
@@ -804,9 +914,7 @@ export default function WaybillsPage() {
           </div>
 
           <div className="inline-flex w-fit items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
-            <FileText
-              size={13}
-            />
+            <FileText size={13} />
 
             {formatNumber(
               filteredWaybills.length
@@ -905,7 +1013,7 @@ export default function WaybillsPage() {
         )}
       </section>
 
-      {/* Loading */}
+      {/* Loading / Error / Empty / List */}
       {loading ? (
         <section className="rounded-3xl border border-slate-200 bg-white p-12 text-center shadow-sm">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
@@ -982,6 +1090,7 @@ export default function WaybillsPage() {
                     size={13}
                     className="animate-spin"
                   />
+
                   در حال دریافت اطلاعات سفارش
                 </div>
               )}
@@ -1119,12 +1228,14 @@ export default function WaybillsPage() {
 
                               <div className="min-w-0">
                                 <span className="block truncate font-black text-slate-900 transition group-hover/customer:text-blue-600">
-                                  {order.customer
+                                  {order
+                                    .customer
                                     ?.name ??
                                     "مشتری نامشخص"}
                                 </span>
 
-                                {order.customer
+                                {order
+                                  .customer
                                   ?.phone && (
                                   <span
                                     dir="ltr"
@@ -1285,6 +1396,7 @@ export default function WaybillsPage() {
                               className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-600"
                             >
                               جزئیات حواله
+
                               <ArrowLeft
                                 size={14}
                               />
@@ -1371,9 +1483,11 @@ export default function WaybillsPage() {
 
                         <div className="mt-2 flex items-center gap-3">
                           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-sm font-black text-blue-700">
-                            {order?.customer?.name?.charAt(
-                              0
-                            ) || "م"}
+                            {order
+                              ?.customer
+                              ?.name?.charAt(
+                                0
+                              ) || "م"}
                           </div>
 
                           <div className="min-w-0">
@@ -1512,6 +1626,7 @@ export default function WaybillsPage() {
                           className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white transition hover:bg-blue-600"
                         >
                           جزئیات حواله
+
                           <ArrowLeft
                             size={14}
                           />
@@ -1522,6 +1637,7 @@ export default function WaybillsPage() {
                           className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
                         >
                           مشاهده سفارش
+
                           <Package
                             size={14}
                           />

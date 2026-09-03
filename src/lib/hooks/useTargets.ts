@@ -50,10 +50,7 @@ function getErrorMessage(
       }
     ).message;
 
-    if (
-      typeof message ===
-      "string"
-    ) {
+    if (typeof message === "string") {
       return message;
     }
   }
@@ -70,21 +67,15 @@ export function useTargets(
   month: number
 ): UseTargetsResult {
   const [targets, setTargets] =
-    useState<MonthlyTarget[]>(
-      []
-    );
+    useState<MonthlyTarget[]>([]);
 
   const [regions, setRegions] =
-    useState<TargetRegion[]>(
-      []
-    );
+    useState<TargetRegion[]>([]);
 
   const [
     salesUsers,
     setSalesUsers,
-  ] = useState<
-    TargetSalesUser[]
-  >([]);
+  ] = useState<TargetSalesUser[]>([]);
 
   const [loading, setLoading] =
     useState(true);
@@ -93,9 +84,7 @@ export function useTargets(
     useState(false);
 
   const [error, setError] =
-    useState<string | null>(
-      null
-    );
+    useState<string | null>(null);
 
   const refresh =
     useCallback(
@@ -115,13 +104,8 @@ export function useTargets(
             targetsService.getRegions(),
           ]);
 
-          setTargets(
-            targetRows
-          );
-
-          setRegions(
-            regionRows
-          );
+          setTargets(targetRows);
+          setRegions(regionRows);
 
           const uniqueUsers =
             new Map<
@@ -129,8 +113,7 @@ export function useTargets(
               TargetSalesUser
             >();
 
-          for (const target of
-            targetRows) {
+          for (const target of targetRows) {
             if (
               target.user &&
               target.user.is_active
@@ -152,86 +135,74 @@ export function useTargets(
 
           const {
             data: users,
-            error:
-              usersError,
-          } =
-            await import(
-              "@/src/lib/supabase"
-            ).then(
-              async ({
-                createSupabaseClient,
-              }) => {
-                const supabase =
-                  createSupabaseClient();
+            error: usersError,
+          } = await import(
+            "@/src/lib/supabase"
+          ).then(
+            async ({
+              createSupabaseClient,
+            }) => {
+              const supabase =
+                createSupabaseClient();
 
-                return supabase
-                  .from("users")
-                  .select(`
-                    id,
-                    full_name,
-                    email,
-                    phone,
-                    job_title,
-                    is_active
-                  `)
-                  .eq(
-                    "company_id",
-                    "11111111-1111-1111-1111-111111111111"
-                  )
-                  .eq(
-                    "is_active",
-                    true
-                  )
-                  .is(
-                    "deleted_at",
-                    null
-                  )
-                  .order(
-                    "full_name",
-                    {
-                      ascending:
-                        true,
-                    }
-                  );
-              }
-            );
+              return supabase
+                .from("users")
+                .select(`
+                  id,
+                  full_name,
+                  email,
+                  phone,
+                  job_title,
+                  is_active
+                `)
+                .eq(
+                  "company_id",
+                  "11111111-1111-1111-1111-111111111111"
+                )
+                .eq(
+                  "is_active",
+                  true
+                )
+                .is(
+                  "deleted_at",
+                  null
+                )
+                .order(
+                  "full_name",
+                  {
+                    ascending: true,
+                  }
+                );
+            }
+          );
 
           if (usersError) {
             throw usersError;
           }
 
-          for (const user of
-            users ?? []) {
+          for (const user of users ?? []) {
             uniqueUsers.set(
               String(user.id),
               {
-                id: String(
-                  user.id
+                id: String(user.id),
+                full_name: String(
+                  user.full_name
                 ),
-                full_name:
-                  String(
-                    user.full_name
-                  ),
-                email:
-                  String(
-                    user.email
-                  ),
-                phone:
-                  user.phone
-                    ? String(
-                        user.phone
-                      )
-                    : null,
+                email: String(
+                  user.email
+                ),
+                phone: user.phone
+                  ? String(user.phone)
+                  : null,
                 job_title:
                   user.job_title
                     ? String(
                         user.job_title
                       )
                     : null,
-                is_active:
-                  Boolean(
-                    user.is_active
-                  ),
+                is_active: Boolean(
+                  user.is_active
+                ),
               }
             );
           }
@@ -261,7 +232,13 @@ export function useTargets(
     );
 
   useEffect(() => {
-    void refresh();
+    const timer = window.setTimeout(() => {
+      void refresh();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [refresh]);
 
   const createTarget =

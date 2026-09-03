@@ -69,5 +69,4 @@ export interface Order {
   items: OrderItem[];
 }
 
-export interface OrderWithRelations
-  extends Order {}
+export type OrderWithRelations = Order;

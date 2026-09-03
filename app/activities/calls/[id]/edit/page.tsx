@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+
+import {
+  FormEvent,
+  useEffect,
+  useState,
+} from "react";
+
 import {
   useParams,
   useRouter,
@@ -13,6 +19,7 @@ import {
 } from "@/src/lib/services/activities";
 
 import { useCustomers } from "@/src/lib/hooks/useCustomers";
+
 import { useUsers } from "@/src/lib/hooks/useUsers";
 
 import type { Customer } from "@/src/lib/types/customer";
@@ -84,7 +91,7 @@ const outcomeOptions = [
 ];
 
 function getCustomerTypeLabel(
-  type?: string | null
+  type?: string | null,
 ): string {
   if (!type) {
     return "";
@@ -97,11 +104,11 @@ function getCustomerTypeLabel(
 }
 
 function getCustomerLabel(
-  customer: Customer
+  customer: Customer,
 ): string {
   const type =
     getCustomerTypeLabel(
-      customer.customer_type
+      customer.customer_type,
     );
 
   if (customer.phone) {
@@ -116,7 +123,7 @@ function getCustomerLabel(
 }
 
 function toPersianDigits(
-  value: string | number
+  value: string | number,
 ): string {
   const persianDigits =
     "۰۱۲۳۴۵۶۷۸۹";
@@ -124,14 +131,12 @@ function toPersianDigits(
   return String(value).replace(
     /\d/g,
     (digit) =>
-      persianDigits[
-        Number(digit)
-      ]
+      persianDigits[Number(digit)],
   );
 }
 
 function getErrorMessage(
-  error: unknown
+  error: unknown,
 ): string {
   if (error instanceof Error) {
     return error.message;
@@ -158,13 +163,13 @@ function getErrorMessage(
 }
 
 function getJalaliDateTime(
-  value: string
+  value: string,
 ) {
   const date = new Date(value);
 
   if (
     Number.isNaN(
-      date.getTime()
+      date.getTime(),
     )
   ) {
     return null;
@@ -178,20 +183,15 @@ function getJalaliDateTime(
   }
 
   return {
-    year:
-      jalali.year,
-    month:
-      jalali.month,
-    day:
-      jalali.day,
-    hour:
-      String(
-        date.getHours()
-      ).padStart(2, "0"),
-    minute:
-      String(
-        date.getMinutes()
-      ).padStart(2, "0"),
+    year: jalali.year,
+    month: jalali.month,
+    day: jalali.day,
+    hour: String(
+      date.getHours(),
+    ).padStart(2, "0"),
+    minute: String(
+      date.getMinutes(),
+    ).padStart(2, "0"),
   };
 }
 
@@ -200,7 +200,7 @@ function buildGregorianIso(
   month: number,
   day: number,
   hour: number,
-  minute: number
+  minute: number,
 ): string {
   if (
     !isValidJalaliDate({
@@ -210,24 +210,20 @@ function buildGregorianIso(
     })
   ) {
     throw new Error(
-      "تاریخ جلالی واردشده معتبر نیست."
+      "تاریخ جلالی واردشده معتبر نیست.",
     );
   }
 
   if (
-    !Number.isInteger(
-      hour
-    ) ||
+    !Number.isInteger(hour) ||
     hour < 0 ||
     hour > 23 ||
-    !Number.isInteger(
-      minute
-    ) ||
+    !Number.isInteger(minute) ||
     minute < 0 ||
     minute > 59
   ) {
     throw new Error(
-      "ساعت یا دقیقه واردشده معتبر نیست."
+      "ساعت یا دقیقه واردشده معتبر نیست.",
     );
   }
 
@@ -235,7 +231,7 @@ function buildGregorianIso(
     jalaliToGregorian(
       year,
       month,
-      day
+      day,
     );
 
   const date = new Date(
@@ -245,16 +241,16 @@ function buildGregorianIso(
     hour,
     minute,
     0,
-    0
+    0,
   );
 
   if (
     Number.isNaN(
-      date.getTime()
+      date.getTime(),
     )
   ) {
     throw new Error(
-      "تاریخ یا زمان واردشده معتبر نیست."
+      "تاریخ یا زمان واردشده معتبر نیست.",
     );
   }
 
@@ -350,14 +346,12 @@ function ChoiceCard({
 export default function EditCallPage() {
   const router = useRouter();
 
-  const params =
-    useParams<{
-      id: string;
-    }>();
+  const params = useParams<{
+    id: string;
+  }>();
 
   const callId =
-    typeof params?.id ===
-    "string"
+    typeof params?.id === "string"
       ? params.id
       : "";
 
@@ -379,20 +373,22 @@ export default function EditCallPage() {
     >(null);
 
   const [loading, setLoading] =
-    useState(true);
+    useState(
+      callId.length > 0,
+    );
 
   const [saving, setSaving] =
     useState(false);
 
   const [error, setError] =
-    useState<
-      string | null
-    >(null);
+    useState<string | null>(
+      callId
+        ? null
+        : "شناسه تماس معتبر نیست.",
+    );
 
   const [success, setSuccess] =
-    useState<
-      string | null
-    >(null);
+    useState<string | null>(null);
 
   const [customerId, setCustomerId] =
     useState("");
@@ -431,26 +427,14 @@ export default function EditCallPage() {
 
   useEffect(() => {
     if (!callId) {
-      setError(
-        "شناسه تماس معتبر نیست."
-      );
-
-      setLoading(false);
       return;
     }
 
     let mounted = true;
 
-    async function loadCall() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const data =
-          await activitiesService.getCallById(
-            callId
-          );
-
+    activitiesService
+      .getCallById(callId)
+      .then((data) => {
         if (!mounted) {
           return;
         }
@@ -460,56 +444,56 @@ export default function EditCallPage() {
         setCustomerId(
           data.customer_id ??
             data.customer?.id ??
-            ""
+            "",
         );
 
         setUserId(
           data.user_id ??
             data.user?.id ??
-            ""
+            "",
         );
 
         const dateTime =
           getJalaliDateTime(
-            data.call_date
+            data.call_date,
           );
 
         if (dateTime) {
           setJalaliYear(
             String(
-              dateTime.year
-            )
+              dateTime.year,
+            ),
           );
 
           setJalaliMonth(
             String(
-              dateTime.month
-            ).padStart(2, "0")
+              dateTime.month,
+            ).padStart(2, "0"),
           );
 
           setJalaliDay(
             String(
-              dateTime.day
-            ).padStart(2, "0")
+              dateTime.day,
+            ).padStart(2, "0"),
           );
 
           setHour(
-            dateTime.hour
+            dateTime.hour,
           );
 
           setMinute(
-            dateTime.minute
+            dateTime.minute,
           );
         }
 
         setDirection(
           data.direction ??
-            "outbound"
+            "outbound",
         );
 
         setOutcome(
           data.outcome ??
-            "answered"
+            "answered",
         );
 
         if (
@@ -521,39 +505,38 @@ export default function EditCallPage() {
           setDurationMinutes(
             String(
               data.duration_seconds /
-                60
-            )
+                60,
+            ),
           );
         } else {
-          setDurationMinutes(
-            ""
-          );
+          setDurationMinutes("");
         }
 
         setNotes(
-          data.notes ?? ""
+          data.notes ?? "",
         );
-      } catch (err) {
+      })
+      .catch((err) => {
         if (!mounted) {
           return;
         }
 
         console.error(
           "خطا در دریافت اطلاعات تماس:",
-          err
+          err,
         );
 
         setError(
-          getErrorMessage(err)
+          getErrorMessage(err),
         );
-      } finally {
+
+        setCall(null);
+      })
+      .finally(() => {
         if (mounted) {
           setLoading(false);
         }
-      }
-    }
-
-    void loadCall();
+      });
 
     return () => {
       mounted = false;
@@ -563,18 +546,17 @@ export default function EditCallPage() {
   const selectedCustomer =
     customers.find(
       (customer) =>
-        customer.id ===
-        customerId
+        customer.id === customerId,
     );
 
   const selectedUser =
     users.find(
       (user) =>
-        user.id === userId
+        user.id === userId,
     );
 
   async function handleSubmit(
-    event: FormEvent<HTMLFormElement>
+    event: FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
 
@@ -583,21 +565,21 @@ export default function EditCallPage() {
 
     if (!callId) {
       setError(
-        "شناسه تماس معتبر نیست."
+        "شناسه تماس معتبر نیست.",
       );
       return;
     }
 
     if (!customerId) {
       setError(
-        "انتخاب مشتری الزامی است."
+        "انتخاب مشتری الزامی است.",
       );
       return;
     }
 
     if (!userId) {
       setError(
-        "انتخاب کاربر الزامی است."
+        "انتخاب کاربر الزامی است.",
       );
       return;
     }
@@ -618,24 +600,18 @@ export default function EditCallPage() {
       Number(minute);
 
     if (
+      !Number.isInteger(year) ||
+      !Number.isInteger(month) ||
+      !Number.isInteger(day) ||
       !Number.isInteger(
-        year
+        selectedHour,
       ) ||
       !Number.isInteger(
-        month
-      ) ||
-      !Number.isInteger(
-        day
-      ) ||
-      !Number.isInteger(
-        selectedHour
-      ) ||
-      !Number.isInteger(
-        selectedMinute
+        selectedMinute,
       )
     ) {
       setError(
-        "تاریخ یا زمان واردشده معتبر نیست."
+        "تاریخ یا زمان واردشده معتبر نیست.",
       );
       return;
     }
@@ -649,11 +625,11 @@ export default function EditCallPage() {
           month,
           day,
           selectedHour,
-          selectedMinute
+          selectedMinute,
         );
     } catch (err) {
       setError(
-        getErrorMessage(err)
+        getErrorMessage(err),
       );
       return;
     }
@@ -667,24 +643,24 @@ export default function EditCallPage() {
     ) {
       const minutes =
         Number(
-          durationMinutes
+          durationMinutes,
         );
 
       if (
         !Number.isFinite(
-          minutes
+          minutes,
         ) ||
         minutes < 0
       ) {
         setError(
-          "مدت تماس باید یک عدد صفر یا بیشتر باشد."
+          "مدت تماس باید یک عدد صفر یا بیشتر باشد.",
         );
         return;
       }
 
       durationSeconds =
         Math.round(
-          minutes * 60
+          minutes * 60,
         );
     }
 
@@ -697,50 +673,44 @@ export default function EditCallPage() {
           {
             customer_id:
               customerId,
-
             user_id:
               userId,
-
             call_date:
               callDateIso,
-
             direction,
-
             outcome,
-
             duration_seconds:
               durationSeconds,
-
             notes:
               notes.trim() ||
               null,
-          }
+          },
         );
 
       setCall(updated);
 
       setSuccess(
-        "تماس با موفقیت ویرایش شد."
+        "تماس با موفقیت ویرایش شد.",
       );
 
       window.setTimeout(
         () => {
           router.push(
-            "/activities/calls"
+            "/activities/calls",
           );
 
           router.refresh();
         },
-        700
+        700,
       );
     } catch (err) {
       console.error(
         "خطا در ویرایش تماس:",
-        err
+        err,
       );
 
       setError(
-        getErrorMessage(err)
+        getErrorMessage(err),
       );
     } finally {
       setSaving(false);
@@ -815,7 +785,6 @@ export default function EditCallPage() {
       className="min-h-screen bg-slate-50 p-4 md:p-6"
     >
       <div className="mx-auto max-w-5xl space-y-6">
-
         {/* Header */}
         <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-slate-900 via-blue-600 to-indigo-600" />
@@ -929,7 +898,6 @@ export default function EditCallPage() {
             />
 
             <div className="grid gap-6 md:grid-cols-2">
-
               {/* Customer */}
               <div>
                 <label
@@ -944,7 +912,7 @@ export default function EditCallPage() {
                     <div className="flex items-center gap-3">
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-sm font-black text-white">
                         {selectedCustomer.name?.charAt(
-                          0
+                          0,
                         ) || "م"}
                       </div>
 
@@ -974,7 +942,7 @@ export default function EditCallPage() {
                     value={customerId}
                     onChange={(event) =>
                       setCustomerId(
-                        event.target.value
+                        event.target.value,
                       )
                     }
                     disabled={
@@ -1000,10 +968,10 @@ export default function EditCallPage() {
                           }
                         >
                           {getCustomerLabel(
-                            customer
+                            customer,
                           )}
                         </option>
-                      )
+                      ),
                     )}
                   </select>
                 )}
@@ -1023,7 +991,7 @@ export default function EditCallPage() {
                   value={userId}
                   onChange={(event) =>
                     setUserId(
-                      event.target.value
+                      event.target.value,
                     )
                   }
                   disabled={
@@ -1051,7 +1019,7 @@ export default function EditCallPage() {
                           ? ` - ${user.job_title}`
                           : ""}
                       </option>
-                    )
+                    ),
                   )}
                 </select>
 
@@ -1080,7 +1048,6 @@ export default function EditCallPage() {
 
             <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-5">
               <div className="grid gap-4 md:grid-cols-4">
-
                 <div>
                   <label
                     htmlFor="jalaliYear"
@@ -1097,7 +1064,7 @@ export default function EditCallPage() {
                     value={jalaliYear}
                     onChange={(event) =>
                       setJalaliYear(
-                        event.target.value
+                        event.target.value,
                       )
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
@@ -1118,7 +1085,7 @@ export default function EditCallPage() {
                     value={jalaliMonth}
                     onChange={(event) =>
                       setJalaliMonth(
-                        event.target.value
+                        event.target.value,
                       )
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
@@ -1131,10 +1098,10 @@ export default function EditCallPage() {
                       (_, index) => {
                         const value =
                           String(
-                            index + 1
+                            index + 1,
                           ).padStart(
                             2,
-                            "0"
+                            "0",
                           );
 
                         return (
@@ -1143,11 +1110,11 @@ export default function EditCallPage() {
                             value={value}
                           >
                             {toPersianDigits(
-                              value
+                              value,
                             )}
                           </option>
                         );
-                      }
+                      },
                     )}
                   </select>
                 </div>
@@ -1165,7 +1132,7 @@ export default function EditCallPage() {
                     value={jalaliDay}
                     onChange={(event) =>
                       setJalaliDay(
-                        event.target.value
+                        event.target.value,
                       )
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
@@ -1178,10 +1145,10 @@ export default function EditCallPage() {
                       (_, index) => {
                         const value =
                           String(
-                            index + 1
+                            index + 1,
                           ).padStart(
                             2,
-                            "0"
+                            "0",
                           );
 
                         return (
@@ -1190,11 +1157,11 @@ export default function EditCallPage() {
                             value={value}
                           >
                             {toPersianDigits(
-                              value
+                              value,
                             )}
                           </option>
                         );
-                      }
+                      },
                     )}
                   </select>
                 </div>
@@ -1212,7 +1179,7 @@ export default function EditCallPage() {
                     value={hour}
                     onChange={(event) =>
                       setHour(
-                        event.target.value
+                        event.target.value,
                       )
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
@@ -1225,10 +1192,10 @@ export default function EditCallPage() {
                       (_, index) => {
                         const value =
                           String(
-                            index
+                            index,
                           ).padStart(
                             2,
-                            "0"
+                            "0",
                           );
 
                         return (
@@ -1237,11 +1204,11 @@ export default function EditCallPage() {
                             value={value}
                           >
                             {toPersianDigits(
-                              value
+                              value,
                             )}
                           </option>
                         );
-                      }
+                      },
                     )}
                   </select>
                 </div>
@@ -1256,7 +1223,7 @@ export default function EditCallPage() {
                   value={minute}
                   onChange={(event) =>
                     setMinute(
-                      event.target.value
+                      event.target.value,
                     )
                   }
                   className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:border-blue-500"
@@ -1269,10 +1236,10 @@ export default function EditCallPage() {
                     (_, index) => {
                       const value =
                         String(
-                          index
+                          index,
                         ).padStart(
                           2,
-                          "0"
+                          "0",
                         );
 
                       return (
@@ -1281,11 +1248,11 @@ export default function EditCallPage() {
                           value={value}
                         >
                           {toPersianDigits(
-                            value
+                            value,
                           )}
                         </option>
                       );
-                    }
+                    },
                   )}
                 </select>
 
@@ -1306,7 +1273,6 @@ export default function EditCallPage() {
             />
 
             <div className="grid gap-6 md:grid-cols-2">
-
               <div>
                 <label className="mb-3 block text-sm font-bold text-slate-700">
                   جهت تماس
@@ -1331,11 +1297,11 @@ export default function EditCallPage() {
                         }
                         onClick={() =>
                           setDirection(
-                            option.value
+                            option.value,
                           )
                         }
                       />
-                    )
+                    ),
                   )}
                 </div>
               </div>
@@ -1353,7 +1319,7 @@ export default function EditCallPage() {
                   value={outcome}
                   onChange={(event) =>
                     setOutcome(
-                      event.target.value
+                      event.target.value,
                     )
                   }
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 font-medium text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
@@ -1370,7 +1336,7 @@ export default function EditCallPage() {
                       >
                         {option.label}
                       </option>
-                    )
+                    ),
                   )}
                 </select>
               </div>
@@ -1387,7 +1353,6 @@ export default function EditCallPage() {
             />
 
             <div className="grid gap-6 md:grid-cols-2">
-
               <div>
                 <label
                   htmlFor="duration"
@@ -1410,7 +1375,7 @@ export default function EditCallPage() {
                     }
                     onChange={(event) =>
                       setDurationMinutes(
-                        event.target.value
+                        event.target.value,
                       )
                     }
                     placeholder="مثلاً ۱۵"
@@ -1447,7 +1412,7 @@ export default function EditCallPage() {
                 value={notes}
                 onChange={(event) =>
                   setNotes(
-                    event.target.value
+                    event.target.value,
                   )
                 }
                 rows={6}
@@ -1477,7 +1442,6 @@ export default function EditCallPage() {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                   <p className="text-xs text-slate-400">
                     مشتری
@@ -1522,7 +1486,7 @@ export default function EditCallPage() {
                     {outcomeOptions.find(
                       (item) =>
                         item.value ===
-                        outcome
+                        outcome,
                     )?.label ??
                       outcome}
                   </p>

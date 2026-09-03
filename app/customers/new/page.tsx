@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  useEffect,
   useState,
   type FormEvent,
   type ReactNode,
@@ -189,19 +188,15 @@ export default function NewCustomerPage() {
     createCity,
   } = useCities();
 
-  const [mounted, setMounted] =
-    useState(false);
-
-  const [form, setForm] =
-    useState<FormData>({
-      name: "",
-      phone: "",
-      whatsapp_number: "",
-      customer_type: "",
-      city_id: "",
-      is_vip: false,
-      is_active: true,
-    });
+  const [form, setForm] = useState<FormData>({
+    name: "",
+    phone: "",
+    whatsapp_number: "",
+    customer_type: "",
+    city_id: "",
+    is_vip: false,
+    is_active: true,
+  });
 
   const [saving, setSaving] =
     useState(false);
@@ -226,10 +221,6 @@ export default function NewCustomerPage() {
 
   const [cityCreateError, setCityCreateError] =
     useState<string | null>(null);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   function updateField<
     K extends keyof FormData
@@ -385,7 +376,6 @@ export default function NewCustomerPage() {
       className="min-h-screen bg-slate-50 px-4 py-6 md:px-6 md:py-8"
     >
       <div className="mx-auto max-w-5xl">
-
         <div className="mb-6">
           <Link
             href="/customers"
@@ -405,7 +395,6 @@ export default function NewCustomerPage() {
 
           <div className="relative p-6 md:p-8">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-
               <div className="flex items-start gap-4">
                 <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-2xl text-white shadow-lg shadow-blue-100">
                   👤
@@ -443,7 +432,6 @@ export default function NewCustomerPage() {
 
         {(error || citiesError) && (
           <div className="mb-6 space-y-3">
-
             {error && (
               <div className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
                 <div className="h-1 bg-red-500" />
@@ -487,7 +475,6 @@ export default function NewCustomerPage() {
                 </div>
               </div>
             )}
-
           </div>
         )}
 
@@ -495,9 +482,7 @@ export default function NewCustomerPage() {
           onSubmit={handleSubmit}
           className="space-y-6"
         >
-
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
-
             <SectionHeader
               icon="📋"
               title="اطلاعات اصلی"
@@ -505,7 +490,6 @@ export default function NewCustomerPage() {
             />
 
             <div className="grid gap-5 md:grid-cols-3">
-
               <InputField
                 label="نام مشتری"
                 required
@@ -564,7 +548,6 @@ export default function NewCustomerPage() {
                 required
               >
                 <div className="space-y-3">
-
                   <select
                     value={form.city_id}
                     onChange={(event) =>
@@ -573,15 +556,11 @@ export default function NewCustomerPage() {
                         event.target.value
                       )
                     }
-                    disabled={
-                      mounted &&
-                      citiesLoading
-                    }
+                    disabled={citiesLoading}
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <option value="">
-                      {mounted &&
-                      citiesLoading
+                      {citiesLoading
                         ? "در حال دریافت شهرها..."
                         : "انتخاب شهر"}
                     </option>
@@ -622,21 +601,17 @@ export default function NewCustomerPage() {
 
                   {showNewCity && (
                     <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
-
                       <p className="text-sm font-black text-blue-900">
                         افزودن شهر جدید
                       </p>
 
                       <div className="mt-3 space-y-3">
-
                         <input
                           type="text"
                           value={
                             newCityName
                           }
-                          onChange={(
-                            event
-                          ) =>
+                          onChange={(event) =>
                             setNewCityName(
                               event.target.value
                             )
@@ -649,9 +624,7 @@ export default function NewCustomerPage() {
                           value={
                             newCityRegionId
                           }
-                          onChange={(
-                            event
-                          ) =>
+                          onChange={(event) =>
                             setNewCityRegionId(
                               event.target.value
                             )
@@ -689,9 +662,7 @@ export default function NewCustomerPage() {
                           value={
                             newCityCode
                           }
-                          onChange={(
-                            event
-                          ) =>
+                          onChange={(event) =>
                             setNewCityCode(
                               event.target.value
                             )
@@ -712,10 +683,8 @@ export default function NewCustomerPage() {
                             void handleCreateCity()
                           }
                           disabled={
-                            mounted &&
-                            (creatingCity ||
-                              regions.length ===
-                                0)
+                            creatingCity ||
+                            regions.length === 0
                           }
                           className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                         >
@@ -723,19 +692,15 @@ export default function NewCustomerPage() {
                             ? "در حال ثبت شهر..."
                             : "ثبت شهر و انتخاب"}
                         </button>
-
                       </div>
                     </div>
                   )}
-
                 </div>
               </InputField>
-
             </div>
           </section>
 
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
-
             <SectionHeader
               icon="📞"
               title="اطلاعات تماس"
@@ -743,7 +708,6 @@ export default function NewCustomerPage() {
             />
 
             <div className="grid gap-5 md:grid-cols-2">
-
               <InputField
                 label="شماره تماس"
                 hint="شماره اصلی مشتری"
@@ -783,12 +747,10 @@ export default function NewCustomerPage() {
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-left text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
                 />
               </InputField>
-
             </div>
           </section>
 
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
-
             <SectionHeader
               icon="⚙️"
               title="وضعیت مشتری"
@@ -796,11 +758,8 @@ export default function NewCustomerPage() {
             />
 
             <div className="grid gap-4 md:grid-cols-2">
-
               <ToggleCard
-                checked={
-                  form.is_vip
-                }
+                checked={form.is_vip}
                 onChange={(checked) =>
                   updateField(
                     "is_vip",
@@ -814,9 +773,7 @@ export default function NewCustomerPage() {
               />
 
               <ToggleCard
-                checked={
-                  form.is_active
-                }
+                checked={form.is_active}
                 onChange={(checked) =>
                   updateField(
                     "is_active",
@@ -828,16 +785,12 @@ export default function NewCustomerPage() {
                 icon="🟢"
                 activeClass="border-emerald-200 bg-emerald-50"
               />
-
             </div>
           </section>
 
           <section className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-900 shadow-sm">
-
             <div className="p-6 md:p-7">
-
               <div className="flex items-center justify-between gap-4">
-
                 <div>
                   <p className="text-xs font-bold text-slate-400">
                     پیش‌نمایش
@@ -854,7 +807,6 @@ export default function NewCustomerPage() {
               </div>
 
               <div className="mt-6 grid gap-4 sm:grid-cols-3">
-
                 <div className="rounded-2xl bg-white/5 p-4">
                   <p className="text-xs text-slate-400">
                     نام
@@ -900,17 +852,14 @@ export default function NewCustomerPage() {
                       "انتخاب نشده"}
                   </p>
                 </div>
-
               </div>
 
               <div className="mt-4 rounded-2xl bg-white/5 p-4">
-
                 <p className="text-xs text-slate-400">
                   وضعیت
                 </p>
 
                 <div className="mt-2 flex flex-wrap gap-2">
-
                   {form.is_active && (
                     <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300">
                       فعال
@@ -928,16 +877,13 @@ export default function NewCustomerPage() {
                       VIP
                     </span>
                   )}
-
                 </div>
               </div>
             </div>
           </section>
 
           <div className="sticky bottom-4 z-20">
-
             <div className="flex flex-col-reverse gap-3 rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-xl shadow-slate-200/50 backdrop-blur sm:flex-row sm:justify-end">
-
               <Link
                 href="/customers"
                 className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
@@ -948,9 +894,8 @@ export default function NewCustomerPage() {
               <button
                 type="submit"
                 disabled={
-                  mounted &&
-                  (saving ||
-                    citiesLoading)
+                  saving ||
+                  citiesLoading
                 }
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-7 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -966,10 +911,8 @@ export default function NewCustomerPage() {
                   </>
                 )}
               </button>
-
             </div>
           </div>
-
         </form>
       </div>
     </main>

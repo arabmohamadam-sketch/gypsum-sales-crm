@@ -49,27 +49,6 @@ export function useCities() {
       }
     }, []);
 
-  const loadRegions =
-    useCallback(async () => {
-      try {
-        const result =
-          await citiesService.getRegions();
-
-        setRegions(result);
-      } catch (err) {
-        console.error(
-          "REGIONS LOAD ERROR:",
-          err
-        );
-
-        setError(
-          err instanceof Error
-            ? err.message
-            : "خطا در دریافت مناطق"
-        );
-      }
-    }, []);
-
   useEffect(() => {
     let mounted = true;
 

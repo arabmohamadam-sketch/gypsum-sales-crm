@@ -98,8 +98,6 @@ const DEFAULT_BAG_WEIGHTS = [
 const MANUAL_PRODUCT_VALUE =
   "__manual__";
 
-const MANUAL_PRODUCT_LINE =
-  "Manual";
 
 function createInitialOrderItem(): OrderItemForm {
   return {
