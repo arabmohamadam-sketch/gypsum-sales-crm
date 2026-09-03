@@ -112,17 +112,30 @@ function getTodayJalali() {
 }
 
 function getJalaliMonthLastDay(
+  year: number,
   month: number
 ): number {
-  if (month >= 1 && month <= 6) {
+  if (
+    month >= 1 &&
+    month <= 6
+  ) {
     return 31;
   }
 
-  if (month >= 7 && month <= 11) {
+  if (
+    month >= 7 &&
+    month <= 11
+  ) {
     return 30;
   }
 
-  return 29;
+  return isValidJalaliDate({
+    year,
+    month,
+    day: 30,
+  })
+    ? 30
+    : 29;
 }
 
 function buildStartOfDayIso(
@@ -537,6 +550,7 @@ export default function ReportsPage() {
 
   const currentMonthLastDay =
     getJalaliMonthLastDay(
+      today.year,
       today.month
     );
 
@@ -592,6 +606,26 @@ export default function ReportsPage() {
 
   const [citySearch, setCitySearch] =
     useState("");
+
+  const fromMonthLastDay =
+    useMemo(
+      () =>
+        getJalaliMonthLastDay(
+          Number(fromYear),
+          Number(fromMonth)
+        ),
+      [fromYear, fromMonth]
+    );
+
+  const toMonthLastDay =
+    useMemo(
+      () =>
+        getJalaliMonthLastDay(
+          Number(toYear),
+          Number(toMonth)
+        ),
+      [toYear, toMonth]
+    );
 
   const currentPeriod =
     useMemo<ReportPeriod | null>(
@@ -701,6 +735,9 @@ export default function ReportsPage() {
         "بازه تاریخ واردشده معتبر نیست."
       );
 
+      setLoading(false);
+      setRefreshing(false);
+
       return;
     }
 
@@ -708,6 +745,9 @@ export default function ReportsPage() {
       setError(
         "تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد."
       );
+
+      setLoading(false);
+      setRefreshing(false);
 
       return;
     }
@@ -819,6 +859,7 @@ export default function ReportsPage() {
 
     const lastDay =
       getJalaliMonthLastDay(
+        current.year,
         month
       );
 
@@ -850,6 +891,144 @@ export default function ReportsPage() {
       String(lastDay).padStart(
         2,
         "0"
+      )
+    );
+  }
+
+  function handleFromYearChange(
+    value: string
+  ) {
+    setFromYear(value);
+
+    const yearNumber =
+      Number(value);
+
+    if (
+      !Number.isInteger(
+        yearNumber
+      )
+    ) {
+      return;
+    }
+
+    const lastDay =
+      getJalaliMonthLastDay(
+        yearNumber,
+        Number(fromMonth)
+      );
+
+    setFromDay(
+      String(
+        Math.min(
+          Number(fromDay) || 1,
+          lastDay
+        )
+      )
+    );
+  }
+
+  function handleFromMonthChange(
+    value: string
+  ) {
+    const monthNumber =
+      Number(value);
+
+    setFromMonth(
+      String(monthNumber).padStart(
+        2,
+        "0"
+      )
+    );
+
+    if (
+      !Number.isInteger(
+        monthNumber
+      )
+    ) {
+      return;
+    }
+
+    const lastDay =
+      getJalaliMonthLastDay(
+        Number(fromYear),
+        monthNumber
+      );
+
+    setFromDay(
+      String(
+        Math.min(
+          Number(fromDay) || 1,
+          lastDay
+        )
+      )
+    );
+  }
+
+  function handleToYearChange(
+    value: string
+  ) {
+    setToYear(value);
+
+    const yearNumber =
+      Number(value);
+
+    if (
+      !Number.isInteger(
+        yearNumber
+      )
+    ) {
+      return;
+    }
+
+    const lastDay =
+      getJalaliMonthLastDay(
+        yearNumber,
+        Number(toMonth)
+      );
+
+    setToDay(
+      String(
+        Math.min(
+          Number(toDay) || 1,
+          lastDay
+        )
+      )
+    );
+  }
+
+  function handleToMonthChange(
+    value: string
+  ) {
+    const monthNumber =
+      Number(value);
+
+    setToMonth(
+      String(monthNumber).padStart(
+        2,
+        "0"
+      )
+    );
+
+    if (
+      !Number.isInteger(
+        monthNumber
+      )
+    ) {
+      return;
+    }
+
+    const lastDay =
+      getJalaliMonthLastDay(
+        Number(toYear),
+        monthNumber
+      );
+
+    setToDay(
+      String(
+        Math.min(
+          Number(toDay) || 1,
+          lastDay
+        )
       )
     );
   }
@@ -1139,7 +1318,6 @@ export default function ReportsPage() {
                       : ""
                   }
                 />
-
                 تلاش مجدد
               </button>
 
@@ -1297,7 +1475,7 @@ export default function ReportsPage() {
                     onChange={(
                       event
                     ) =>
-                      setFromYear(
+                      handleFromYearChange(
                         event.target
                           .value
                       )
@@ -1319,7 +1497,7 @@ export default function ReportsPage() {
                     onChange={(
                       event
                     ) =>
-                      setFromMonth(
+                      handleFromMonthChange(
                         event.target
                           .value
                       )
@@ -1369,7 +1547,9 @@ export default function ReportsPage() {
                   <input
                     type="number"
                     min="1"
-                    max="31"
+                    max={
+                      fromMonthLastDay
+                    }
                     value={
                       fromDay
                     }
@@ -1384,6 +1564,14 @@ export default function ReportsPage() {
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                     required
                   />
+
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    حداکثر{" "}
+                    {toPersianDigits(
+                      fromMonthLastDay
+                    )}{" "}
+                    روز
+                  </p>
                 </div>
               </div>
             </div>
@@ -1407,7 +1595,7 @@ export default function ReportsPage() {
                     onChange={(
                       event
                     ) =>
-                      setToYear(
+                      handleToYearChange(
                         event.target
                           .value
                       )
@@ -1429,7 +1617,7 @@ export default function ReportsPage() {
                     onChange={(
                       event
                     ) =>
-                      setToMonth(
+                      handleToMonthChange(
                         event.target
                           .value
                       )
@@ -1479,7 +1667,9 @@ export default function ReportsPage() {
                   <input
                     type="number"
                     min="1"
-                    max="31"
+                    max={
+                      toMonthLastDay
+                    }
                     value={toDay}
                     onChange={(
                       event
@@ -1492,6 +1682,14 @@ export default function ReportsPage() {
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold text-slate-800 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-50"
                     required
                   />
+
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    حداکثر{" "}
+                    {toPersianDigits(
+                      toMonthLastDay
+                    )}{" "}
+                    روز
+                  </p>
                 </div>
               </div>
             </div>
