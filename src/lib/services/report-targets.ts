@@ -74,6 +74,54 @@ function toNumber(
   return Number.isFinite(result) ? result : 0;
 }
 
+/**
+ * تعداد روز آخر ماه جلالی
+ *
+ * ماه‌های ۱ تا ۶ = ۳۱ روز
+ * ماه‌های ۷ تا ۱۱ = ۳۰ روز
+ * اسفند = ۲۹ یا ۳۰ روز
+ */
+function getJalaliMonthLastDay(
+  jalaliYear: number,
+  jalaliMonth: number
+): number {
+  if (
+    jalaliMonth >= 1 &&
+    jalaliMonth <= 6
+  ) {
+    return 31;
+  }
+
+  if (
+    jalaliMonth >= 7 &&
+    jalaliMonth <= 11
+  ) {
+    return 30;
+  }
+
+  return isValidJalaaliDate(
+    jalaliYear,
+    12,
+    30
+  )
+    ? 30
+    : 29;
+}
+
+/**
+ * تبدیل سال/ماه جلالی به کلید سال/ماه میلادی دیتابیس
+ *
+ * قرارداد فعلی دیتابیس:
+ * دوره جلالی بر اساس تاریخ انتهای همان ماه جلالی
+ * به سال/ماه میلادی تبدیل می‌شود.
+ *
+ * مثال:
+ * ۱۴۰۵/۰۶/۳۱
+ * =
+ * 2026-09-22
+ * =
+ * 2026 / 9
+ */
 function jalaliPeriodToGregorian(
   jalaliYear: number,
   jalaliMonth: number
@@ -108,11 +156,17 @@ function jalaliPeriodToGregorian(
     );
   }
 
+  const lastDay =
+    getJalaliMonthLastDay(
+      jalaliYear,
+      jalaliMonth
+    );
+
   if (
     !isValidJalaaliDate(
       jalaliYear,
       jalaliMonth,
-      1
+      lastDay
     )
   ) {
     throw new Error(
@@ -123,7 +177,7 @@ function jalaliPeriodToGregorian(
   const gregorian = toGregorian(
     jalaliYear,
     jalaliMonth,
-    1
+    lastDay
   );
 
   return {
@@ -143,10 +197,11 @@ export const reportTargetsService = {
      * در دیتابیس با سال/ماه میلادی ذخیره شده‌اند.
      *
      * مثال:
-     * 1405 / 6
+     * ۱۴۰۵ / ۶
      * =>
      * 2026 / 9
      */
+
     const gregorianPeriod =
       jalaliPeriodToGregorian(
         year,
@@ -295,8 +350,9 @@ export const reportTargetsService = {
         []) as RegionRow[];
 
     /*
-     * مجموع هدف تمام رکوردهای هدف
+     * مجموع هدف
      */
+
     const totalTarget =
       targets.reduce(
         (sum, item) =>
@@ -308,10 +364,9 @@ export const reportTargetsService = {
       );
 
     /*
-     * اگر رکورد کلی region_id = null وجود داشته باشد،
-     * از همان برای عدد کلی استفاده می‌کنیم
-     * تا مجموع منطقه‌ها باعث دوباره‌شماری نشود.
+     * رکورد کلی
      */
+
     const overallProgress =
       progress.find(
         (item) =>
@@ -322,15 +377,17 @@ export const reportTargetsService = {
     let totalOrders = 0;
 
     if (overallProgress) {
-      totalAchieved = toNumber(
-        overallProgress.achieved_tonnage
-      );
-
-      totalOrders = Math.round(
+      totalAchieved =
         toNumber(
-          overallProgress.order_count
-        )
-      );
+          overallProgress.achieved_tonnage
+        );
+
+      totalOrders =
+        Math.round(
+          toNumber(
+            overallProgress.order_count
+          )
+        );
     } else {
       totalAchieved =
         progress.reduce(
@@ -380,8 +437,9 @@ export const reportTargetsService = {
         : 0;
 
     /*
-     * گزارش هر منطقه
+     * گزارش مناطق
      */
+
     const regionReports =
       regions
         .map((region) => {
@@ -444,17 +502,22 @@ export const reportTargetsService = {
     return {
       year,
       month,
-      targetTonnage: totalTarget,
-      achievedTonnage: totalAchieved,
-      orderCount: totalOrders,
+      targetTonnage:
+        totalTarget,
+      achievedTonnage:
+        totalAchieved,
+      orderCount:
+        totalOrders,
       achievementRate:
         totalAchievementRate,
-      remainingTonnage: Math.max(
-        totalTarget -
-          totalAchieved,
-        0
-      ),
-      regions: regionReports,
+      remainingTonnage:
+        Math.max(
+          totalTarget -
+            totalAchieved,
+          0
+        ),
+      regions:
+        regionReports,
     };
   },
 };

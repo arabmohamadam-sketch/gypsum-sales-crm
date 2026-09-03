@@ -1,4 +1,8 @@
-import { toGregorian, toJalaali, isValidJalaaliDate } from "jalaali-js";
+import {
+  isValidJalaaliDate,
+  toGregorian,
+  toJalaali,
+} from "jalaali-js";
 
 import { createSupabaseClient } from "@/src/lib/supabase";
 
@@ -133,7 +137,9 @@ function getErrorMessage(
   return fallback;
 }
 
-async function getCurrentUserId(): Promise<string | null> {
+async function getCurrentUserId(): Promise<
+  string | null
+> {
   const supabase = createSupabaseClient();
 
   const {
@@ -154,9 +160,55 @@ async function getCurrentUserId(): Promise<string | null> {
 }
 
 /**
- * تبدیل سال/ماه جلالی به سال/ماه میلادی
+ * تعداد روز آخر ماه جلالی
+ *
+ * فروردین تا شهریور = 31
+ * مهر تا بهمن = 30
+ * اسفند = 29 یا 30
+ */
+function getJalaliMonthLastDay(
+  jalaliYear: number,
+  jalaliMonth: number
+): number {
+  if (
+    jalaliMonth >= 1 &&
+    jalaliMonth <= 6
+  ) {
+    return 31;
+  }
+
+  if (
+    jalaliMonth >= 7 &&
+    jalaliMonth <= 11
+  ) {
+    return 30;
+  }
+
+  return isValidJalaaliDate(
+    jalaliYear,
+    12,
+    30
+  )
+    ? 30
+    : 29;
+}
+
+/**
+ * تبدیل سال/ماه جلالی به سال/ماه میلادی DB
+ *
+ * قرارداد دیتابیس:
+ * کلید دوره بر اساس ماه میلادیِ تاریخ پایان
+ * همان ماه جلالی ذخیره می‌شود.
  *
  * مثال:
+ *
+ * 1405 / 6
+ * آخرین روز:
+ * 1405 / 6 / 31
+ * =
+ * 2026 / 9 / 22
+ *
+ * بنابراین:
  * 1405 / 6
  * =>
  * 2026 / 9
@@ -178,6 +230,15 @@ function jalaliPeriodToGregorian(
   }
 
   if (
+    jalaliYear < 1200 ||
+    jalaliYear > 1600
+  ) {
+    throw new Error(
+      "سال جلالی هدف معتبر نیست."
+    );
+  }
+
+  if (
     jalaliMonth < 1 ||
     jalaliMonth > 12
   ) {
@@ -186,11 +247,17 @@ function jalaliPeriodToGregorian(
     );
   }
 
+  const lastDay =
+    getJalaliMonthLastDay(
+      jalaliYear,
+      jalaliMonth
+    );
+
   if (
     !isValidJalaaliDate(
       jalaliYear,
       jalaliMonth,
-      1
+      lastDay
     )
   ) {
     throw new Error(
@@ -201,7 +268,7 @@ function jalaliPeriodToGregorian(
   const gregorian = toGregorian(
     jalaliYear,
     jalaliMonth,
-    1
+    lastDay
   );
 
   return {
@@ -211,7 +278,17 @@ function jalaliPeriodToGregorian(
 }
 
 /**
- * تبدیل سال/ماه میلادی دیتابیس به سال/ماه جلالی برای UI
+ * تبدیل کلید دوره میلادی DB به دوره جلالی برای UI
+ *
+ * چون DB ماه میلادیِ تاریخ پایان ماه جلالی را نگه می‌دارد،
+ * روز اول همان ماه میلادی، دوره جلالی مربوطه را مشخص می‌کند.
+ *
+ * مثال:
+ * 2026 / 9
+ * =
+ * 2026-09-01
+ * =
+ * 1405 / 6
  */
 function gregorianPeriodToJalali(
   gregorianYear: number,
@@ -266,7 +343,9 @@ function normalizeRegion(
 }
 
 export const targetsService = {
-  async getRegions(): Promise<TargetRegion[]> {
+  async getRegions(): Promise<
+    TargetRegion[]
+  > {
     const supabase =
       createSupabaseClient();
 
@@ -275,13 +354,15 @@ export const targetsService = {
       error,
     } = await supabase
       .from("regions")
-      .select(`
-        id,
-        name,
-        code,
-        is_active,
-        sort_order
-      `)
+      .select(
+        `
+          id,
+          name,
+          code,
+          is_active,
+          sort_order
+        `
+      )
       .eq(
         "company_id",
         COMPANY_ID
@@ -342,7 +423,12 @@ export const targetsService = {
 
     /*
      * UI جلالی است
-     * DB میلادی است
+     * DB میلادی است.
+     *
+     * مثال:
+     * 1405 / 6
+     * =>
+     * 2026 / 9
      */
     const gregorianPeriod =
       jalaliPeriodToGregorian(
@@ -355,20 +441,22 @@ export const targetsService = {
       error: targetsError,
     } = await supabase
       .from("monthly_targets")
-      .select(`
-        id,
-        company_id,
-        user_id,
-        region_id,
-        target_year,
-        target_month,
-        target_tonnage,
-        notes,
-        created_by,
-        updated_by,
-        created_at,
-        updated_at
-      `)
+      .select(
+        `
+          id,
+          company_id,
+          user_id,
+          region_id,
+          target_year,
+          target_month,
+          target_tonnage,
+          notes,
+          created_by,
+          updated_by,
+          created_at,
+          updated_at
+        `
+      )
       .eq(
         "company_id",
         COMPANY_ID
@@ -409,7 +497,9 @@ export const targetsService = {
     const targetRows =
       (targets ?? []) as TargetRow[];
 
-    if (targetRows.length === 0) {
+    if (
+      targetRows.length === 0
+    ) {
       return [];
     }
 
@@ -447,14 +537,16 @@ export const targetsService = {
     ] = await Promise.all([
       supabase
         .from("users")
-        .select(`
-          id,
-          full_name,
-          email,
-          phone,
-          job_title,
-          is_active
-        `)
+        .select(
+          `
+            id,
+            full_name,
+            email,
+            phone,
+            job_title,
+            is_active
+          `
+        )
         .eq(
           "company_id",
           COMPANY_ID
@@ -471,12 +563,14 @@ export const targetsService = {
       regionIds.length > 0
         ? supabase
             .from("regions")
-            .select(`
-              id,
-              name,
-              code,
-              is_active
-            `)
+            .select(
+              `
+                id,
+                name,
+                code,
+                is_active
+              `
+            )
             .eq(
               "company_id",
               COMPANY_ID
@@ -496,19 +590,21 @@ export const targetsService = {
 
       supabase
         .from("monthly_progress")
-        .select(`
-          id,
-          company_id,
-          user_id,
-          region_id,
-          progress_year,
-          progress_month,
-          achieved_tonnage,
-          target_tonnage,
-          order_count,
-          achievement_rate,
-          last_calculated_at
-        `)
+        .select(
+          `
+            id,
+            company_id,
+            user_id,
+            region_id,
+            progress_year,
+            progress_month,
+            achieved_tonnage,
+            target_tonnage,
+            order_count,
+            achievement_rate,
+            last_calculated_at
+          `
+        )
         .eq(
           "company_id",
           COMPANY_ID
@@ -560,12 +656,16 @@ export const targetsService = {
         TargetSalesUser
       >();
 
-    for (const user of
-      usersResult.data ?? []) {
+    for (
+      const user of
+        usersResult.data ?? []
+    ) {
       usersMap.set(
         String(user.id),
         {
-          id: String(user.id),
+          id: String(
+            user.id
+          ),
           full_name: String(
             user.full_name
           ),
@@ -584,9 +684,10 @@ export const targetsService = {
                   user.job_title
                 )
               : null,
-          is_active: Boolean(
-            user.is_active
-          ),
+          is_active:
+            Boolean(
+              user.is_active
+            ),
         }
       );
     }
@@ -597,8 +698,10 @@ export const targetsService = {
         TargetRegion
       >();
 
-    for (const region of
-      regionsResult.data ?? []) {
+    for (
+      const region of
+        regionsResult.data ?? []
+    ) {
       regionsMap.set(
         String(region.id),
         {
@@ -611,9 +714,10 @@ export const targetsService = {
           code: String(
             region.code
           ),
-          is_active: Boolean(
-            region.is_active
-          ),
+          is_active:
+            Boolean(
+              region.is_active
+            ),
         }
       );
     }
@@ -624,9 +728,11 @@ export const targetsService = {
         ProgressRow
       >();
 
-    for (const progress of
-      (progressResult.data ??
-        []) as ProgressRow[]) {
+    for (
+      const progress of
+        (progressResult.data ??
+          []) as ProgressRow[]
+    ) {
       const key = [
         progress.user_id,
         progress.region_id ??
@@ -758,8 +864,8 @@ export const targetsService = {
 
     /*
      * ورودی UI جلالی است
-     * قبل از INSERT به میلادی تبدیل می‌شود
      *
+     * مثال:
      * 1405 / 6
      * =>
      * 2026 / 9
@@ -802,20 +908,22 @@ export const targetsService = {
         created_by:
           createdBy,
       })
-      .select(`
-        id,
-        company_id,
-        user_id,
-        region_id,
-        target_year,
-        target_month,
-        target_tonnage,
-        notes,
-        created_by,
-        updated_by,
-        created_at,
-        updated_at
-      `)
+      .select(
+        `
+          id,
+          company_id,
+          user_id,
+          region_id,
+          target_year,
+          target_month,
+          target_tonnage,
+          notes,
+          created_by,
+          updated_by,
+          created_at,
+          updated_at
+        `
+      )
       .single();
 
     if (error) {
@@ -841,9 +949,6 @@ export const targetsService = {
     /*
      * Trigger دیتابیس بعد از INSERT
      * monthly_progress را ایجاد/به‌روزرسانی می‌کند.
-     *
-     * سپس getTargets را اجرا می‌کنیم تا
-     * اطلاعات کامل هدف + تحقق آن برگردد.
      */
     const targets =
       await this.getTargets(
@@ -854,7 +959,8 @@ export const targetsService = {
     const created =
       targets.find(
         (target) =>
-          target.id === data.id
+          target.id ===
+          data.id
       );
 
     if (!created) {
@@ -882,11 +988,13 @@ export const targetsService = {
         currentTargetError,
     } = await supabase
       .from("monthly_targets")
-      .select(`
-        id,
-        target_year,
-        target_month
-      `)
+      .select(
+        `
+          id,
+          target_year,
+          target_month
+        `
+      )
       .eq(
         "id",
         targetId
@@ -911,8 +1019,8 @@ export const targetsService = {
     }
 
     /*
-     * مقدار فعلی دیتابیس میلادی است.
-     * برای ساخت مقدار بعدی ابتدا آن را جلالی می‌کنیم.
+     * مقدار فعلی DB میلادی است
+     * و برای ادامه کار به جلالی تبدیل می‌شود.
      */
     const currentJalaliPeriod =
       gregorianPeriodToJalali(
@@ -933,8 +1041,8 @@ export const targetsService = {
       currentJalaliPeriod.month;
 
     /*
-     * مقدار جدید را به میلادی تبدیل می‌کنیم
-     * و همان را در DB ذخیره می‌کنیم.
+     * مقدار جدید UI جلالی
+     * به مقدار DB میلادی تبدیل می‌شود.
      */
     const nextGregorianPeriod =
       jalaliPeriodToGregorian(
@@ -1015,10 +1123,6 @@ export const targetsService = {
       );
     }
 
-    /*
-     * چون مقدار ورودی UI جلالی است،
-     * دوباره با همان مقدار جلالی getTargets را صدا می‌زنیم.
-     */
     const targets =
       await this.getTargets(
         nextJalaliYear,
@@ -1057,14 +1161,16 @@ export const targetsService = {
       error: targetError,
     } = await supabase
       .from("monthly_targets")
-      .select(`
-        id,
-        company_id,
-        user_id,
-        region_id,
-        target_year,
-        target_month
-      `)
+      .select(
+        `
+          id,
+          company_id,
+          user_id,
+          region_id,
+          target_year,
+          target_month
+        `
+      )
       .eq(
         "id",
         targetId
