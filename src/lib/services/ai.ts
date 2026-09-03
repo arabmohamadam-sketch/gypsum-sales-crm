@@ -1,4 +1,5 @@
 import {
+  isLeapJalaaliYear,
   toGregorian,
   toJalaali,
 } from "jalaali-js";
@@ -172,7 +173,24 @@ function isBuildingMaterialStore(
   );
 }
 
-function getCurrentGregorianPeriod(): {
+/**
+ * تعیین دوره جاری هدف بر اساس ماه جلالی.
+ *
+ * قرارداد پروژه:
+ * دوره‌های هدف در دیتابیس با سال/ماه میلادی
+ * ذخیره می‌شوند، اما مبنای انتخاب دوره در UI و
+ * منطق کسب‌وکار، ماه جلالی است.
+ *
+ * بنابراین به‌جای تبدیل روز اول ماه جلالی،
+ * روز آخر همان ماه را به میلادی تبدیل می‌کنیم.
+ *
+ * نمونه:
+ * ۱۴۰۵/۰۶/۳۱ → 2026/09/22
+ * پس دوره هدف:
+ * target_year = 2026
+ * target_month = 9
+ */
+function getCurrentTargetPeriod(): {
   year: number;
   month: number;
 } {
@@ -184,10 +202,30 @@ function getCurrentGregorianPeriod(): {
     now.getDate(),
   );
 
+  let lastDay: number;
+
+  if (
+    jalali.jm >= 1 &&
+    jalali.jm <= 6
+  ) {
+    lastDay = 31;
+  } else if (
+    jalali.jm >= 7 &&
+    jalali.jm <= 11
+  ) {
+    lastDay = 30;
+  } else {
+    lastDay = isLeapJalaaliYear(
+      jalali.jy,
+    )
+      ? 30
+      : 29;
+  }
+
   const gregorian = toGregorian(
     jalali.jy,
     jalali.jm,
-    1,
+    lastDay,
   );
 
   return {
@@ -222,7 +260,11 @@ function isToday(
 ): boolean {
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
     return false;
   }
 
@@ -243,7 +285,11 @@ function calculateDaysSince(
     dateValue,
   );
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
     return 9999;
   }
 
@@ -379,7 +425,11 @@ function calculateExpectedNextOrderDate(
     lastOrderDate,
   );
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
     return null;
   }
 
@@ -404,7 +454,11 @@ function calculateDaysUntilExpectedOrder(
     expectedDate,
   );
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
     return null;
   }
 
@@ -637,7 +691,9 @@ function buildPeerTonnageMaps(
     count: 0,
   };
 
-  for (const customer of customers) {
+  for (
+    const customer of customers
+  ) {
     const customerOrders =
       ordersByCustomer.get(
         customer.id,
@@ -1778,11 +1834,11 @@ export const aiService = {
 
     try {
       /* ==========================================
-         CURRENT MONTH
+         CURRENT TARGET PERIOD
          ========================================== */
 
       const currentPeriod =
-        getCurrentGregorianPeriod();
+        getCurrentTargetPeriod();
 
       /* ==========================================
          CUSTOMERS
@@ -1926,8 +1982,7 @@ export const aiService = {
       }
 
       const callRows =
-        (calls ??
-          []) as CallRow[];
+        (calls ?? []) as CallRow[];
 
       /* ==========================================
          FOLLOW UPS
@@ -2086,7 +2141,9 @@ export const aiService = {
           FollowUpRow[]
         >();
 
-      for (const order of orderRows) {
+      for (
+        const order of orderRows
+      ) {
         const list =
           ordersByCustomer.get(
             order.customer_id,
@@ -2100,7 +2157,9 @@ export const aiService = {
         );
       }
 
-      for (const call of callRows) {
+      for (
+        const call of callRows
+      ) {
         const list =
           callsByCustomer.get(
             call.customer_id,
@@ -2333,7 +2392,9 @@ export const aiService = {
                PURCHASE HISTORY
                ========================================== */
 
-            if (orderCount >= 5) {
+            if (
+              orderCount >= 5
+            ) {
               score += 20;
 
               reasons.push({
