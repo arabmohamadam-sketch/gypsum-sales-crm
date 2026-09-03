@@ -32,6 +32,17 @@ function formatNumber(
   ).format(value);
 }
 
+function formatJalaliYear(
+  year: number
+): string {
+  return year.toLocaleString(
+    "fa-IR",
+    {
+      useGrouping: false,
+    }
+  );
+}
+
 function formatDecimal(
   value: number
 ): string {
@@ -445,7 +456,9 @@ export default function TargetsPage() {
       window.confirm(
         `هدف ${target.user?.full_name ?? "این کاربر"} برای ${getMonthName(
           month
-        )} ${year} حذف شود؟`
+        )} ${formatJalaliYear(
+          year
+        )} حذف شود؟`
       );
 
     if (!confirmed) {
@@ -542,7 +555,7 @@ export default function TargetsPage() {
                   {getMonthName(
                     month
                   )}{" "}
-                  {formatNumber(
+                  {formatJalaliYear(
                     year
                   )}
                 </p>
@@ -656,7 +669,7 @@ export default function TargetsPage() {
               {getMonthName(
                 month
               )}{" "}
-              {formatNumber(
+              {formatJalaliYear(
                 year
               )}
             </p>
@@ -1029,7 +1042,7 @@ export default function TargetsPage() {
                   {getMonthName(
                     month
                   )}{" "}
-                  {formatNumber(
+                  {formatJalaliYear(
                     year
                   )}
                 </p>
@@ -1212,7 +1225,7 @@ export default function TargetsPage() {
                   disabled={
                     saving
                   }
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? (
                     <>
