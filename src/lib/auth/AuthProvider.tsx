@@ -9,6 +9,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { useRouter } from "next/navigation";
+
 import type {
   Session,
   User,
@@ -42,6 +44,8 @@ type AuthProviderProps = {
 export function AuthProvider({
   children,
 }: AuthProviderProps) {
+  const router = useRouter();
+
   const [user, setUser] =
     useState<User | null>(null);
 
@@ -78,6 +82,7 @@ export function AuthProvider({
           setSession(null);
           setUser(null);
           setLoading(false);
+
           return;
         }
 
@@ -86,10 +91,7 @@ export function AuthProvider({
           data.session
         );
 
-        setSession(
-          data.session
-        );
-
+        setSession(data.session);
         setUser(
           data.session?.user ?? null
         );
@@ -132,13 +134,25 @@ export function AuthProvider({
             event
           );
 
-          setSession(
-            nextSession
-          );
+          setSession(nextSession);
 
           setUser(
             nextSession?.user ?? null
           );
+
+          if (
+            event === "PASSWORD_RECOVERY"
+          ) {
+            console.log(
+              "Supabase Auth: password recovery started"
+            );
+
+            router.replace(
+              "/reset-password"
+            );
+
+            return;
+          }
 
           if (
             event === "SIGNED_IN"
@@ -162,7 +176,7 @@ export function AuthProvider({
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [router]);
 
   async function handleSignOut() {
     const result =

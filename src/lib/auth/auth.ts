@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "@/src/lib/supabase";
+
 import type {
   Session,
   User,
@@ -47,6 +48,36 @@ export async function signIn(
   return {
     success: true,
     session: data.session,
+    user: data.user,
+  };
+}
+
+export async function updatePassword(
+  password: string
+): Promise<AuthResult> {
+  const supabase =
+    getSupabaseClient();
+
+  const {
+    data,
+    error,
+  } =
+    await supabase.auth.updateUser({
+      password,
+    });
+
+  if (error) {
+    return {
+      success: false,
+      error: translateAuthError(
+        error.message
+      ),
+    };
+  }
+
+  return {
+    success: true,
+    session: null,
     user: data.user,
   };
 }
@@ -147,9 +178,22 @@ function translateAuthError(
   }
 
   if (
-    normalized.includes("network")
+    normalized.includes(
+      "network"
+    )
   ) {
     return "ارتباط با سرور برقرار نشد. اتصال اینترنت را بررسی کنید.";
+  }
+
+  if (
+    normalized.includes(
+      "password"
+    ) &&
+    normalized.includes(
+      "same"
+    )
+  ) {
+    return "رمز عبور جدید باید با رمز قبلی متفاوت باشد.";
   }
 
   return message;

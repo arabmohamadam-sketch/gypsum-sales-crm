@@ -1,3 +1,7 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 
@@ -6,6 +10,20 @@ export default function MainLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
+  const isAuthPage =
+    pathname === "/login" ||
+    pathname === "/reset-password";
+
+  if (isAuthPage) {
+    return (
+      <div dir="rtl" className="min-h-screen bg-slate-50">
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div
       dir="rtl"
