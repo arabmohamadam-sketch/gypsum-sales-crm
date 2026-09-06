@@ -78,7 +78,7 @@ export function useTargets(
   ] = useState<TargetSalesUser[]>([]);
 
   const [loading, setLoading] =
-    useState(true);
+  useState(false);
 
   const [saving, setSaving] =
     useState(false);

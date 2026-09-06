@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 
+import { usePermissions } from "@/src/lib/hooks/usePermissions";
 import { useTargets } from "@/src/lib/hooks/useTargets";
 import {
   gregorianToJalali,
@@ -227,6 +228,15 @@ export default function TargetsPage() {
     useState(today.month);
 
   const {
+    hasPermission,
+    loading: permissionsLoading,
+  } = usePermissions();
+
+  const canManageTargets =
+    !permissionsLoading &&
+    hasPermission("targets.write");
+
+  const {
     targets,
     regions,
     salesUsers,
@@ -321,6 +331,10 @@ export default function TargetsPage() {
   }
 
   function openCreateForm() {
+    if (!canManageTargets) {
+      return;
+    }
+
     resetForm();
     setIsFormOpen(true);
   }
@@ -330,6 +344,10 @@ export default function TargetsPage() {
       typeof targets
     )[number]
   ) {
+    if (!canManageTargets) {
+      return;
+    }
+
     setEditingId(
       target.id
     );
@@ -369,6 +387,10 @@ export default function TargetsPage() {
     event: React.FormEvent
   ) {
     event.preventDefault();
+
+    if (!canManageTargets) {
+      return;
+    }
 
     setFormError(null);
 
@@ -452,6 +474,10 @@ export default function TargetsPage() {
       typeof targets
     )[number]
   ) {
+    if (!canManageTargets) {
+      return;
+    }
+
     const confirmed =
       window.confirm(
         `هدف ${target.user?.full_name ?? "این کاربر"} برای ${getMonthName(
@@ -537,7 +563,9 @@ export default function TargetsPage() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={goPreviousMonth}
+                onClick={
+                  goPreviousMonth
+                }
                 className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
                 title="ماه قبل"
               >
@@ -563,7 +591,9 @@ export default function TargetsPage() {
 
               <button
                 type="button"
-                onClick={goNextMonth}
+                onClick={
+                  goNextMonth
+                }
                 className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
                 title="ماه بعد"
               >
@@ -574,7 +604,9 @@ export default function TargetsPage() {
 
               <button
                 type="button"
-                onClick={goCurrentMonth}
+                onClick={
+                  goCurrentMonth
+                }
                 className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
               >
                 <ArrowRight
@@ -583,14 +615,18 @@ export default function TargetsPage() {
                 ماه جاری
               </button>
 
-              <button
-                type="button"
-                onClick={openCreateForm}
-                className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white transition hover:bg-slate-800"
-              >
-                <Plus size={17} />
-                ثبت هدف
-              </button>
+              {canManageTargets && (
+                <button
+                  type="button"
+                  onClick={
+                    openCreateForm
+                  }
+                  className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white transition hover:bg-slate-800"
+                >
+                  <Plus size={17} />
+                  ثبت هدف
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -603,7 +639,9 @@ export default function TargetsPage() {
             stats.totalTarget
           )}
           description="مجموع اهداف ثبت‌شده برای این ماه"
-          icon={<Target size={22} />}
+          icon={
+            <Target size={22} />
+          }
         />
 
         <StatCard
@@ -719,20 +757,23 @@ export default function TargetsPage() {
 
             <p className="mt-2 max-w-md text-sm leading-7 text-slate-400">
               برای این ماه هدف فروش ثبت نشده.
-              با دکمه «ثبت هدف» اولین هدف را
-              اضافه کنید.
+              {canManageTargets
+                ? " با دکمه «ثبت هدف» اولین هدف را اضافه کنید."
+                : " در حال حاضر هدفی برای این ماه ثبت نشده است."}
             </p>
 
-            <button
-              type="button"
-              onClick={
-                openCreateForm
-              }
-              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white"
-            >
-              <Plus size={17} />
-              ثبت اولین هدف
-            </button>
+            {canManageTargets && (
+              <button
+                type="button"
+                onClick={
+                  openCreateForm
+                }
+                className="mt-5 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-bold text-white"
+              >
+                <Plus size={17} />
+                ثبت اولین هدف
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -764,9 +805,11 @@ export default function TargetsPage() {
                       درصد تحقق
                     </th>
 
-                    <th className="px-5 py-4">
-                      عملیات
-                    </th>
+                    {canManageTargets && (
+                      <th className="px-5 py-4">
+                        عملیات
+                      </th>
+                    )}
                   </tr>
                 </thead>
 
@@ -845,42 +888,44 @@ export default function TargetsPage() {
                           />
                         </td>
 
-                        <td className="px-5 py-5">
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                openEditForm(
-                                  target
-                                )
-                              }
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50"
-                              title="ویرایش"
-                            >
-                              <Edit3
-                                size={15}
-                              />
-                            </button>
+                        {canManageTargets && (
+                          <td className="px-5 py-5">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openEditForm(
+                                    target
+                                  )
+                                }
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50"
+                                title="ویرایش"
+                              >
+                                <Edit3
+                                  size={15}
+                                />
+                              </button>
 
-                            <button
-                              type="button"
-                              onClick={() =>
-                                void handleDelete(
-                                  target
-                                )
-                              }
-                              disabled={
-                                saving
-                              }
-                              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-red-200 text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-                              title="حذف"
-                            >
-                              <Trash2
-                                size={15}
-                              />
-                            </button>
-                          </div>
-                        </td>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleDelete(
+                                    target
+                                  )
+                                }
+                                disabled={
+                                  saving
+                                }
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-red-200 text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                                title="حذف"
+                              >
+                                <Trash2
+                                  size={15}
+                                />
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     )
                   )}
@@ -986,39 +1031,41 @@ export default function TargetsPage() {
                       />
                     </div>
 
-                    <div className="mt-4 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          openEditForm(
-                            target
-                          )
-                        }
-                        className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700"
-                      >
-                        <Edit3
-                          size={15}
-                        />
-                        ویرایش
-                      </button>
+                    {canManageTargets && (
+                      <div className="mt-4 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openEditForm(
+                              target
+                            )
+                          }
+                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700"
+                        >
+                          <Edit3
+                            size={15}
+                          />
+                          ویرایش
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void handleDelete(
-                            target
-                          )
-                        }
-                        disabled={
-                          saving
-                        }
-                        className="inline-flex items-center justify-center rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-600"
-                      >
-                        <Trash2
-                          size={15}
-                        />
-                      </button>
-                    </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void handleDelete(
+                              target
+                            )
+                          }
+                          disabled={
+                            saving
+                          }
+                          className="inline-flex items-center justify-center rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-600"
+                        >
+                          <Trash2
+                            size={15}
+                          />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )
               )}
@@ -1027,7 +1074,8 @@ export default function TargetsPage() {
         )}
       </section>
 
-      {isFormOpen && (
+      {isFormOpen &&
+        canManageTargets && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
           <div className="w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5">

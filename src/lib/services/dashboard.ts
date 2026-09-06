@@ -9,7 +9,6 @@ export interface DashboardStats {
   totalTonnage: number;
   todayCallsCount: number;
   todayFollowUpsCount: number;
-
   waybillsCount: number;
   issuedWaybillsCount: number;
   loadingConfirmedWaybillsCount: number;
@@ -85,6 +84,7 @@ interface FollowUpRow {
 
 interface WaybillRow {
   id: string;
+  order_id: string;
   status: string;
   deleted_at: string | null;
 }
@@ -129,23 +129,16 @@ function calculateInactivityDays(
     return 9999;
   }
 
-  const activityDate = new Date(
-    lastActivity
-  );
+  const activityDate = new Date(lastActivity);
 
-  if (
-    Number.isNaN(
-      activityDate.getTime()
-    )
-  ) {
+  if (Number.isNaN(activityDate.getTime())) {
     return 9999;
   }
 
   const now = new Date();
 
   const difference =
-    now.getTime() -
-    activityDate.getTime();
+    now.getTime() - activityDate.getTime();
 
   return Math.max(
     0,
@@ -171,9 +164,7 @@ function getErrorMessage(
       }
     ).message;
 
-    if (
-      typeof message === "string"
-    ) {
+    if (typeof message === "string") {
       return message;
     }
   }
@@ -208,25 +199,24 @@ function logSupabaseError(
 function getWaybillItemTonnage(
   item: WaybillItemRow
 ): number {
-  const directTonnage =
-    Number(item.tonnage ?? 0);
+  const directTonnage = Number(
+    item.tonnage ?? 0
+  );
 
   if (
-    Number.isFinite(
-      directTonnage
-    ) &&
+    Number.isFinite(directTonnage) &&
     directTonnage > 0
   ) {
     return directTonnage;
   }
 
-  const quantity =
-    Number(item.quantity ?? 0);
+  const quantity = Number(
+    item.quantity ?? 0
+  );
 
-  const weightKg =
-    Number(
-      item.weight_kg_snapshot ?? 0
-    );
+  const weightKg = Number(
+    item.weight_kg_snapshot ?? 0
+  );
 
   if (
     !Number.isFinite(quantity) ||
@@ -257,6 +247,10 @@ export const dashboardService = {
 
     const tomorrowStartDate =
       new Date(tomorrowStart);
+
+    // ==============================
+    // CUSTOMERS
+    // ==============================
 
     const {
       data: customers,
@@ -302,6 +296,17 @@ export const dashboardService = {
     const customerRows =
       (customers ?? []) as unknown as CustomerRow[];
 
+    // ==============================
+    // ORDERS
+    //
+    // فقط سفارش‌های تأییدشده را
+    // برای پیدا کردن سفارش‌های قابل
+    // اتصال به حواله می‌گیریم.
+    //
+    // فروش واقعی بعداً فقط از طریق
+    // loading_confirmed تعیین می‌شود.
+    // ==============================
+
     const {
       data: orders,
       error: ordersError,
@@ -344,6 +349,10 @@ export const dashboardService = {
     const orderRows =
       (orders ?? []) as OrderRow[];
 
+    // ==============================
+    // CALLS
+    // ==============================
+
     const {
       data: calls,
       error: callsError,
@@ -380,6 +389,10 @@ export const dashboardService = {
 
     const callRows =
       (calls ?? []) as CallRow[];
+
+    // ==============================
+    // FOLLOW UPS
+    // ==============================
 
     const {
       data: followUps,
@@ -430,6 +443,7 @@ export const dashboardService = {
       .from("waybills")
       .select(`
         id,
+        order_id,
         status,
         deleted_at
       `)
@@ -462,9 +476,7 @@ export const dashboardService = {
     let waybillItemRows:
       WaybillItemRow[] = [];
 
-    if (
-      waybillRows.length > 0
-    ) {
+    if (waybillRows.length > 0) {
       const waybillIds =
         waybillRows.map(
           (waybill) =>
@@ -508,8 +520,7 @@ export const dashboardService = {
       }
 
       waybillItemRows =
-        (waybillItems ??
-          []) as WaybillItemRow[];
+        (waybillItems ?? []) as WaybillItemRow[];
     }
 
     // ==============================
@@ -526,12 +537,15 @@ export const dashboardService = {
           "issued"
       ).length;
 
-    const loadingConfirmedWaybillsCount =
+    const loadingConfirmedWaybills =
       waybillRows.filter(
         (waybill) =>
           waybill.status ===
           "loading_confirmed"
-      ).length;
+      );
+
+    const loadingConfirmedWaybillsCount =
+      loadingConfirmedWaybills.length;
 
     const cancelledWaybillsCount =
       waybillRows.filter(
@@ -539,6 +553,10 @@ export const dashboardService = {
           waybill.status ===
           "cancelled"
       ).length;
+
+    // ==============================
+    // TONNAGE BY WAYBILL
+    // ==============================
 
     const waybillTonnageByWaybill =
       new Map<string, number>();
@@ -560,48 +578,97 @@ export const dashboardService = {
       );
     }
 
-    const loadingConfirmedTonnage =
-      waybillRows
-        .filter(
-          (waybill) =>
-            waybill.status ===
-            "loading_confirmed"
-        )
-        .reduce(
-          (
-            total,
-            waybill
-          ) =>
-            total +
-            (waybillTonnageByWaybill.get(
-              waybill.id
-            ) ?? 0),
-          0
+    // ==============================
+    // REAL SALES
+    //
+    // فروش قطعی فقط از حواله‌هایی
+    // که بارگیری آنها تأیید شده است.
+    // ==============================
+
+    const loadingConfirmedOrderIds =
+      new Set<string>();
+
+    for (
+      const waybill of loadingConfirmedWaybills
+    ) {
+      if (waybill.order_id) {
+        loadingConfirmedOrderIds.add(
+          waybill.order_id
         );
+      }
+    }
+
+    const loadingConfirmedOrders =
+      orderRows.filter(
+        (order) =>
+          loadingConfirmedOrderIds.has(
+            order.id
+          )
+      );
+
+    // ==============================
+    // SALES TONNAGE BY ORDER
+    // ==============================
+
+    const salesTonnageByOrder =
+      new Map<string, number>();
+
+    for (
+      const waybill of loadingConfirmedWaybills
+    ) {
+      const orderId =
+        waybill.order_id;
+
+      if (!orderId) {
+        continue;
+      }
+
+      const waybillTonnage =
+        waybillTonnageByWaybill.get(
+          waybill.id
+        ) ?? 0;
+
+      const current =
+        salesTonnageByOrder.get(
+          orderId
+        ) ?? 0;
+
+      salesTonnageByOrder.set(
+        orderId,
+        current +
+          waybillTonnage
+      );
+    }
+
+    const loadingConfirmedTonnage =
+      loadingConfirmedWaybills.reduce(
+        (
+          total,
+          waybill
+        ) =>
+          total +
+          (waybillTonnageByWaybill.get(
+            waybill.id
+          ) ?? 0),
+        0
+      );
 
     // ==============================
     // SALES STATISTICS
     // ==============================
 
     const totalTonnage =
-      orderRows.reduce(
-        (
-          total,
-          order
-        ) =>
-          total +
-          Number(
-            order.total_tonnage ??
-              0
-          ),
-        0
-      );
+      loadingConfirmedTonnage;
 
     const ordersCount =
-      orderRows.length;
+      loadingConfirmedOrders.length;
 
     const customersCount =
       customerRows.length;
+
+    // ==============================
+    // TODAY CALLS
+    // ==============================
 
     const todayCallsCount =
       callRows.filter(
@@ -622,6 +689,10 @@ export const dashboardService = {
           );
         }
       ).length;
+
+    // ==============================
+    // TODAY FOLLOW UPS
+    // ==============================
 
     const todayFollowUpsCount =
       followUpRows.filter(
@@ -681,8 +752,9 @@ export const dashboardService = {
       );
     }
 
+    // فقط فروش واقعی
     for (
-      const order of orderRows
+      const order of loadingConfirmedOrders
     ) {
       const current =
         customerActivity.get(
@@ -834,6 +906,8 @@ export const dashboardService = {
 
     // ==============================
     // LIFETIME TONNAGE
+    //
+    // فقط فروش واقعی
     // ==============================
 
     const tonnageByCustomer =
@@ -843,20 +917,22 @@ export const dashboardService = {
       >();
 
     for (
-      const order of orderRows
+      const order of loadingConfirmedOrders
     ) {
       const current =
         tonnageByCustomer.get(
           order.customer_id
         ) ?? 0;
 
+      const orderTonnage =
+        salesTonnageByOrder.get(
+          order.id
+        ) ?? 0;
+
       tonnageByCustomer.set(
         order.customer_id,
         current +
-          Number(
-            order.total_tonnage ??
-              0
-          )
+          orderTonnage
       );
     }
 
@@ -924,9 +1000,12 @@ export const dashboardService = {
               ) ?? 0;
 
             return {
-              id: customer.id,
-              name: customer.name,
-              phone: customer.phone,
+              id:
+                customer.id,
+              name:
+                customer.name,
+              phone:
+                customer.phone,
               customer_type:
                 customer.customer_type,
               is_vip:
@@ -970,6 +1049,10 @@ export const dashboardService = {
         )
         .slice(0, 5);
 
+    // ==============================
+    // FINAL RESULT
+    // ==============================
+
     return {
       stats: {
         customersCount,
@@ -983,7 +1066,6 @@ export const dashboardService = {
         cancelledWaybillsCount,
         loadingConfirmedTonnage,
       },
-
       recentActivities,
       recommendedCustomers,
     };

@@ -155,14 +155,16 @@ function logReportError(
     typeof error === "object" &&
     error !== null
   ) {
-    console.error("details:", error);
+    console.error(
+      "details:",
+      error
+    );
   }
 
   console.error(
     "=================================================="
   );
 }
-
 
 function getWaybillItemTonnage(
   item: WaybillItemRow
@@ -242,7 +244,10 @@ function normalizeCityName(
     تنکابن: "تنکابن",
   };
 
-  return normalized[value] ?? value;
+  return (
+    normalized[value] ??
+    value
+  );
 }
 
 function getCitySortIndex(
@@ -282,35 +287,47 @@ function getLocalDatabaseDate(
 ): string {
   const date = new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
     throw new Error(
       "تاریخ گزارش معتبر نیست."
     );
   }
 
-  const parts = new Intl.DateTimeFormat(
-    "en-CA",
-    {
-      timeZone: "Asia/Tehran",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }
-  ).formatToParts(date);
+  const parts =
+    new Intl.DateTimeFormat(
+      "en-CA",
+      {
+        timeZone: "Asia/Tehran",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }
+    ).formatToParts(date);
 
   const year = parts.find(
-    (part) => part.type === "year"
+    (part) =>
+      part.type === "year"
   )?.value;
 
   const month = parts.find(
-    (part) => part.type === "month"
+    (part) =>
+      part.type === "month"
   )?.value;
 
   const day = parts.find(
-    (part) => part.type === "day"
+    (part) =>
+      part.type === "day"
   )?.value;
 
-  if (!year || !month || !day) {
+  if (
+    !year ||
+    !month ||
+    !day
+  ) {
     throw new Error(
       "تبدیل تاریخ گزارش انجام نشد."
     );
@@ -447,6 +464,12 @@ export const reportsService = {
      * ========================================================
      * ORDERS
      * ========================================================
+     *
+     * این Query فقط برای پیدا کردن سفارش‌های تأییدشده
+     * و اطلاعات پایه سفارش استفاده می‌شود.
+     *
+     * فروش واقعی پایین‌تر فقط از حواله‌های
+     * loading_confirmed محاسبه خواهد شد.
      */
     let ordersQuery = supabase
       .from("orders")
@@ -487,13 +510,12 @@ export const reportsService = {
     }
 
     ordersQuery =
-      ordersQuery
-        .order(
-          "order_date",
-          {
-            ascending: false,
-          }
-        );
+      ordersQuery.order(
+        "order_date",
+        {
+          ascending: false,
+        }
+      );
 
     const {
       data: orders,
@@ -578,13 +600,12 @@ export const reportsService = {
     }
 
     waybillsQuery =
-      waybillsQuery
-        .order(
-          "waybill_date",
-          {
-            ascending: false,
-          }
-        );
+      waybillsQuery.order(
+        "waybill_date",
+        {
+          ascending: false,
+        }
+      );
 
     const {
       data: waybills,
@@ -620,7 +641,8 @@ export const reportsService = {
      * ========================================================
      *
      * یک حواله باید بتواند شهر سفارش خودش را پیدا کند،
-     * حتی اگر سفارش خارج از Query فروش بازه باشد.
+     * حتی اگر سفارش به دلیل بازه order_date داخل
+     * Query فروش اولیه نباشد.
      */
     const missingOrderIds =
       waybillRows
@@ -630,7 +652,9 @@ export const reportsService = {
         )
         .filter(
           (orderId) =>
-            !ordersById.has(orderId)
+            !ordersById.has(
+              orderId
+            )
         );
 
     if (
@@ -644,8 +668,7 @@ export const reportsService = {
         );
 
       const {
-        data:
-          relatedOrders,
+        data: relatedOrders,
         error:
           relatedOrdersError,
       } = await supabase
@@ -762,6 +785,96 @@ export const reportsService = {
 
     /*
      * ========================================================
+     * WAYBILL TONNAGE MAP
+     * ========================================================
+     */
+    const tonnageByWaybill =
+      new Map<
+        string,
+        number
+      >();
+
+    for (
+      const item of waybillItemRows
+    ) {
+      const current =
+        tonnageByWaybill.get(
+          item.waybill_id
+        ) ?? 0;
+
+      tonnageByWaybill.set(
+        item.waybill_id,
+        current +
+          getWaybillItemTonnage(
+            item
+          )
+      );
+    }
+
+    /*
+     * ========================================================
+     * REAL SALES
+     * ========================================================
+     *
+     * فروش واقعی فقط زمانی ثبت می‌شود که
+     * حواله به وضعیت loading_confirmed رسیده باشد.
+     */
+    const loadingConfirmedWaybills =
+      waybillRows.filter(
+        (waybill) =>
+          waybill.status ===
+          "loading_confirmed"
+      );
+
+    const loadingConfirmedOrderIds =
+      new Set(
+        loadingConfirmedWaybills
+          .map(
+            (waybill) =>
+              waybill.order_id
+          )
+          .filter(Boolean)
+      );
+
+    const loadedOrders =
+      orderRows.filter(
+        (order) =>
+          loadingConfirmedOrderIds.has(
+            order.id
+          )
+      );
+
+    /*
+     * تناژ فروش واقعی به تفکیک سفارش
+     */
+    const salesTonnageByOrder =
+      new Map<
+        string,
+        number
+      >();
+
+    for (
+      const waybill of
+        loadingConfirmedWaybills
+    ) {
+      const current =
+        salesTonnageByOrder.get(
+          waybill.order_id
+        ) ?? 0;
+
+      salesTonnageByOrder.set(
+        waybill.order_id,
+        current +
+          (
+            tonnageByWaybill.get(
+              waybill.id
+            ) ?? 0
+          )
+      );
+    }
+
+    /*
+     * ========================================================
      * CALLS
      * ========================================================
      */
@@ -868,7 +981,8 @@ export const reportsService = {
     const {
       data: followUps,
       error: followUpsError,
-    } = await followUpsQuery;
+    } =
+      await followUpsQuery;
 
     if (followUpsError) {
       logReportError(
@@ -937,19 +1051,25 @@ export const reportsService = {
      * ========================================================
      * SALES TOTALS
      * ========================================================
+     *
+     * توجه:
+     * فروش واقعی از حواله‌های loading_confirmed
+     * محاسبه می‌شود، نه از orders.status = confirmed.
      */
     const ordersCount =
-      orderRows.length;
+      loadingConfirmedOrderIds.size;
 
     const totalTonnage =
-      orderRows.reduce(
+      loadingConfirmedWaybills.reduce(
         (
           total,
-          order
+          waybill
         ) =>
           total +
-          Number(
-            order.total_tonnage ?? 0
+          (
+            tonnageByWaybill.get(
+              waybill.id
+            ) ?? 0
           ),
         0
       );
@@ -987,49 +1107,20 @@ export const reportsService = {
           "cancelled"
       ).length;
 
-    const tonnageByWaybill =
-      new Map<
-        string,
-        number
-      >();
-
-    for (
-      const item of waybillItemRows
-    ) {
-      const current =
-        tonnageByWaybill.get(
-          item.waybill_id
-        ) ?? 0;
-
-      tonnageByWaybill.set(
-        item.waybill_id,
-        current +
-          getWaybillItemTonnage(
-            item
-          )
-      );
-    }
-
     const loadingTonnage =
-      waybillRows
-        .filter(
-          (waybill) =>
-            waybill.status ===
-            "loading_confirmed"
-        )
-        .reduce(
+      loadingConfirmedWaybills.reduce(
+        (
+          total,
+          waybill
+        ) =>
+          total +
           (
-            total,
-            waybill
-          ) =>
-            total +
-            (
-              tonnageByWaybill.get(
-                waybill.id
-              ) ?? 0
-            ),
-          0
-        );
+            tonnageByWaybill.get(
+              waybill.id
+            ) ?? 0
+          ),
+        0
+      );
 
     /*
      * ========================================================
@@ -1125,8 +1216,7 @@ export const reportsService = {
             )
           : undefined;
 
-      const created:
-        CityReport = {
+      const created: CityReport = {
         cityId:
           customer?.city?.id ??
           customer?.city_id ??
@@ -1209,24 +1299,27 @@ export const reportsService = {
 
     /*
      * ========================================================
-     * CITY ORDERS
+     * CITY ORDERS / REAL SALES
      * ========================================================
+     *
+     * فقط سفارش‌هایی وارد این بخش می‌شوند که
+     * حداقل یک حواله loading_confirmed داشته باشند.
      */
     for (
-      const order of orderRows
+      const order of loadedOrders
     ) {
       const report =
         getOrCreateCity(
           order.customer_id
         );
 
-      report.ordersCount += 1;
+      report.ordersCount +=
+        1;
 
       report.salesTonnage +=
-        Number(
-          order.total_tonnage ??
-            0
-        );
+        salesTonnageByOrder.get(
+          order.id
+        ) ?? 0;
     }
 
     /*
@@ -1242,7 +1335,8 @@ export const reportsService = {
           call.customer_id
         );
 
-      report.callsCount += 1;
+      report.callsCount +=
+        1;
     }
 
     /*
@@ -1387,6 +1481,8 @@ export const reportsService = {
         callsCount,
         followUpsCount,
         customersCount,
+        loadedOrderCount:
+          loadedOrders.length,
         cityReports:
           cityReports.length,
       }
