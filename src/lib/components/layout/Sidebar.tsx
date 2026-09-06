@@ -618,7 +618,7 @@ function SidebarContent({
             </div>
 
             <div className="pointer-events-none absolute right-full top-1/2 z-50 mr-3 -translate-y-1/2 translate-x-2 whitespace-nowrap rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-white opacity-0 shadow-xl transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100">
-              محمد عرب · مدیر فروش
+              محمد عرب · کارشناس فروش
             </div>
           </div>
         ) : (
@@ -634,7 +634,7 @@ function SidebarContent({
                 </p>
 
                 <p className="mt-1 truncate text-xs text-slate-400">
-                  مدیر فروش
+                  کارشناس فروش
                 </p>
               </div>
             </div>

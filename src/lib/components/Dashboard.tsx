@@ -434,9 +434,9 @@ export default function Dashboard() {
       {/* Sales KPI */}
       <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
-          title="مشتریان فعال"
+          title="مشتریان در محدوده دسترسی"
           value={formatNumber(stats?.customersCount ?? 0)}
-          subtitle="مشتریان فعال CRM"
+          subtitle="مشتریان قابل‌دسترسی CRM"
           icon={<Users className="h-5 w-5" />}
           href="/customers"
         />
@@ -444,7 +444,7 @@ export default function Dashboard() {
         <StatCard
           title="سفارش‌ها"
           value={formatNumber(stats?.ordersCount ?? 0)}
-          subtitle="سفارش‌های تأییدشده"
+          subtitle="سفارش‌های محقق‌شده"
           icon={<ClipboardList className="h-5 w-5" />}
           href="/orders"
         />
@@ -452,7 +452,7 @@ export default function Dashboard() {
         <StatCard
           title="تناژ فروش"
           value={formatTonnage(stats?.totalTonnage ?? 0)}
-          subtitle="مجموع تناژ سفارش‌های تأییدشده"
+          subtitle="مجموع تناژ فروش محقق‌شده"
           icon={<PackageCheck className="h-5 w-5" />}
           href="/reports"
         />
@@ -818,7 +818,7 @@ export default function Dashboard() {
                   </div>
 
                   <span className="text-sm font-medium text-slate-600">
-                    مشتریان فعال
+                    مشتریان در محدوده دسترسی
                   </span>
                 </div>
 
@@ -836,7 +836,7 @@ export default function Dashboard() {
                   </div>
 
                   <span className="text-sm font-medium text-slate-600">
-                    سفارش‌های تأییدشده
+                    سفارش‌های محقق‌شده
                   </span>
                 </div>
 
@@ -854,7 +854,7 @@ export default function Dashboard() {
                   </div>
 
                   <span className="text-sm font-medium text-slate-600">
-                    مجموع تناژ
+                    مجموع تناژ فروش محقق‌شده
                   </span>
                 </div>
 
