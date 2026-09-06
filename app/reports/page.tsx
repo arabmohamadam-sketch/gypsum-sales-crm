@@ -162,17 +162,17 @@ function buildStartOfDayIso(
       day
     );
 
-  const date = new Date(
-    gregorian.gy,
-    gregorian.gm - 1,
-    gregorian.gd,
-    0,
-    0,
-    0,
-    0
-  );
+  const monthText = String(
+    gregorian.gm
+  ).padStart(2, "0");
 
-  return date.toISOString();
+  const dayText = String(
+    gregorian.gd
+  ).padStart(2, "0");
+
+  return new Date(
+    `${gregorian.gy}-${monthText}-${dayText}T00:00:00+03:30`
+  ).toISOString();
 }
 
 function buildEndOfDayIso(
@@ -199,17 +199,17 @@ function buildEndOfDayIso(
       day
     );
 
-  const date = new Date(
-    gregorian.gy,
-    gregorian.gm - 1,
-    gregorian.gd,
-    23,
-    59,
-    59,
-    999
-  );
+  const monthText = String(
+    gregorian.gm
+  ).padStart(2, "0");
 
-  return date.toISOString();
+  const dayText = String(
+    gregorian.gd
+  ).padStart(2, "0");
+
+  return new Date(
+    `${gregorian.gy}-${monthText}-${dayText}T23:59:59.999+03:30`
+  ).toISOString();
 }
 
 function getJalaliDateParts(
