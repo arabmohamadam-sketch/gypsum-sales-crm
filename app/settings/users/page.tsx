@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -94,8 +95,13 @@ export default function SettingsUsersPage() {
 
   /*
    * بارگذاری اولیه.
-   * useEffect مستقیماً state را تغییر نمی‌دهد؛
-   * تمام setStateها داخل then/catch/finally اجرا می‌شوند.
+   *
+   * وقتی Permissionها هنوز در حال دریافت هستند،
+   * effect متوقف می‌شود.
+   *
+   * اگر مجوز مشاهده کاربران وجود نداشته باشد،
+   * effect متوقف می‌شود و هیچ setState مستقیمی
+   * داخل effect انجام نمی‌شود.
    */
   useEffect(() => {
     if (permissionsLoading || !canReadUsers) {
@@ -119,10 +125,7 @@ export default function SettingsUsersPage() {
           return;
         }
 
-        console.error(
-          "Failed to load user management:",
-          err
-        );
+        console.error("Failed to load user management:", err);
 
         setError(getErrorMessage(err));
         setUsers([]);
@@ -161,10 +164,7 @@ export default function SettingsUsersPage() {
       setUsers(usersData);
       setRoles(rolesData);
     } catch (err) {
-      console.error(
-        "Failed to load user management:",
-        err
-      );
+      console.error("Failed to load user management:", err);
 
       setError(getErrorMessage(err));
     } finally {
@@ -195,15 +195,10 @@ export default function SettingsUsersPage() {
 
       const matchesStatus =
         statusFilter === "all" ||
-        (statusFilter === "active" &&
-          item.is_active) ||
-        (statusFilter === "inactive" &&
-          !item.is_active);
+        (statusFilter === "active" && item.is_active) ||
+        (statusFilter === "inactive" && !item.is_active);
 
-      return (
-        matchesSearch &&
-        matchesStatus
-      );
+      return matchesSearch && matchesStatus;
     });
   }, [users, search, statusFilter]);
 
@@ -244,16 +239,13 @@ export default function SettingsUsersPage() {
           item.id === user.id
             ? {
                 ...item,
-                is_active:
-                  !item.is_active,
+                is_active: !item.is_active,
               }
             : item
         )
       );
     } catch (err) {
-      setError(
-        getErrorMessage(err)
-      );
+      setError(getErrorMessage(err));
     } finally {
       setSavingUserId(null);
     }
@@ -279,11 +271,9 @@ export default function SettingsUsersPage() {
         roleId
       );
 
-      const selectedRole =
-        roles.find(
-          (role) =>
-            role.id === roleId
-        );
+      const selectedRole = roles.find(
+        (role) => role.id === roleId
+      );
 
       setUsers((current) =>
         current.map((item) =>
@@ -291,31 +281,27 @@ export default function SettingsUsersPage() {
             ? {
                 ...item,
                 role_id:
-                  selectedRole?.id ??
-                  null,
+                  selectedRole?.id ?? null,
                 role_name:
-                  selectedRole?.name ??
-                  null,
+                  selectedRole?.name ?? null,
                 role_slug:
-                  selectedRole?.slug ??
-                  null,
+                  selectedRole?.slug ?? null,
               }
             : item
         )
       );
     } catch (err) {
-      setError(
-        getErrorMessage(err)
-      );
+      setError(getErrorMessage(err));
     } finally {
       setSavingUserId(null);
     }
   }
 
-  if (
-    permissionsLoading ||
-    loading
-  ) {
+  /*
+   * ابتدا وضعیت Permission بررسی می‌شود.
+   * بعد از آن Loading داخلی صفحه بررسی می‌شود.
+   */
+  if (permissionsLoading) {
     return (
       <main
         dir="rtl"
@@ -330,7 +316,7 @@ export default function SettingsUsersPage() {
           </div>
 
           <p className="mt-4 text-sm font-bold text-slate-600">
-            در حال دریافت کاربران...
+            در حال بررسی سطح دسترسی...
           </p>
         </div>
       </main>
@@ -366,6 +352,28 @@ export default function SettingsUsersPage() {
             </div>
           </div>
         </section>
+      </main>
+    );
+  }
+
+  if (loading) {
+    return (
+      <main
+        dir="rtl"
+        className="flex min-h-[500px] items-center justify-center"
+      >
+        <div className="text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+            <Loader2
+              size={22}
+              className="animate-spin text-blue-600"
+            />
+          </div>
+
+          <p className="mt-4 text-sm font-bold text-slate-600">
+            در حال دریافت کاربران...
+          </p>
+        </div>
       </main>
     );
   }
@@ -440,9 +448,7 @@ export default function SettingsUsersPage() {
           </p>
 
           <p className="mt-2 text-2xl font-black text-slate-900">
-            {users.length.toLocaleString(
-              "fa-IR"
-            )}
+            {users.length.toLocaleString("fa-IR")}
           </p>
         </div>
 
@@ -452,9 +458,7 @@ export default function SettingsUsersPage() {
           </p>
 
           <p className="mt-2 text-2xl font-black text-emerald-800">
-            {activeUsersCount.toLocaleString(
-              "fa-IR"
-            )}
+            {activeUsersCount.toLocaleString("fa-IR")}
           </p>
         </div>
 
@@ -464,9 +468,7 @@ export default function SettingsUsersPage() {
           </p>
 
           <p className="mt-2 text-2xl font-black text-slate-700">
-            {inactiveUsersCount.toLocaleString(
-              "fa-IR"
-            )}
+            {inactiveUsersCount.toLocaleString("fa-IR")}
           </p>
         </div>
       </section>
@@ -477,9 +479,7 @@ export default function SettingsUsersPage() {
             type="search"
             value={search}
             onChange={(event) => {
-              setSearch(
-                event.target.value
-              );
+              setSearch(event.target.value);
             }}
             placeholder="جستجو بر اساس نام، ایمیل، موبایل یا سمت..."
             className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-4 text-sm outline-none transition focus:border-blue-400 focus:bg-white"
@@ -522,9 +522,7 @@ export default function SettingsUsersPage() {
 
               <p className="mt-1 text-xs text-slate-400">
                 نمایش{" "}
-                {filteredUsers.length.toLocaleString(
-                  "fa-IR"
-                )}{" "}
+                {filteredUsers.length.toLocaleString("fa-IR")}{" "}
                 کاربر
               </p>
             </div>
@@ -572,183 +570,149 @@ export default function SettingsUsersPage() {
             </thead>
 
             <tbody>
-              {filteredUsers.map(
-                (user) => {
-                  const isSaving =
-                    savingUserId ===
-                    user.id;
+              {filteredUsers.map((user) => {
+                const isSaving =
+                  savingUserId === user.id;
 
-                  return (
-                    <tr
-                      key={user.id}
-                      className="border-b border-slate-100 last:border-0"
-                    >
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600">
-                            <UserRound size={18} />
-                          </div>
-
-                          <div>
-                            <p className="text-sm font-black text-slate-800">
-                              {user.full_name}
-                            </p>
-
-                            <p
-                              dir="ltr"
-                              className="mt-1 text-xs text-slate-400"
-                            >
-                              {user.email}
-                            </p>
-                          </div>
+                return (
+                  <tr
+                    key={user.id}
+                    className="border-b border-slate-100 last:border-0"
+                  >
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+                          <UserRound size={18} />
                         </div>
-                      </td>
 
-                      <td className="px-5 py-4">
-                        <span className="text-sm text-slate-600">
-                          {user.phone ||
-                            "—"}
-                        </span>
-                      </td>
+                        <div>
+                          <p className="text-sm font-black text-slate-800">
+                            {user.full_name}
+                          </p>
 
-                      <td className="px-5 py-4">
-                        <span className="text-sm text-slate-600">
-                          {user.job_title ||
-                            "—"}
-                        </span>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        {canManageUsers ? (
-                          <select
-                            value={
-                              user.role_id ??
-                              ""
-                            }
-                            disabled={
-                              isSaving
-                            }
-                            onChange={(
-                              event
-                            ) => {
-                              const value =
-                                event
-                                  .target
-                                  .value;
-
-                              if (!value) {
-                                return;
-                              }
-
-                              void handleRoleChange(
-                                user,
-                                value
-                              );
-                            }}
-                            className="h-10 min-w-[190px] rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none focus:border-blue-400 disabled:opacity-50"
+                          <p
+                            dir="ltr"
+                            className="mt-1 text-xs text-slate-400"
                           >
+                            {user.email}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="px-5 py-4">
+                      <span className="text-sm text-slate-600">
+                        {user.phone || "—"}
+                      </span>
+                    </td>
+
+                    <td className="px-5 py-4">
+                      <span className="text-sm text-slate-600">
+                        {user.job_title || "—"}
+                      </span>
+                    </td>
+
+                    <td className="px-5 py-4">
+                      {canManageUsers ? (
+                        <select
+                          value={user.role_id ?? ""}
+                          disabled={isSaving}
+                          onChange={(event) => {
+                            const value =
+                              event.target.value;
+
+                            if (!value) {
+                              return;
+                            }
+
+                            void handleRoleChange(
+                              user,
+                              value
+                            );
+                          }}
+                          className="h-10 min-w-[190px] rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none focus:border-blue-400 disabled:opacity-50"
+                        >
+                          <option
+                            value=""
+                            disabled
+                          >
+                            بدون نقش
+                          </option>
+
+                          {roles.map((role) => (
                             <option
-                              value=""
-                              disabled
+                              key={role.id}
+                              value={role.id}
                             >
-                              بدون نقش
+                              {role.name}
                             </option>
-
-                            {roles.map(
-                              (
-                                role
-                              ) => (
-                                <option
-                                  key={
-                                    role.id
-                                  }
-                                  value={
-                                    role.id
-                                  }
-                                >
-                                  {
-                                    role.name
-                                  }
-                                </option>
-                              )
-                            )}
-                          </select>
-                        ) : (
-                          <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
-                            {user.role_name ||
-                              "بدون نقش"}
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span className="text-xs text-slate-500">
-                          {formatLastLogin(
-                            user.last_login_at
-                          )}
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">
+                          {user.role_name || "بدون نقش"}
                         </span>
-                      </td>
+                      )}
+                    </td>
 
-                      <td className="px-5 py-4">
-                        {user.is_active ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
-                            <CheckCircle2
-                              size={14}
-                            />
-                            فعال
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-500">
-                            <UserX
-                              size={14}
-                            />
-                            غیرفعال
-                          </span>
+                    <td className="px-5 py-4">
+                      <span className="text-xs text-slate-500">
+                        {formatLastLogin(
+                          user.last_login_at
                         )}
-                      </td>
+                      </span>
+                    </td>
 
-                      <td className="px-5 py-4">
-                        {canManageUsers ? (
-                          <button
-                            type="button"
-                            disabled={
-                              isSaving
-                            }
-                            onClick={() => {
-                              void handleToggleStatus(
-                                user
-                              );
-                            }}
-                            className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                              user.is_active
-                                ? "bg-red-50 text-red-600 hover:bg-red-100"
-                                : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                            }`}
-                          >
-                            {isSaving && (
-                              <Loader2
-                                size={14}
-                                className="animate-spin"
-                              />
-                            )}
+                    <td className="px-5 py-4">
+                      {user.is_active ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                          <CheckCircle2 size={14} />
+                          فعال
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-500">
+                          <UserX size={14} />
+                          غیرفعال
+                        </span>
+                      )}
+                    </td>
 
-                            {user.is_active
-                              ? "غیرفعال کردن"
-                              : "فعال کردن"}
-                          </button>
-                        ) : (
-                          <span className="text-xs text-slate-400">
-                            فقط مشاهده
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                }
-              )}
+                    <td className="px-5 py-4">
+                      {canManageUsers ? (
+                        <button
+                          type="button"
+                          disabled={isSaving}
+                          onClick={() => {
+                            void handleToggleStatus(user);
+                          }}
+                          className={`inline-flex h-9 items-center gap-2 rounded-lg px-3 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                            user.is_active
+                              ? "bg-red-50 text-red-600 hover:bg-red-100"
+                              : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                          }`}
+                        >
+                          {isSaving && (
+                            <Loader2
+                              size={14}
+                              className="animate-spin"
+                            />
+                          )}
 
-              {filteredUsers.length ===
-                0 && (
+                          {user.is_active
+                            ? "غیرفعال کردن"
+                            : "فعال کردن"}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-400">
+                          فقط مشاهده
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {filteredUsers.length === 0 && (
                 <tr>
                   <td
                     colSpan={7}

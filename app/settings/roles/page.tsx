@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -82,8 +83,8 @@ export default function SettingsRolesPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   /*
-   * این تابع فقط داده را دریافت می‌کند و خودش state را تغییر نمی‌دهد.
-   * بنابراین می‌توان آن را مستقیماً داخل useEffect اجرا کرد.
+   * این تابع فقط داده‌ها را دریافت می‌کند
+   * و هیچ stateای را تغییر نمی‌دهد.
    */
   function fetchRoleData() {
     return rolePermissionsService.getData();
@@ -91,7 +92,12 @@ export default function SettingsRolesPage() {
 
   /*
    * بارگذاری اولیه داده‌ها.
-   * تمام setStateها داخل callbackهای Promise انجام می‌شوند.
+   *
+   * اگر Permissionها هنوز در حال دریافت باشند،
+   * این effect متوقف می‌شود.
+   *
+   * اگر کاربر مجوز مشاهده تنظیمات نداشته باشد،
+   * effect بدون هیچ setState مستقیمی متوقف می‌شود.
    */
   useEffect(() => {
     if (permissionsLoading || !canReadSettings) {
@@ -113,7 +119,9 @@ export default function SettingsRolesPage() {
 
         const currentRoleExists =
           selectedRoleId &&
-          result.roles.some((role) => role.id === selectedRoleId);
+          result.roles.some(
+            (role) => role.id === selectedRoleId
+          );
 
         const nextRoleId = currentRoleExists
           ? selectedRoleId
@@ -161,8 +169,6 @@ export default function SettingsRolesPage() {
 
   /*
    * بروزرسانی دستی.
-   * چون این تابع از event handler صدا زده می‌شود،
-   * استفاده از setState در آن مشکلی ایجاد نمی‌کند.
    */
   async function loadData() {
     if (!canReadSettings) {
@@ -174,7 +180,8 @@ export default function SettingsRolesPage() {
       setError(null);
       setSuccess(null);
 
-      const result = await rolePermissionsService.getData();
+      const result =
+        await rolePermissionsService.getData();
 
       setRoles(result.roles);
       setPermissions(result.permissions);
@@ -182,7 +189,9 @@ export default function SettingsRolesPage() {
 
       const currentRoleExists =
         selectedRoleId &&
-        result.roles.some((role) => role.id === selectedRoleId);
+        result.roles.some(
+          (role) => role.id === selectedRoleId
+        );
 
       const nextRoleId = currentRoleExists
         ? selectedRoleId
@@ -209,7 +218,9 @@ export default function SettingsRolesPage() {
 
   const selectedRole = useMemo(
     () =>
-      roles.find((role) => role.id === selectedRoleId) ?? null,
+      roles.find(
+        (role) => role.id === selectedRoleId
+      ) ?? null,
     [roles, selectedRoleId]
   );
 
@@ -251,7 +262,9 @@ export default function SettingsRolesPage() {
 
     setSelectedPermissionIds((current) =>
       current.includes(permissionId)
-        ? current.filter((id) => id !== permissionId)
+        ? current.filter(
+            (id) => id !== permissionId
+          )
         : [...current, permissionId]
     );
   }
@@ -277,7 +290,8 @@ export default function SettingsRolesPage() {
 
       setRolePermissionIds((current) => ({
         ...current,
-        [selectedRoleId]: selectedPermissionIds,
+        [selectedRoleId]:
+          selectedPermissionIds,
       }));
 
       setSuccess(
@@ -290,14 +304,19 @@ export default function SettingsRolesPage() {
     }
   }
 
-  function isPermissionSelected(permissionId: string) {
-    return selectedPermissionIds.includes(permissionId);
+  function isPermissionSelected(
+    permissionId: string
+  ) {
+    return selectedPermissionIds.includes(
+      permissionId
+    );
   }
 
-  if (
-    permissionsLoading ||
-    loading
-  ) {
+  /*
+   * ابتدا Permissionها بررسی می‌شوند.
+   * در صورت نبود دسترسی، صفحه دیگر روی Loading نمی‌ماند.
+   */
+  if (permissionsLoading) {
     return (
       <main
         dir="rtl"
@@ -312,7 +331,7 @@ export default function SettingsRolesPage() {
           </div>
 
           <p className="mt-4 text-sm font-bold text-slate-600">
-            در حال دریافت نقش‌ها و دسترسی‌ها...
+            در حال بررسی سطح دسترسی...
           </p>
         </div>
       </main>
@@ -348,6 +367,28 @@ export default function SettingsRolesPage() {
             </div>
           </div>
         </section>
+      </main>
+    );
+  }
+
+  if (loading) {
+    return (
+      <main
+        dir="rtl"
+        className="flex min-h-[500px] items-center justify-center"
+      >
+        <div className="text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+            <Loader2
+              size={22}
+              className="animate-spin text-blue-600"
+            />
+          </div>
+
+          <p className="mt-4 text-sm font-bold text-slate-600">
+            در حال دریافت نقش‌ها و دسترسی‌ها...
+          </p>
+        </div>
       </main>
     );
   }
@@ -395,7 +436,11 @@ export default function SettingsRolesPage() {
           >
             <RefreshCw
               size={17}
-              className={loading ? "animate-spin" : ""}
+              className={
+                loading
+                  ? "animate-spin"
+                  : ""
+              }
             />
             بروزرسانی
           </button>
@@ -435,7 +480,8 @@ export default function SettingsRolesPage() {
 
           <div className="space-y-2">
             {roles.map((role) => {
-              const active = role.id === selectedRoleId;
+              const active =
+                role.id === selectedRoleId;
 
               const permissionCount = (
                 rolePermissionIds[role.id] ?? []
@@ -480,7 +526,9 @@ export default function SettingsRolesPage() {
                   </p>
 
                   <div className="mt-3 text-xs font-bold text-slate-500">
-                    {permissionCount.toLocaleString("fa-IR")}{" "}
+                    {permissionCount.toLocaleString(
+                      "fa-IR"
+                    )}{" "}
                     دسترسی فعال
                   </div>
                 </button>
@@ -557,58 +605,71 @@ export default function SettingsRolesPage() {
                     >
                       <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
                         <h3 className="text-sm font-black text-slate-800">
-                          {RESOURCE_LABELS[resource] || resource}
+                          {RESOURCE_LABELS[resource] ||
+                            resource}
                         </h3>
                       </div>
 
                       <div className="grid gap-3 p-4 md:grid-cols-2">
-                        {resourcePermissions.map((permission) => {
-                          const selected =
-                            isPermissionSelected(permission.id);
+                        {resourcePermissions.map(
+                          (permission) => {
+                            const selected =
+                              isPermissionSelected(
+                                permission.id
+                              );
 
-                          return (
-                            <label
-                              key={permission.id}
-                              className={`flex items-center gap-3 rounded-2xl border p-4 transition ${
-                                selected
-                                  ? "border-blue-200 bg-blue-50"
-                                  : "border-slate-200 bg-white"
-                              } ${
-                                canManageSettings
-                                  ? "cursor-pointer hover:bg-slate-50"
-                                  : "cursor-default"
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selected}
-                                disabled={!canManageSettings}
-                                onChange={() => {
-                                  togglePermission(permission.id);
-                                }}
-                                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                              />
+                            return (
+                              <label
+                                key={permission.id}
+                                className={`flex items-center gap-3 rounded-2xl border p-4 transition ${
+                                  selected
+                                    ? "border-blue-200 bg-blue-50"
+                                    : "border-slate-200 bg-white"
+                                } ${
+                                  canManageSettings
+                                    ? "cursor-pointer hover:bg-slate-50"
+                                    : "cursor-default"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selected}
+                                  disabled={
+                                    !canManageSettings
+                                  }
+                                  onChange={() => {
+                                    togglePermission(
+                                      permission.id
+                                    );
+                                  }}
+                                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
 
-                              <div className="min-w-0">
-                                <p className="text-sm font-black text-slate-800">
-                                  {ACTION_LABELS[permission.action] ||
-                                    permission.action}
-                                </p>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-black text-slate-800">
+                                    {ACTION_LABELS[
+                                      permission.action
+                                    ] ||
+                                      permission.action}
+                                  </p>
 
-                                <p className="mt-1 text-xs text-slate-400">
-                                  {permission.description}
-                                </p>
+                                  <p className="mt-1 text-xs text-slate-400">
+                                    {
+                                      permission.description
+                                    }
+                                  </p>
 
-                                <p
-                                  dir="ltr"
-                                  className="mt-1 text-[10px] text-slate-400"
-                                >
-                                  {permission.slug}
-                                </p>
-                              </div>
-                            </label>
-                          );
-                        })}
+                                  <p
+                                    dir="ltr"
+                                    className="mt-1 text-[10px] text-slate-400"
+                                  >
+                                    {permission.slug}
+                                  </p>
+                                </div>
+                              </label>
+                            );
+                          }
+                        )}
                       </div>
                     </div>
                   )
