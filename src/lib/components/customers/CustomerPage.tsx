@@ -468,12 +468,23 @@ function getFollowUpStatusLabel(
   );
 }
 
+/*
+ * محاسبه مدت عدم فعالیت:
+ *
+ * - فقط تاریخ‌های معتبر بررسی می‌شوند.
+ * - تاریخ‌های آینده نادیده گرفته می‌شوند.
+ * - اگر هیچ فعالیت گذشته‌ای وجود نداشته باشد،
+ *   مقدار null برمی‌گردد تا UI بتواند
+ *   «بدون سابقه» نمایش دهد.
+ */
 function calculateInactivityDays(
   values: Array<
     string | null | undefined
   >
-): number {
-  const validDates = values
+): number | null {
+  const now = Date.now();
+
+  const validPastDates = values
     .filter(
       (
         value
@@ -485,23 +496,28 @@ function calculateInactivityDays(
         new Date(value)
     )
     .filter(
-      (date) =>
-        !Number.isNaN(
-          date.getTime()
-        )
+      (date) => {
+        const time =
+          date.getTime();
+
+        return (
+          !Number.isNaN(time) &&
+          time <= now
+        );
+      }
     );
 
-  if (validDates.length === 0) {
-    return 0;
+  if (
+    validPastDates.length === 0
+  ) {
+    return null;
   }
 
   const latestTime = Math.max(
-    ...validDates.map((date) =>
+    ...validPastDates.map((date) =>
       date.getTime()
     )
   );
-
-  const now = Date.now();
 
   return Math.max(
     0,
@@ -1016,6 +1032,10 @@ export default function CustomerPage({
   const phone =
     customer.phone ?? undefined;
 
+  const secondaryPhone =
+    customer.secondary_phone ??
+    undefined;
+
   const whatsapp =
     customer.whatsapp_number ??
     customer.phone ??
@@ -1034,20 +1054,25 @@ export default function CustomerPage({
       : null;
 
   const inactivityTone =
-    inactivityDays >= 30
+    inactivityDays === null
       ? {
-          box: "bg-red-50 text-red-600",
-          text: "text-red-700",
+          box: "bg-slate-100 text-slate-500",
+          text: "text-slate-600",
         }
-      : inactivityDays >= 7
+      : inactivityDays >= 30
         ? {
-            box: "bg-amber-50 text-amber-600",
-            text: "text-amber-700",
+            box: "bg-red-50 text-red-600",
+            text: "text-red-700",
           }
-        : {
-            box: "bg-emerald-50 text-emerald-600",
-            text: "text-emerald-700",
-          };
+        : inactivityDays >= 7
+          ? {
+              box: "bg-amber-50 text-amber-600",
+              text: "text-amber-700",
+            }
+          : {
+              box: "bg-emerald-50 text-emerald-600",
+              text: "text-emerald-700",
+            };
 
   return (
     <>
@@ -1143,6 +1168,16 @@ export default function CustomerPage({
                         {phone}
                       </span>
                     )}
+
+                    {secondaryPhone && (
+                      <span
+                        dir="ltr"
+                        className="inline-flex items-center gap-1.5"
+                      >
+                        <Phone size={15} />
+                        {secondaryPhone}
+                      </span>
+                    )}
                   </div>
 
                   <p className="mt-3 text-xs text-slate-400">
@@ -1162,6 +1197,16 @@ export default function CustomerPage({
                   >
                     <Phone size={16} />
                     تماس
+                  </a>
+                )}
+
+                {secondaryPhone && (
+                  <a
+                    href={`tel:${secondaryPhone}`}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-xs font-black text-white shadow-sm transition hover:bg-indigo-700 hover:shadow-md"
+                  >
+                    <Phone size={16} />
+                    تماس دوم
                   </a>
                 )}
 
@@ -1276,10 +1321,20 @@ export default function CustomerPage({
 
           <StatCard
             title="عدم فعالیت"
-            value={formatNumber(
-              inactivityDays
-            )}
-            suffix="روز"
+            value={
+              inactivityDays ===
+              null
+                ? "بدون سابقه"
+                : formatNumber(
+                    inactivityDays
+                  )
+            }
+            suffix={
+              inactivityDays ===
+              null
+                ? ""
+                : "روز"
+            }
             icon={
               <Clock3 size={21} />
             }
@@ -1334,9 +1389,17 @@ export default function CustomerPage({
             />
 
             <Info
-              label="شماره تماس"
+              label="شماره تماس اصلی"
               value={
                 customer.phone ||
+                "—"
+              }
+            />
+
+            <Info
+              label="شماره تماس دوم"
+              value={
+                customer.secondary_phone ||
                 "—"
               }
             />
@@ -2016,9 +2079,11 @@ function StatCard({
               {value}
             </p>
 
-            <span className="text-xs font-bold text-slate-400">
-              {suffix}
-            </span>
+            {suffix && (
+              <span className="text-xs font-bold text-slate-400">
+                {suffix}
+              </span>
+            )}
           </div>
         </div>
 

@@ -20,6 +20,8 @@ import {
   Save,
   Star,
   UserRound,
+  AlertTriangle,
+  X,
 } from "lucide-react";
 
 import {
@@ -56,6 +58,7 @@ const customerTypes = [
 interface FormData {
   name: string;
   phone: string;
+  secondary_phone: string;
   whatsapp_number: string;
   customer_type: string;
   city_id: string;
@@ -214,13 +217,10 @@ function LoadingState() {
     >
       <div className="mx-auto max-w-5xl">
         <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-
           <div className="h-1.5 animate-pulse bg-slate-200" />
 
           <div className="p-6 md:p-8">
-
             <div className="flex items-center gap-4">
-
               <div className="h-16 w-16 animate-pulse rounded-2xl bg-slate-200" />
 
               <div className="flex-1">
@@ -231,7 +231,6 @@ function LoadingState() {
             </div>
 
             <div className="mt-8 grid gap-5 md:grid-cols-3">
-
               {Array.from({
                 length: 6,
               }).map(
@@ -243,12 +242,99 @@ function LoadingState() {
                   </div>
                 )
               )}
-
             </div>
           </div>
         </div>
       </div>
     </main>
+  );
+}
+
+function ErrorToast({
+  message,
+  onClose,
+}: {
+  message: string;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      dir="rtl"
+      className="fixed right-4 top-4 z-[100] w-[calc(100vw-2rem)] max-w-md animate-in slide-in-from-top-4 fade-in duration-200"
+    >
+      <div className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-2xl shadow-red-200/40">
+        <div className="h-1 bg-red-500" />
+
+        <div className="flex items-start gap-3 p-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+            <AlertTriangle size={19} />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="font-black text-red-800">
+              امکان ذخیره تغییرات وجود ندارد
+            </p>
+
+            <p className="mt-1 text-sm leading-6 text-red-600">
+              {message}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="بستن پیام"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          >
+            <X size={17} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SuccessToast({
+  message,
+  onClose,
+}: {
+  message: string;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      dir="rtl"
+      className="fixed right-4 top-4 z-[100] w-[calc(100vw-2rem)] max-w-md animate-in slide-in-from-top-4 fade-in duration-200"
+    >
+      <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-2xl shadow-emerald-200/40">
+        <div className="h-1 bg-emerald-500" />
+
+        <div className="flex items-start gap-3 p-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+            <CheckCircle2 size={19} />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="font-black text-emerald-800">
+              تغییرات ذخیره شد
+            </p>
+
+            <p className="mt-1 text-sm leading-6 text-emerald-600">
+              {message}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="بستن پیام"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+          >
+            <X size={17} />
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -288,6 +374,7 @@ export default function EditCustomerPage() {
     useState<FormData>({
       name: "",
       phone: "",
+      secondary_phone: "",
       whatsapp_number: "",
       customer_type: "",
       city_id: "",
@@ -346,6 +433,9 @@ export default function EditCustomerPage() {
             data.name ?? "",
           phone:
             data.phone ?? "",
+          secondary_phone:
+            data.secondary_phone ??
+            "",
           whatsapp_number:
             data.whatsapp_number ??
             "",
@@ -364,6 +454,10 @@ export default function EditCustomerPage() {
           return;
         }
 
+        /*
+         * خطای دریافت اطلاعات، خطای فنی است.
+         * بنابراین این مورد می‌تواند در Console ثبت شود.
+         */
         console.error(
           "خطا در دریافت اطلاعات مشتری:",
           err
@@ -387,6 +481,22 @@ export default function EditCustomerPage() {
       mounted = false;
     };
   }, [customerId]);
+
+  useEffect(() => {
+    if (!error && !success) {
+      return;
+    }
+
+    const timeoutId =
+      window.setTimeout(() => {
+        setError(null);
+        setSuccess(null);
+      }, 7000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [error, success]);
 
   function updateField<
     K extends keyof FormData
@@ -448,6 +558,9 @@ export default function EditCustomerPage() {
       setNewCityRegionId("");
       setShowNewCity(false);
     } catch (err) {
+      /*
+       * خطای ایجاد شهر، خطای فنی/عملیاتی است.
+       */
       console.error(
         "CREATE CITY ERROR:",
         err
@@ -481,6 +594,9 @@ export default function EditCustomerPage() {
     const phone =
       form.phone.trim();
 
+    const secondaryPhone =
+      form.secondary_phone.trim();
+
     const whatsapp =
       form.whatsapp_number.trim();
 
@@ -505,6 +621,22 @@ export default function EditCustomerPage() {
       return;
     }
 
+    /*
+     * بررسی سریع سمت رابط کاربری
+     * برای جلوگیری از ارسال شماره یکسان
+     * به سرویس.
+     */
+    if (
+      phone &&
+      secondaryPhone &&
+      phone === secondaryPhone
+    ) {
+      setError(
+        "شماره تماس دوم نمی‌تواند با شماره تماس اصلی یکسان باشد."
+      );
+      return;
+    }
+
     try {
       setSaving(true);
 
@@ -514,6 +646,9 @@ export default function EditCustomerPage() {
           name,
           phone:
             phone || null,
+          secondary_phone:
+            secondaryPhone ||
+            null,
           whatsapp_number:
             whatsapp || null,
           customer_type:
@@ -539,6 +674,30 @@ export default function EditCustomerPage() {
         router.refresh();
       }, 700);
     } catch (err) {
+      /*
+       * خطاهای اعتبارسنجی مشتری، مثل:
+       *
+       * 1. یکسان بودن شماره اصلی و دوم
+       * 2. تکراری بودن شماره نزد مشتری دیگر
+       *
+       * نباید با console.error ثبت شوند.
+       * فقط در Popup نمایش داده می‌شوند.
+       */
+      if (
+        err instanceof Error &&
+        err.name ===
+          "CustomerValidationError"
+      ) {
+        setError(
+          err.message
+        );
+        return;
+      }
+
+      /*
+       * خطاهای واقعی Supabase / شبکه / دیتابیس
+       * برای عیب‌یابی در Console ثبت می‌شوند.
+       */
       console.error(
         "خطا در بروزرسانی مشتری:",
         err
@@ -565,15 +724,11 @@ export default function EditCustomerPage() {
         className="min-h-screen bg-slate-50 px-4 py-6 md:px-6 md:py-8"
       >
         <div className="mx-auto max-w-5xl">
-
           <section className="overflow-hidden rounded-3xl border border-red-200 bg-white shadow-sm">
-
             <div className="h-1.5 bg-red-500" />
 
             <div className="p-7">
-
               <div className="flex items-start gap-4">
-
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-xl font-black text-red-600">
                   !
                 </div>
@@ -588,7 +743,6 @@ export default function EditCustomerPage() {
                       "اطلاعات مشتری موردنظر موجود نیست."}
                   </p>
                 </div>
-
               </div>
 
               <Link
@@ -598,10 +752,8 @@ export default function EditCustomerPage() {
                 <ArrowLeft size={16} />
                 بازگشت به مشتریان
               </Link>
-
             </div>
           </section>
-
         </div>
       </main>
     );
@@ -633,8 +785,25 @@ export default function EditCustomerPage() {
       dir="rtl"
       className="min-h-screen bg-slate-50 px-4 py-6 md:px-6 md:py-8"
     >
-      <div className="mx-auto max-w-5xl">
+      {error && (
+        <ErrorToast
+          message={error}
+          onClose={() =>
+            setError(null)
+          }
+        />
+      )}
 
+      {success && (
+        <SuccessToast
+          message={success}
+          onClose={() =>
+            setSuccess(null)
+          }
+        />
+      )}
+
+      <div className="mx-auto max-w-5xl">
         <div className="mb-6">
           <Link
             href={`/customers/${customer.id}`}
@@ -646,7 +815,6 @@ export default function EditCustomerPage() {
         </div>
 
         <section className="relative mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-
           <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-blue-700 via-blue-500 to-cyan-400" />
 
           <div className="absolute -left-20 -top-24 h-64 w-64 rounded-full bg-blue-100/50 blur-3xl" />
@@ -654,19 +822,14 @@ export default function EditCustomerPage() {
           <div className="absolute -bottom-24 right-0 h-64 w-64 rounded-full bg-cyan-100/40 blur-3xl" />
 
           <div className="relative p-6 md:p-8">
-
             <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-
               <div className="flex min-w-0 items-start gap-4">
-
                 <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
                   <UserRound size={28} />
                 </div>
 
                 <div className="min-w-0">
-
                   <div className="flex flex-wrap items-center gap-2">
-
                     <h1 className="truncate text-2xl font-black tracking-tight text-slate-900 md:text-3xl">
                       ویرایش مشتری
                     </h1>
@@ -681,18 +844,15 @@ export default function EditCustomerPage() {
                         VIP
                       </span>
                     )}
-
                   </div>
 
                   <p className="mt-2 text-sm leading-6 text-slate-500 md:text-base">
                     اطلاعات مشتری را بررسی و بروزرسانی کنید.
                   </p>
-
                 </div>
               </div>
 
               <div className="rounded-2xl bg-slate-50 px-4 py-3">
-
                 <p className="text-xs font-medium text-slate-400">
                   مشتری فعلی
                 </p>
@@ -700,95 +860,30 @@ export default function EditCustomerPage() {
                 <p className="mt-1 max-w-[220px] truncate text-sm font-black text-slate-800">
                   {customer.name}
                 </p>
-
               </div>
-
             </div>
-
           </div>
-
         </section>
 
-        {(error ||
-          success ||
-          citiesError) && (
-          <div className="mb-6 space-y-3">
+        {citiesError && (
+          <div className="mb-6 overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
+            <div className="h-1 bg-amber-500" />
 
-            {error && (
-              <div className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
-
-                <div className="h-1 bg-red-500" />
-
-                <div className="flex items-start gap-3 p-5">
-
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 font-black text-red-600">
-                    !
-                  </div>
-
-                  <div>
-                    <p className="font-black text-red-800">
-                      ذخیره تغییرات انجام نشد
-                    </p>
-
-                    <p className="mt-1 text-sm leading-6 text-red-600">
-                      {error}
-                    </p>
-                  </div>
-
-                </div>
+            <div className="flex items-start gap-3 p-5">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 font-black text-amber-600">
+                !
               </div>
-            )}
 
-            {success && (
-              <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
+              <div>
+                <p className="font-black text-amber-800">
+                  خطا در دریافت شهرها
+                </p>
 
-                <div className="h-1 bg-emerald-500" />
-
-                <div className="flex items-start gap-3 p-5">
-
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                    <CheckCircle2 size={20} />
-                  </div>
-
-                  <div>
-                    <p className="font-black text-emerald-800">
-                      تغییرات ذخیره شد
-                    </p>
-
-                    <p className="mt-1 text-sm text-emerald-600">
-                      {success}
-                    </p>
-                  </div>
-
-                </div>
+                <p className="mt-1 text-sm leading-6 text-amber-600">
+                  {citiesError}
+                </p>
               </div>
-            )}
-
-            {citiesError && (
-              <div className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
-
-                <div className="h-1 bg-amber-500" />
-
-                <div className="flex items-start gap-3 p-5">
-
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 font-black text-amber-600">
-                    !
-                  </div>
-
-                  <div>
-                    <p className="font-black text-amber-800">
-                      خطا در دریافت شهرها
-                    </p>
-
-                    <p className="mt-1 text-sm leading-6 text-amber-600">
-                      {citiesError}
-                    </p>
-                  </div>
-
-                </div>
-              </div>
-            )}
-
+            </div>
           </div>
         )}
 
@@ -796,9 +891,7 @@ export default function EditCustomerPage() {
           onSubmit={handleSubmit}
           className="space-y-6"
         >
-
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
-
             <SectionHeader
               icon={<UserRound size={20} />}
               title="اطلاعات اصلی"
@@ -806,7 +899,6 @@ export default function EditCustomerPage() {
             />
 
             <div className="grid gap-5 md:grid-cols-3">
-
               <InputField
                 label="نام مشتری"
                 required
@@ -865,7 +957,6 @@ export default function EditCustomerPage() {
                 required
               >
                 <div className="space-y-3">
-
                   <select
                     value={
                       form.city_id
@@ -923,13 +1014,11 @@ export default function EditCustomerPage() {
 
                   {showNewCity && (
                     <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
-
                       <p className="text-sm font-black text-blue-900">
                         افزودن شهر جدید
                       </p>
 
                       <div className="mt-3 space-y-3">
-
                         <input
                           type="text"
                           value={
@@ -1023,33 +1112,27 @@ export default function EditCustomerPage() {
                             ? "در حال ثبت شهر..."
                             : "ثبت شهر و انتخاب"}
                         </button>
-
                       </div>
                     </div>
                   )}
-
                 </div>
               </InputField>
-
             </div>
           </section>
 
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
-
             <SectionHeader
               icon={<Phone size={20} />}
               title="اطلاعات تماس"
-              description="شماره‌های تماس مشتری را بروزرسانی کنید."
+              description="شماره تماس اصلی، شماره دوم و واتساپ مشتری را بروزرسانی کنید."
             />
 
-            <div className="grid gap-5 md:grid-cols-2">
-
+            <div className="grid gap-5 md:grid-cols-3">
               <InputField
-                label="شماره تماس"
+                label="شماره تماس اصلی"
                 hint="شماره اصلی مشتری"
               >
                 <div className="relative">
-
                   <Phone
                     size={17}
                     className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -1066,9 +1149,38 @@ export default function EditCustomerPage() {
                     }
                     placeholder="0912..."
                     dir="ltr"
+                    autoComplete="tel"
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-4 pr-11 text-left text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
                   />
+                </div>
+              </InputField>
 
+              <InputField
+                label="شماره تماس دوم"
+                hint="در صورت داشتن شماره دوم مشتری"
+              >
+                <div className="relative">
+                  <Phone
+                    size={17}
+                    className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+
+                  <input
+                    type="tel"
+                    value={
+                      form.secondary_phone
+                    }
+                    onChange={(event) =>
+                      updateField(
+                        "secondary_phone",
+                        event.target.value
+                      )
+                    }
+                    placeholder="0912..."
+                    dir="ltr"
+                    autoComplete="tel"
+                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-4 pr-11 text-left text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
+                  />
                 </div>
               </InputField>
 
@@ -1077,7 +1189,6 @@ export default function EditCustomerPage() {
                 hint="در صورت متفاوت بودن با شماره تماس"
               >
                 <div className="relative">
-
                   <Phone
                     size={17}
                     className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
@@ -1096,17 +1207,15 @@ export default function EditCustomerPage() {
                     }
                     placeholder="0912..."
                     dir="ltr"
+                    autoComplete="tel"
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-4 pr-11 text-left text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
                   />
-
                 </div>
               </InputField>
-
             </div>
           </section>
 
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
-
             <SectionHeader
               icon={<Star size={20} />}
               title="وضعیت مشتری"
@@ -1114,7 +1223,6 @@ export default function EditCustomerPage() {
             />
 
             <div className="grid gap-4 md:grid-cols-2">
-
               <ToggleCard
                 checked={
                   form.is_vip
@@ -1154,20 +1262,16 @@ export default function EditCustomerPage() {
                 activeClass="border-emerald-200 bg-emerald-50"
                 activeIconClass="text-emerald-600"
               />
-
             </div>
           </section>
 
           <section className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-900 shadow-sm">
-
             <div className="relative p-6 md:p-7">
-
               <div className="absolute -left-16 -top-20 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl" />
 
               <div className="absolute -bottom-20 right-0 h-48 w-48 rounded-full bg-cyan-400/10 blur-3xl" />
 
               <div className="relative flex items-center justify-between gap-4">
-
                 <div>
                   <p className="text-xs font-bold text-slate-400">
                     پیش‌نمایش اطلاعات جدید
@@ -1184,7 +1288,6 @@ export default function EditCustomerPage() {
               </div>
 
               <div className="relative mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-
                 <PreviewItem
                   label="نام مشتری"
                   value={
@@ -1208,13 +1311,11 @@ export default function EditCustomerPage() {
                 />
 
                 <div className="rounded-2xl bg-white/5 p-4">
-
                   <p className="text-xs text-slate-400">
                     وضعیت
                   </p>
 
                   <div className="mt-2 flex flex-wrap gap-2">
-
                     <span
                       className={`rounded-full px-3 py-1 text-xs font-bold ${
                         form.is_active
@@ -1232,18 +1333,40 @@ export default function EditCustomerPage() {
                         VIP
                       </span>
                     )}
-
                   </div>
                 </div>
+              </div>
 
+              <div className="relative mt-4 grid gap-4 sm:grid-cols-3">
+                <PreviewItem
+                  label="شماره تماس اصلی"
+                  value={
+                    form.phone ||
+                    "ثبت نشده"
+                  }
+                />
+
+                <PreviewItem
+                  label="شماره تماس دوم"
+                  value={
+                    form.secondary_phone ||
+                    "ثبت نشده"
+                  }
+                />
+
+                <PreviewItem
+                  label="شماره واتساپ"
+                  value={
+                    form.whatsapp_number ||
+                    "ثبت نشده"
+                  }
+                />
               </div>
             </div>
           </section>
 
           <div className="sticky bottom-4 z-20">
-
             <div className="flex flex-col-reverse gap-3 rounded-3xl border border-slate-200 bg-white/95 p-4 shadow-xl shadow-slate-200/50 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-
               <Link
                 href={`/customers/${customer.id}`}
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-6 py-3.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
@@ -1263,21 +1386,17 @@ export default function EditCustomerPage() {
                 {saving ? (
                   <>
                     <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-
                     در حال ذخیره...
                   </>
                 ) : (
                   <>
                     <Save size={17} />
-
                     ذخیره تغییرات
                   </>
                 )}
               </button>
-
             </div>
           </div>
-
         </form>
       </div>
     </main>
@@ -1293,7 +1412,6 @@ function PreviewItem({
 }) {
   return (
     <div className="rounded-2xl bg-white/5 p-4">
-
       <p className="text-xs text-slate-400">
         {label}
       </p>
@@ -1301,7 +1419,6 @@ function PreviewItem({
       <p className="mt-2 truncate font-bold text-white">
         {value}
       </p>
-
     </div>
   );
 }

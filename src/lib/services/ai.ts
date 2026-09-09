@@ -234,6 +234,82 @@ function getCurrentTargetPeriod(): {
   };
 }
 
+/**
+ * محاسبه ابتدا و انتهای ماه جلالی جاری.
+ *
+ * این تابع برای فیلتر کردن سفارش‌های ماه جاری
+ * استفاده می‌شود تا مشتری دارای سفارش تأییدشده
+ * در ماه جاری، وارد پیشنهادهای روزانه نشود.
+ *
+ * مثال:
+ * ماه ۱۴۰۵/۰۶
+ * از 2026-08-23
+ * تا 2026-09-22
+ */
+function getCurrentJalaliMonthBounds(): {
+  start: string;
+  end: string;
+} {
+  const now = new Date();
+
+  const jalali = toJalaali(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    now.getDate(),
+  );
+
+  let lastDay: number;
+
+  if (
+    jalali.jm >= 1 &&
+    jalali.jm <= 6
+  ) {
+    lastDay = 31;
+  } else if (
+    jalali.jm >= 7 &&
+    jalali.jm <= 11
+  ) {
+    lastDay = 30;
+  } else {
+    lastDay = isLeapJalaaliYear(
+      jalali.jy,
+    )
+      ? 30
+      : 29;
+  }
+
+  const startGregorian =
+    toGregorian(
+      jalali.jy,
+      jalali.jm,
+      1,
+    );
+
+  const endGregorian =
+    toGregorian(
+      jalali.jy,
+      jalali.jm,
+      lastDay,
+    );
+
+  const start = `${startGregorian.gy}-${String(
+    startGregorian.gm,
+  ).padStart(2, "0")}-${String(
+    startGregorian.gd,
+  ).padStart(2, "0")}`;
+
+  const end = `${endGregorian.gy}-${String(
+    endGregorian.gm,
+  ).padStart(2, "0")}-${String(
+    endGregorian.gd,
+  ).padStart(2, "0")}`;
+
+  return {
+    start,
+    end,
+  };
+}
+
 function getTodayStart(): Date {
   const now = new Date();
 
@@ -1841,6 +1917,13 @@ export const aiService = {
         getCurrentTargetPeriod();
 
       /* ==========================================
+         CURRENT JALALI MONTH
+         ========================================== */
+
+      const currentJalaliMonthBounds =
+        getCurrentJalaliMonthBounds();
+
+      /* ==========================================
          CUSTOMERS
          ========================================== */
 
@@ -1942,6 +2025,39 @@ export const aiService = {
       const orderRows =
         (orders ??
           []) as OrderRow[];
+
+      /* ==========================================
+         CUSTOMERS WITH CURRENT-MONTH PURCHASE
+         ========================================== */
+
+      const customersPurchasedThisMonth =
+        new Set(
+          orderRows
+            .filter(
+              (order) => {
+                const orderDate =
+                  order.order_date?.slice(
+                    0,
+                    10,
+                  );
+
+                if (!orderDate) {
+                  return false;
+                }
+
+                return (
+                  orderDate >=
+                    currentJalaliMonthBounds.start &&
+                  orderDate <=
+                    currentJalaliMonthBounds.end
+                );
+              },
+            )
+            .map(
+              (order) =>
+                order.customer_id,
+            ),
+        );
 
       /* ==========================================
          CALLS
@@ -3047,10 +3163,20 @@ export const aiService = {
          FINAL SALES-FOCUSED RANKING
          ========================================== */
 
+      /*
+       * مشتری دارای سفارش تأییدشده در ماه جاری
+       * نباید اصلاً وارد لیست پیشنهادهای تماس شود.
+       *
+       * همچنین مشتری‌ای که امروز تماس شده است
+       * نیز از لیست حذف می‌شود.
+       */
       const eligibleRecommendations =
         recommendations.filter(
           (customer) =>
-            !customer.calledToday,
+            !customer.calledToday &&
+            !customersPurchasedThisMonth.has(
+              customer.customerId,
+            ),
         );
 
       const salesCandidates =

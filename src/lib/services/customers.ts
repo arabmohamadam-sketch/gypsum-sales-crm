@@ -16,6 +16,13 @@ type CustomerWithCity = Customer & {
   city: CustomerCity | null;
 };
 
+export class CustomerValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CustomerValidationError";
+  }
+}
+
 function logSupabaseError(
   title: string,
   error: {
@@ -33,11 +40,209 @@ function logSupabaseError(
   });
 }
 
+function normalizePhone(
+  value: string | null | undefined
+): string {
+  if (!value) {
+    return "";
+  }
+
+  const persianDigits = "۰۱۲۳۴۵۶۷۸۹";
+  const arabicDigits = "٠١٢٣٤٥٦٧٨٩";
+
+  let normalized = value.trim();
+
+  normalized = normalized.replace(
+    /[۰-۹٠-٩]/g,
+    (digit) => {
+      const persianIndex =
+        persianDigits.indexOf(digit);
+
+      if (persianIndex >= 0) {
+        return String(persianIndex);
+      }
+
+      const arabicIndex =
+        arabicDigits.indexOf(digit);
+
+      if (arabicIndex >= 0) {
+        return String(arabicIndex);
+      }
+
+      return digit;
+    }
+  );
+
+  normalized = normalized.replace(
+    /[^\d+]/g,
+    ""
+  );
+
+  if (normalized.startsWith("+98")) {
+    normalized = `0${normalized.slice(3)}`;
+  } else if (
+    normalized.startsWith("0098")
+  ) {
+    normalized = `0${normalized.slice(4)}`;
+  } else if (
+    normalized.startsWith("98") &&
+    normalized.length >= 10
+  ) {
+    normalized = `0${normalized.slice(2)}`;
+  }
+
+  return normalized;
+}
+
+function cleanPhoneValue(
+  value: string | null | undefined
+): string | null {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+
+  return trimmed || null;
+}
+
+async function validatePhoneDuplicates(
+  phone: string | null | undefined,
+  secondaryPhone: string | null | undefined,
+  excludeCustomerId?: string
+): Promise<void> {
+  const normalizedPhone =
+    normalizePhone(phone);
+
+  const normalizedSecondaryPhone =
+    normalizePhone(secondaryPhone);
+
+  /*
+   * شماره اصلی و شماره دوم یک مشتری
+   * نباید یکسان باشند.
+   */
+  if (
+    normalizedPhone &&
+    normalizedSecondaryPhone &&
+    normalizedPhone ===
+      normalizedSecondaryPhone
+  ) {
+    throw new CustomerValidationError(
+      "شماره تماس دوم نمی‌تواند با شماره تماس اصلی یکسان باشد."
+    );
+  }
+
+  const numbersToCheck = [
+    normalizedPhone,
+    normalizedSecondaryPhone,
+  ].filter(Boolean);
+
+  /*
+   * اگر هیچ شماره‌ای برای بررسی وجود ندارد،
+   * ادامه کار بدون بررسی تکراری بودن.
+   */
+  if (numbersToCheck.length === 0) {
+    return;
+  }
+
+  const supabase =
+    createSupabaseClient();
+
+  const {
+    data,
+    error,
+  } = await supabase
+    .from("customers")
+    .select(
+      "id, name, phone, secondary_phone"
+    )
+    .eq(
+      "company_id",
+      COMPANY_ID
+    )
+    .is(
+      "deleted_at",
+      null
+    );
+
+  /*
+   * این خطا یک خطای واقعی ارتباطی / دیتابیس است
+   * و باید در لاگ باقی بماند.
+   */
+  if (error) {
+    logSupabaseError(
+      "خطا در بررسی تکراری بودن شماره تلفن:",
+      error
+    );
+
+    throw error;
+  }
+
+  const duplicateCustomers =
+    (data ?? []).filter(
+      (customer) => {
+        if (
+          excludeCustomerId &&
+          String(customer.id) ===
+            excludeCustomerId
+        ) {
+          return false;
+        }
+
+        const existingPhone =
+          normalizePhone(
+            customer.phone
+          );
+
+        const existingSecondaryPhone =
+          normalizePhone(
+            customer.secondary_phone
+          );
+
+        return numbersToCheck.some(
+          (number) =>
+            number ===
+              existingPhone ||
+            number ===
+              existingSecondaryPhone
+        );
+      }
+    );
+
+  if (
+    duplicateCustomers.length === 0
+  ) {
+    return;
+  }
+
+  const duplicateCustomer =
+    duplicateCustomers[0];
+
+  const duplicateName =
+    typeof duplicateCustomer.name ===
+    "string"
+      ? duplicateCustomer.name.trim()
+      : "";
+
+  if (duplicateName) {
+    throw new CustomerValidationError(
+      `این شماره تلفن قبلاً برای مشتری «${duplicateName}» ثبت شده است.`
+    );
+  }
+
+  throw new CustomerValidationError(
+    "این شماره تلفن قبلاً برای مشتری دیگری ثبت شده است."
+  );
+}
+
 export const customersService = {
   async getAll(): Promise<Customer[]> {
     const supabase =
       createSupabaseClient();
-  
+
     const {
       data,
       error,
@@ -55,26 +260,18 @@ export const customersService = {
       .order("name", {
         ascending: true,
       });
-  
+
     if (error) {
       logSupabaseError(
         "خطا در دریافت فهرست مشتریان:",
         error
       );
-  
       throw error;
     }
-  
+
     const customers =
       (data ?? []) as Customer[];
-  
-    /*
-     * شهر هر مشتری را از روی city_id
-     * جداگانه دریافت می‌کنیم.
-     *
-     * عمداً از JOIN مستقیم استفاده نمی‌کنیم
-     * تا وابسته به نام Relation در Supabase نباشیم.
-     */
+
     const cityIds =
       Array.from(
         new Set(
@@ -93,10 +290,10 @@ export const customersService = {
             )
         )
       );
-  
+
     let cities: CustomerCity[] =
       [];
-  
+
     if (cityIds.length > 0) {
       const {
         data: cityRows,
@@ -118,16 +315,15 @@ export const customersService = {
           "deleted_at",
           null
         );
-  
+
       if (citiesError) {
         logSupabaseError(
           "خطا در دریافت شهرهای مشتریان:",
           citiesError
         );
-  
         throw citiesError;
       }
-  
+
       cities =
         (cityRows ?? []).map(
           (item) => ({
@@ -150,7 +346,7 @@ export const customersService = {
           })
         );
     }
-  
+
     const citiesById =
       new Map(
         cities.map(
@@ -160,12 +356,7 @@ export const customersService = {
           ]
         )
       );
-  
-    /*
-     * شهر را داخل آبجکت مشتری قرار می‌دهیم
-     * تا CustomerPage / CustomerTable
-     * بتوانند مستقیماً آن را نمایش دهند.
-     */
+
     return customers.map(
       (customer) => ({
         ...customer,
@@ -219,7 +410,6 @@ export const customersService = {
         "خطا در دریافت مشتری:",
         error
       );
-
       throw error;
     }
 
@@ -229,13 +419,6 @@ export const customersService = {
       );
     }
 
-    /*
-     * شهر مشتری را جداگانه دریافت می‌کنیم.
-     *
-     * این روش عمداً بدون JOIN مستقیم انجام می‌شود
-     * تا به نام Foreign Key یا Relation Name
-     * وابسته نباشیم.
-     */
     let city:
       | CustomerCity
       | null = null;
@@ -260,25 +443,6 @@ export const customersService = {
       }
     }
 
-    console.log(
-      "CUSTOMER GET BY ID:",
-      {
-        id: data.id,
-        name: data.name,
-        city_id:
-          data.city_id,
-        city_name:
-          city?.name ?? null,
-      }
-    );
-
-    /*
-     * city را به آبجکت مشتری اضافه می‌کنیم.
-     *
-     * Customer فعلی پروژه ممکن است فیلد city
-     * را در TypeScript نداشته باشد؛ بنابراین
-     * برای حفظ سازگاری، در زمان return cast می‌کنیم.
-     */
     return {
       ...data,
       city,
@@ -314,7 +478,6 @@ export const customersService = {
         "خطا در دریافت فهرست شهرها:",
         error
       );
-
       throw error;
     }
 
@@ -323,17 +486,14 @@ export const customersService = {
         id: String(
           item.id
         ),
-
         company_id:
           item.company_id !==
           undefined
             ? item.company_id
             : null,
-
         name: String(
           item.name ?? ""
         ),
-
         code:
           item.code !==
           undefined
@@ -386,7 +546,6 @@ export const customersService = {
         "خطا در دریافت شهر مشتری:",
         error
       );
-
       throw error;
     }
 
@@ -398,17 +557,14 @@ export const customersService = {
       id: String(
         data.id
       ),
-
       company_id:
         data.company_id !==
         undefined
           ? data.company_id
           : null,
-
       name: String(
         data.name ?? ""
       ),
-
       code:
         data.code !==
         undefined
@@ -417,13 +573,14 @@ export const customersService = {
     };
   },
 
-   async update(
+  async update(
     id: string,
     values: Partial<
       Pick<
         Customer,
         | "name"
         | "phone"
+        | "secondary_phone"
         | "whatsapp_number"
         | "customer_type"
         | "is_vip"
@@ -445,8 +602,32 @@ export const customersService = {
     const customerId =
       id.trim();
 
-    // ابتدا بررسی می‌کنیم مشتری واقعاً وجود دارد.
-    await this.getById(customerId);
+    const currentCustomer =
+      await this.getById(
+        customerId
+      );
+
+    const nextPhone =
+      values.phone !==
+      undefined
+        ? cleanPhoneValue(
+            values.phone
+          )
+        : currentCustomer.phone;
+
+    const nextSecondaryPhone =
+      values.secondary_phone !==
+      undefined
+        ? cleanPhoneValue(
+            values.secondary_phone
+          )
+        : currentCustomer.secondary_phone;
+
+    await validatePhoneDuplicates(
+      nextPhone,
+      nextSecondaryPhone,
+      customerId
+    );
 
     const updateData: Record<
       string,
@@ -478,7 +659,15 @@ export const customersService = {
       undefined
     ) {
       updateData.phone =
-        values.phone;
+        nextPhone;
+    }
+
+    if (
+      values.secondary_phone !==
+      undefined
+    ) {
+      updateData.secondary_phone =
+        nextSecondaryPhone;
     }
 
     if (
@@ -486,7 +675,9 @@ export const customersService = {
       undefined
     ) {
       updateData.whatsapp_number =
-        values.whatsapp_number;
+        cleanPhoneValue(
+          values.whatsapp_number
+        );
     }
 
     if (
@@ -563,31 +754,14 @@ export const customersService = {
       );
 
     if (error) {
-      console.error(
-        "SUPABASE CUSTOMER UPDATE ERROR",
-        {
-          message:
-            error.message ??
-            "",
-          details:
-            error.details ??
-            "",
-          hint:
-            error.hint ??
-            "",
-          code:
-            error.code ??
-            "",
-        }
+      logSupabaseError(
+        "خطا در بروزرسانی مشتری:",
+        error
       );
 
-      throw new Error(
-        error.message ||
-          "خطا در بروزرسانی مشتری."
-      );
+      throw error;
     }
 
-    // بعد از Update رکورد را دوباره می‌خوانیم.
     const updatedCustomer =
       await this.getById(
         customerId
@@ -602,6 +776,7 @@ export const customersService = {
         Customer,
         | "name"
         | "phone"
+        | "secondary_phone"
         | "whatsapp_number"
         | "customer_type"
         | "city_id"
@@ -615,7 +790,7 @@ export const customersService = {
       createSupabaseClient();
 
     if (!values.name?.trim()) {
-      throw new Error(
+      throw new CustomerValidationError(
         "نام مشتری الزامی است."
       );
     }
@@ -623,7 +798,7 @@ export const customersService = {
     if (
       !values.city_id?.trim()
     ) {
-      throw new Error(
+      throw new CustomerValidationError(
         "انتخاب شهر مشتری الزامی است."
       );
     }
@@ -631,10 +806,25 @@ export const customersService = {
     if (
       !values.customer_type
     ) {
-      throw new Error(
+      throw new CustomerValidationError(
         "نوع مشتری الزامی است."
       );
     }
+
+    const phone =
+      cleanPhoneValue(
+        values.phone
+      );
+
+    const secondaryPhone =
+      cleanPhoneValue(
+        values.secondary_phone
+      );
+
+    await validatePhoneDuplicates(
+      phone,
+      secondaryPhone
+    );
 
     const insertData: Record<
       string,
@@ -642,19 +832,14 @@ export const customersService = {
     > = {
       company_id:
         COMPANY_ID,
-
       city_id:
         values.city_id.trim(),
-
       name:
         values.name.trim(),
-
       customer_type:
         values.customer_type,
-
       is_vip:
         values.is_vip ?? false,
-
       is_active:
         values.is_active ?? true,
     };
@@ -664,7 +849,15 @@ export const customersService = {
       undefined
     ) {
       insertData.phone =
-        values.phone;
+        phone;
+    }
+
+    if (
+      values.secondary_phone !==
+      undefined
+    ) {
+      insertData.secondary_phone =
+        secondaryPhone;
     }
 
     if (
@@ -672,7 +865,9 @@ export const customersService = {
       undefined
     ) {
       insertData.whatsapp_number =
-        values.whatsapp_number;
+        cleanPhoneValue(
+          values.whatsapp_number
+        );
     }
 
     if (

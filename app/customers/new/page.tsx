@@ -3,10 +3,17 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  useEffect,
   useState,
   type FormEvent,
   type ReactNode,
 } from "react";
+
+import {
+  AlertTriangle,
+  CheckCircle2,
+  X,
+} from "lucide-react";
 
 import { customersService } from "@/src/lib/services/customers";
 import { useCities } from "@/src/lib/hooks/useCities";
@@ -33,6 +40,7 @@ const customerTypes = [
 interface FormData {
   name: string;
   phone: string;
+  secondary_phone: string;
   whatsapp_number: string;
   customer_type: string;
   city_id: string;
@@ -177,6 +185,88 @@ function ToggleCard({
   );
 }
 
+function ErrorToast({
+  message,
+  onClose,
+}: {
+  message: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-x-4 top-4 z-[100] mx-auto max-w-lg sm:left-auto sm:right-6 sm:inset-x-auto">
+      <div className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-2xl shadow-red-200/40">
+        <div className="h-1 bg-red-500" />
+
+        <div className="flex items-start gap-3 p-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+            <AlertTriangle size={20} />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-black text-red-800">
+              خطا در ثبت مشتری
+            </p>
+
+            <p className="mt-1 text-sm leading-6 text-red-600">
+              {message}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            aria-label="بستن پیام خطا"
+          >
+            <X size={17} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CityErrorToast({
+  message,
+  onClose,
+}: {
+  message: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-x-4 top-4 z-[100] mx-auto max-w-lg sm:left-auto sm:right-6 sm:inset-x-auto">
+      <div className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-2xl shadow-amber-200/40">
+        <div className="h-1 bg-amber-500" />
+
+        <div className="flex items-start gap-3 p-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+            <AlertTriangle size={20} />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-black text-amber-800">
+              خطا در ایجاد شهر
+            </p>
+
+            <p className="mt-1 text-sm leading-6 text-amber-600">
+              {message}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            aria-label="بستن پیام خطا"
+          >
+            <X size={17} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function NewCustomerPage() {
   const router = useRouter();
 
@@ -191,6 +281,7 @@ export default function NewCustomerPage() {
   const [form, setForm] = useState<FormData>({
     name: "",
     phone: "",
+    secondary_phone: "",
     whatsapp_number: "",
     customer_type: "",
     city_id: "",
@@ -221,6 +312,21 @@ export default function NewCustomerPage() {
 
   const [cityCreateError, setCityCreateError] =
     useState<string | null>(null);
+
+  useEffect(() => {
+    if (!error && !cityCreateError) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setError(null);
+      setCityCreateError(null);
+    }, 7000);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [error, cityCreateError]);
 
   function updateField<
     K extends keyof FormData
@@ -307,6 +413,9 @@ export default function NewCustomerPage() {
     const phone =
       form.phone.trim();
 
+    const secondaryPhone =
+      form.secondary_phone.trim();
+
     const whatsapp =
       form.whatsapp_number.trim();
 
@@ -339,6 +448,9 @@ export default function NewCustomerPage() {
           name,
           phone:
             phone || undefined,
+          secondary_phone:
+            secondaryPhone ||
+            undefined,
           whatsapp_number:
             whatsapp || undefined,
           customer_type:
@@ -351,15 +463,12 @@ export default function NewCustomerPage() {
             form.is_active,
         });
 
+      setError(null);
+
       router.push(
         `/customers/${customer.id}`
       );
     } catch (err) {
-      console.error(
-        "خطا در ایجاد مشتری:",
-        err
-      );
-
       setError(
         err instanceof Error
           ? err.message
@@ -375,6 +484,31 @@ export default function NewCustomerPage() {
       dir="rtl"
       className="min-h-screen bg-slate-50 px-4 py-6 md:px-6 md:py-8"
     >
+      {error && (
+        <ErrorToast
+          message={error}
+          onClose={() =>
+            setError(null)
+          }
+        />
+      )}
+
+      {!error && cityCreateError && (
+        <CityErrorToast
+          message={cityCreateError}
+          onClose={() =>
+            setCityCreateError(null)
+          }
+        />
+      )}
+
+      {!error && citiesError && (
+        <CityErrorToast
+          message={citiesError}
+          onClose={() => {}}
+        />
+      )}
+
       <div className="mx-auto max-w-5xl">
         <div className="mb-6">
           <Link
@@ -704,12 +838,12 @@ export default function NewCustomerPage() {
             <SectionHeader
               icon="📞"
               title="اطلاعات تماس"
-              description="شماره تماس و واتساپ مشتری را ثبت کنید."
+              description="شماره تماس اصلی، شماره دوم و واتساپ مشتری را ثبت کنید."
             />
 
-            <div className="grid gap-5 md:grid-cols-2">
+            <div className="grid gap-5 md:grid-cols-3">
               <InputField
-                label="شماره تماس"
+                label="شماره تماس اصلی"
                 hint="شماره اصلی مشتری"
               >
                 <input
@@ -723,6 +857,29 @@ export default function NewCustomerPage() {
                   }
                   placeholder="0912..."
                   dir="ltr"
+                  autoComplete="tel"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-left text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
+                />
+              </InputField>
+
+              <InputField
+                label="شماره تماس دوم"
+                hint="در صورت داشتن شماره دوم مشتری"
+              >
+                <input
+                  type="tel"
+                  value={
+                    form.secondary_phone
+                  }
+                  onChange={(event) =>
+                    updateField(
+                      "secondary_phone",
+                      event.target.value
+                    )
+                  }
+                  placeholder="0912..."
+                  dir="ltr"
+                  autoComplete="tel"
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-left text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
                 />
               </InputField>
@@ -744,6 +901,7 @@ export default function NewCustomerPage() {
                   }
                   placeholder="0912..."
                   dir="ltr"
+                  autoComplete="tel"
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-left text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
                 />
               </InputField>
@@ -906,7 +1064,9 @@ export default function NewCustomerPage() {
                   </>
                 ) : (
                   <>
-                    <span>✓</span>
+                    <CheckCircle2
+                      size={17}
+                    />
                     ذخیره مشتری
                   </>
                 )}
