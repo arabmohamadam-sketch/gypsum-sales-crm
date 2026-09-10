@@ -14,14 +14,9 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-import {
-  useEffect,
-  useState,
-} from "react";
+import { useEffect, useState } from "react";
 
-import {
-  isLeapJalaaliYear,
-} from "jalaali-js";
+import { isLeapJalaaliYear } from "jalaali-js";
 
 import {
   aiService,
@@ -34,38 +29,22 @@ import {
   type MonthlyTargetReport,
 } from "@/src/lib/services/report-targets";
 
-import {
-  getTodayJalali,
-} from "@/src/lib/utils/jalali";
+import { getTodayJalali } from "@/src/lib/utils/jalali";
 
-function formatNumber(
-  value: number,
-): string {
-  return new Intl.NumberFormat(
-    "fa-IR",
-  ).format(value);
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat("fa-IR").format(value);
 }
 
-function formatTonnage(
-  value: number,
-): string {
-  return `${new Intl.NumberFormat(
-    "fa-IR",
-    {
-      maximumFractionDigits: 1,
-    },
-  ).format(value)} تن`;
+function formatTonnage(value: number): string {
+  return `${new Intl.NumberFormat("fa-IR", {
+    maximumFractionDigits: 1,
+  }).format(value)} تن`;
 }
 
-function formatPercent(
-  value: number,
-): string {
-  return new Intl.NumberFormat(
-    "fa-IR",
-    {
-      maximumFractionDigits: 1,
-    },
-  ).format(value);
+function formatPercent(value: number): string {
+  return new Intl.NumberFormat("fa-IR", {
+    maximumFractionDigits: 1,
+  }).format(value);
 }
 
 function getPriorityLabel(
@@ -101,9 +80,7 @@ function getPriorityClass(
 function getOpportunityLabel(
   customer: AIRecommendedCustomer,
 ): string {
-  switch (
-    customer.opportunityType
-  ) {
+  switch (customer.opportunityType) {
     case "reactivation":
       return "احیای مشتری";
 
@@ -118,9 +95,7 @@ function getOpportunityLabel(
 function getOpportunityClass(
   customer: AIRecommendedCustomer,
 ): string {
-  switch (
-    customer.opportunityType
-  ) {
+  switch (customer.opportunityType) {
     case "reactivation":
       return "bg-orange-50 text-orange-700";
 
@@ -132,17 +107,12 @@ function getOpportunityClass(
   }
 }
 
-function getCityName(
-  name?: string | null,
-): string {
+function getCityName(name?: string | null): string {
   if (!name) {
     return "نامشخص";
   }
 
-  const cityNames: Record<
-    string,
-    string
-  > = {
+  const cityNames: Record<string, string> = {
     Garmsar: "گرمسار",
     garmsar: "گرمسار",
 
@@ -166,60 +136,31 @@ function getCityName(
     tonekabon: "تنکابن",
   };
 
-  return (
-    cityNames[name] ??
-    name
-  );
+  return cityNames[name] ?? name;
 }
 
-function getCustomerTypeLabel(
-  type: string,
-): string {
-  const labels: Record<
-    string,
-    string
-  > = {
-    building_material_store:
-      "مصالح‌فروشی",
+function getCustomerTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    building_material_store: "مصالح‌فروشی",
+    building_material_stores: "مصالح‌فروشی",
 
-    building_material_stores:
-      "مصالح‌فروشی",
+    contractor: "پیمانکار",
+    contractor_company: "پیمانکار",
 
-    contractor:
-      "پیمانکار",
+    employer: "کارفرما",
+    employers: "کارفرما",
 
-    contractor_company:
-      "پیمانکار",
+    plaster_worker: "گچ‌کار",
+    plasterer: "گچ‌کار",
+    plasterer_company: "گچ‌کار",
 
-    employer:
-      "کارفرما",
+    distributor: "توزیع‌کننده",
+    distributor_company: "توزیع‌کننده",
 
-    employers:
-      "کارفرما",
-
-    plaster_worker:
-      "گچ‌کار",
-
-    plasterer:
-      "گچ‌کار",
-
-    plasterer_company:
-      "گچ‌کار",
-
-    distributor:
-      "توزیع‌کننده",
-
-    distributor_company:
-      "توزیع‌کننده",
-
-    retailer:
-      "خرده‌فروشی",
+    retailer: "خرده‌فروشی",
   };
 
-  return (
-    labels[type] ??
-    type
-  );
+  return labels[type] ?? type;
 }
 
 function getDaysInJalaliMonth(
@@ -234,22 +175,14 @@ function getDaysInJalaliMonth(
     return 30;
   }
 
-  return isLeapJalaaliYear(year)
-    ? 30
-    : 29;
+  return isLeapJalaaliYear(year) ? 30 : 29;
 }
 
-function getProbabilityLabel(
-  probability: number,
-): string {
-  return `${formatPercent(
-    probability * 100,
-  )}%`;
+function getProbabilityLabel(probability: number): string {
+  return `${formatPercent(probability * 100)}%`;
 }
 
-function getProbabilityClass(
-  probability: number,
-): string {
+function getProbabilityClass(probability: number): string {
   if (probability >= 0.75) {
     return "bg-emerald-50 text-emerald-700";
   }
@@ -293,6 +226,78 @@ function getExpectedSalesLabel(
   return "پتانسیل فروش محدود";
 }
 
+function getPurchaseIntentLabel(
+  value: AIRecommendedCustomer["salesNoteSignals"]["purchaseIntent"],
+): string {
+  switch (value) {
+    case "high":
+      return "قصد خرید بالا";
+
+    case "medium":
+      return "قصد خرید متوسط";
+
+    case "low":
+      return "قصد خرید پایین";
+
+    default:
+      return "قصد خرید نامشخص";
+  }
+}
+
+function getPurchaseIntentClass(
+  value: AIRecommendedCustomer["salesNoteSignals"]["purchaseIntent"],
+): string {
+  switch (value) {
+    case "high":
+      return "bg-emerald-50 text-emerald-700";
+
+    case "medium":
+      return "bg-blue-50 text-blue-700";
+
+    case "low":
+      return "bg-slate-100 text-slate-600";
+
+    default:
+      return "bg-slate-50 text-slate-500";
+  }
+}
+
+function getSalesOpportunityLabel(
+  value: AIRecommendedCustomer["salesNoteSignals"]["salesOpportunity"],
+): string {
+  switch (value) {
+    case "high":
+      return "فرصت فروش بالا";
+
+    case "medium":
+      return "فرصت فروش متوسط";
+
+    case "low":
+      return "فرصت فروش پایین";
+
+    default:
+      return "فرصت فروش نامشخص";
+  }
+}
+
+function getSalesOpportunityClass(
+  value: AIRecommendedCustomer["salesNoteSignals"]["salesOpportunity"],
+): string {
+  switch (value) {
+    case "high":
+      return "bg-violet-50 text-violet-700";
+
+    case "medium":
+      return "bg-indigo-50 text-indigo-700";
+
+    case "low":
+      return "bg-slate-100 text-slate-600";
+
+    default:
+      return "bg-slate-50 text-slate-500";
+  }
+}
+
 function RecommendationCard({
   customer,
   index,
@@ -301,12 +306,22 @@ function RecommendationCard({
   index: number;
 }) {
   const averageInterval =
-    customer.averageOrderIntervalDays >
-    0
-      ? Math.round(
-          customer.averageOrderIntervalDays,
-        )
+    customer.averageOrderIntervalDays > 0
+      ? Math.round(customer.averageOrderIntervalDays)
       : null;
+
+  const signals = customer.salesNoteSignals;
+
+  const hasPositiveSalesSignals =
+    signals.hasRecontactIntent ||
+    signals.priceObjection ||
+    signals.competitorMentioned ||
+    signals.projectPending ||
+    signals.projectActive ||
+    signals.customerInterested ||
+    signals.customerNeedsPrice ||
+    signals.purchaseIntent !== "unknown" ||
+    signals.salesOpportunity !== "unknown";
 
   return (
     <div className="rounded-2xl border border-slate-100 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-100 hover:bg-blue-50/20 hover:shadow-sm">
@@ -316,9 +331,7 @@ function RecommendationCard({
           className="flex min-w-0 items-start gap-3"
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-sm font-black text-white">
-            {formatNumber(
-              index + 1,
-            )}
+            {formatNumber(index + 1)}
           </div>
 
           <div className="min-w-0 flex-1">
@@ -338,9 +351,7 @@ function RecommendationCard({
                   customer.priority,
                 )}`}
               >
-                {getPriorityLabel(
-                  customer.priority,
-                )}
+                {getPriorityLabel(customer.priority)}
               </span>
 
               <span
@@ -348,88 +359,58 @@ function RecommendationCard({
                   customer,
                 )}`}
               >
-                {getOpportunityLabel(
-                  customer,
-                )}
+                {getOpportunityLabel(customer)}
               </span>
             </div>
 
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500">
               <span>
-                شهر:{" "}
-                {getCityName(
-                  customer.city?.name,
-                )}
+                شهر: {getCityName(customer.city?.name)}
               </span>
 
               <span>
-                نوع:{" "}
-                {getCustomerTypeLabel(
-                  customer.customerType,
-                )}
+                نوع: {getCustomerTypeLabel(customer.customerType)}
               </span>
 
               <span>
                 عدم فعالیت:{" "}
-                {customer.inactivityDays >=
-                9999
+                {customer.inactivityDays >= 9999
                   ? "بدون فعالیت قبلی"
-                  : `${formatNumber(
-                      customer.inactivityDays,
-                    )} روز`}
+                  : `${formatNumber(customer.inactivityDays)} روز`}
               </span>
             </div>
 
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium text-slate-500">
               <span>
-                تناژ کل:{" "}
-                {formatTonnage(
-                  customer.lifetimeTonnage,
-                )}
+                تناژ کل: {formatTonnage(customer.lifetimeTonnage)}
               </span>
 
               <span>
-                سفارش:{" "}
-                {formatNumber(
-                  customer.orderCount,
-                )}
+                سفارش: {formatNumber(customer.orderCount)}
               </span>
 
               <span>
                 میانگین سفارش:{" "}
-                {formatTonnage(
-                  customer.averageOrderTonnage,
-                )}
+                {formatTonnage(customer.averageOrderTonnage)}
               </span>
             </div>
 
-            {averageInterval !==
-              null && (
+            {averageInterval !== null && (
               <div className="mt-2 flex flex-wrap gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1.5 text-[11px] font-bold text-blue-700">
                   <Clock3 size={13} />
-                  چرخه خرید:{" "}
-                  {formatNumber(
-                    averageInterval,
-                  )}{" "}
-                  روز
+                  چرخه خرید: {formatNumber(averageInterval)} روز
                 </span>
 
                 {customer.isOrderDue ? (
                   <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700">
-                    <CheckCircle2
-                      size={13}
-                    />
+                    <CheckCircle2 size={13} />
                     موعد خرید رسیده
                   </span>
-                ) : customer.daysUntilExpectedOrder !==
-                    null &&
-                  customer.daysUntilExpectedOrder >
-                    0 ? (
+                ) : customer.daysUntilExpectedOrder !== null &&
+                  customer.daysUntilExpectedOrder > 0 ? (
                   <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 text-[11px] font-bold text-slate-600">
-                    <CalendarClock
-                      size={13}
-                    />
+                    <CalendarClock size={13} />
                     حدود{" "}
                     {formatNumber(
                       customer.daysUntilExpectedOrder,
@@ -437,6 +418,104 @@ function RecommendationCard({
                     روز تا خرید
                   </span>
                 ) : null}
+              </div>
+            )}
+
+            {hasPositiveSalesSignals && (
+              <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/50 p-3">
+                <div className="mb-2 flex items-center gap-2">
+                  <Sparkles
+                    size={14}
+                    className="text-violet-600"
+                  />
+
+                  <span className="text-xs font-black text-violet-800">
+                    تحلیل یادداشت‌ها و مکالمات
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {signals.purchaseIntent !== "unknown" && (
+                    <span
+                      className={`rounded-lg px-2.5 py-1.5 text-[11px] font-black ${getPurchaseIntentClass(
+                        signals.purchaseIntent,
+                      )}`}
+                    >
+                      {getPurchaseIntentLabel(
+                        signals.purchaseIntent,
+                      )}
+                    </span>
+                  )}
+
+                  {signals.salesOpportunity !== "unknown" && (
+                    <span
+                      className={`rounded-lg px-2.5 py-1.5 text-[11px] font-black ${getSalesOpportunityClass(
+                        signals.salesOpportunity,
+                      )}`}
+                    >
+                      {getSalesOpportunityLabel(
+                        signals.salesOpportunity,
+                      )}
+                    </span>
+                  )}
+
+                  {signals.hasRecontactIntent && (
+                    <span className="rounded-lg bg-cyan-50 px-2.5 py-1.5 text-[11px] font-black text-cyan-700">
+                      زمان مناسب برای تماس مجدد ثبت شده
+                    </span>
+                  )}
+
+                  {signals.priceObjection && (
+                    <span className="rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] font-black text-amber-700">
+                      حساسیت به قیمت
+                    </span>
+                  )}
+
+                  {signals.competitorMentioned && (
+                    <span className="rounded-lg bg-red-50 px-2.5 py-1.5 text-[11px] font-black text-red-700">
+                      رقیب
+                      {signals.competitorName
+                        ? `: ${signals.competitorName}`
+                        : " ذکر شده"}
+                    </span>
+                  )}
+
+                  {signals.stockBarrier && (
+                    <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-black text-slate-600">
+                      مانع فعلی: موجودی
+                    </span>
+                  )}
+
+                  {signals.projectPending && (
+                    <span className="rounded-lg bg-orange-50 px-2.5 py-1.5 text-[11px] font-black text-orange-700">
+                      پروژه در انتظار
+                    </span>
+                  )}
+
+                  {signals.projectActive && (
+                    <span className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] font-black text-emerald-700">
+                      پروژه فعال
+                    </span>
+                  )}
+
+                  {signals.customerInterested && (
+                    <span className="rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] font-black text-emerald-700">
+                      علاقه به خرید
+                    </span>
+                  )}
+
+                  {signals.customerNeedsPrice && (
+                    <span className="rounded-lg bg-blue-50 px-2.5 py-1.5 text-[11px] font-black text-blue-700">
+                      نیاز به قیمت
+                    </span>
+                  )}
+                </div>
+
+                {signals.nextActionHint && (
+                  <div className="mt-2 rounded-lg border border-violet-100 bg-white px-3 py-2 text-[11px] font-bold text-violet-800">
+                    اقدام بعدی پیشنهادی: {signals.nextActionHint}
+                  </div>
+                )}
               </div>
             )}
 
@@ -448,9 +527,7 @@ function RecommendationCard({
                 </div>
 
                 <p className="mt-1 text-sm font-black text-blue-800">
-                  {formatTonnage(
-                    customer.suggestedOrderTonnage,
-                  )}
+                  {formatTonnage(customer.suggestedOrderTonnage)}
                 </p>
               </div>
 
@@ -482,9 +559,7 @@ function RecommendationCard({
                 </div>
 
                 <p className="mt-1 text-sm font-black">
-                  {formatTonnage(
-                    customer.expectedSalesTonnage,
-                  )}
+                  {formatTonnage(customer.expectedSalesTonnage)}
                 </p>
               </div>
             </div>
@@ -501,19 +576,16 @@ function RecommendationCard({
               </span>
             </div>
 
-            {customer.reasons.length >
-              0 && (
+            {customer.reasons.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
-                {customer.reasons.map(
-                  (reason) => (
-                    <span
-                      key={`${reason.code}-${reason.points}`}
-                      className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-[11px] font-bold text-slate-600"
-                    >
-                      {reason.title}
-                    </span>
-                  ),
-                )}
+                {customer.reasons.map((reason) => (
+                  <span
+                    key={`${reason.code}-${reason.points}`}
+                    className="rounded-lg bg-slate-50 px-2.5 py-1.5 text-[11px] font-bold text-slate-600"
+                  >
+                    {reason.title}
+                  </span>
+                ))}
               </div>
             )}
           </div>
@@ -521,9 +593,7 @@ function RecommendationCard({
           <div className="shrink-0 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
               <span className="text-sm font-black">
-                {formatNumber(
-                  customer.score,
-                )}
+                {formatNumber(customer.score)}
               </span>
             </div>
 
@@ -535,24 +605,20 @@ function RecommendationCard({
 
         <div
           className={`rounded-xl px-3 py-3 ${
-            customer.opportunityType ===
-            "reactivation"
+            customer.opportunityType === "reactivation"
               ? "bg-orange-50 text-orange-700"
-              : customer.opportunityType ===
-                  "retention"
+              : customer.opportunityType === "retention"
                 ? "bg-emerald-50 text-emerald-700"
                 : "bg-violet-50 text-violet-700"
           }`}
         >
           <div className="flex items-start gap-2">
-            {customer.opportunityType ===
-            "reactivation" ? (
+            {customer.opportunityType === "reactivation" ? (
               <TrendingUp
                 size={16}
                 className="mt-0.5 shrink-0"
               />
-            ) : customer.opportunityType ===
-              "retention" ? (
+            ) : customer.opportunityType === "retention" ? (
               <CheckCircle2
                 size={16}
                 className="mt-0.5 shrink-0"
@@ -570,9 +636,7 @@ function RecommendationCard({
               </div>
 
               <div className="mt-1 text-xs font-medium leading-6">
-                {
-                  customer.suggestedActionDescription
-                }
+                {customer.suggestedActionDescription}
               </div>
             </div>
           </div>
@@ -585,9 +649,7 @@ function RecommendationCard({
           </div>
 
           <div className="text-sm font-medium leading-6 text-slate-800">
-            {
-              customer.suggestedContactGoal
-            }
+            {customer.suggestedContactGoal}
           </div>
         </div>
 
@@ -604,9 +666,7 @@ function RecommendationCard({
             href={`/activities/follow-ups/new?customerId=${customer.customerId}`}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-700"
           >
-            <CalendarClock
-              size={15}
-            />
+            <CalendarClock size={15} />
             ثبت پیگیری
           </Link>
         </div>
@@ -616,27 +676,16 @@ function RecommendationCard({
 }
 
 export default function AIRecommendations() {
-  const [
-    recommendations,
-    setRecommendations,
-  ] = useState<
+  const [recommendations, setRecommendations] = useState<
     AIRecommendedCustomer[]
   >([]);
 
-  const [
-    monthlyTargetReport,
-    setMonthlyTargetReport,
-  ] = useState<
-    MonthlyTargetReport | null
-  >(null);
+  const [monthlyTargetReport, setMonthlyTargetReport] =
+    useState<MonthlyTargetReport | null>(null);
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
 
-  const [error, setError] =
-    useState<string | null>(
-      null,
-    );
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -646,16 +695,10 @@ export default function AIRecommendations() {
         setLoading(true);
         setError(null);
 
-        const today =
-          getTodayJalali();
+        const today = getTodayJalali();
 
-        const [
-          result,
-          targetReport,
-        ] = await Promise.all([
-          aiService.getDailyCustomerRecommendations(
-            5,
-          ),
+        const [result, targetReport] = await Promise.all([
+          aiService.getDailyCustomerRecommendations(5),
 
           reportTargetsService.getMonthlyReport(
             today.year,
@@ -667,13 +710,8 @@ export default function AIRecommendations() {
           return;
         }
 
-        setRecommendations(
-          result,
-        );
-
-        setMonthlyTargetReport(
-          targetReport,
-        );
+        setRecommendations(result);
+        setMonthlyTargetReport(targetReport);
       } catch (err) {
         if (cancelled) {
           return;
@@ -685,10 +723,7 @@ export default function AIRecommendations() {
         );
 
         setRecommendations([]);
-
-        setMonthlyTargetReport(
-          null,
-        );
+        setMonthlyTargetReport(null);
 
         setError(
           err instanceof Error
@@ -709,84 +744,58 @@ export default function AIRecommendations() {
     };
   }, []);
 
-  const today =
-    getTodayJalali();
+  const today = getTodayJalali();
 
-  const suggestedTonnage =
-    recommendations.reduce(
-      (
-        total,
-        customer,
-      ) =>
-        total +
-        customer.suggestedOrderTonnage,
-      0,
-    );
+  const suggestedTonnage = recommendations.reduce(
+    (total, customer) =>
+      total + customer.suggestedOrderTonnage,
+    0,
+  );
 
-  const expectedSalesTonnage =
-    recommendations.reduce(
-      (
-        total,
-        customer,
-      ) =>
-        total +
-        customer.expectedSalesTonnage,
-      0,
-    );
+  const expectedSalesTonnage = recommendations.reduce(
+    (total, customer) =>
+      total + customer.expectedSalesTonnage,
+    0,
+  );
 
-  const targetRemaining =
-    Math.max(
-      monthlyTargetReport?.remainingTonnage ??
-        0,
-      0,
-    );
+  const targetRemaining = Math.max(
+    monthlyTargetReport?.remainingTonnage ?? 0,
+    0,
+  );
 
   const targetCoverage =
     targetRemaining > 0
-      ? (suggestedTonnage /
-          targetRemaining) *
-        100
+      ? (suggestedTonnage / targetRemaining) * 100
       : 0;
 
   const expectedSalesCoverage =
     targetRemaining > 0
-      ? (expectedSalesTonnage /
-          targetRemaining) *
-        100
+      ? (expectedSalesTonnage / targetRemaining) * 100
       : 0;
 
-  const daysInCurrentMonth =
-    getDaysInJalaliMonth(
-      today.year,
-      today.month,
-    );
+  const daysInCurrentMonth = getDaysInJalaliMonth(
+    today.year,
+    today.month,
+  );
 
-  const remainingDays =
-    Math.max(
-      daysInCurrentMonth -
-        today.day,
-      0,
-    );
+  const remainingDays = Math.max(
+    daysInCurrentMonth - today.day,
+    0,
+  );
 
   const dailyRequiredTonnage =
-    remainingDays > 0 &&
-    targetRemaining > 0
-      ? targetRemaining /
-        remainingDays
+    remainingDays > 0 && targetRemaining > 0
+      ? targetRemaining / remainingDays
       : 0;
 
   const dailyNeedCoverage =
     dailyRequiredTonnage > 0
-      ? (suggestedTonnage /
-          dailyRequiredTonnage) *
-        100
+      ? (suggestedTonnage / dailyRequiredTonnage) * 100
       : 0;
 
   const expectedDailyNeedCoverage =
     dailyRequiredTonnage > 0
-      ? (expectedSalesTonnage /
-          dailyRequiredTonnage) *
-        100
+      ? (expectedSalesTonnage / dailyRequiredTonnage) * 100
       : 0;
 
   return (
@@ -806,7 +815,8 @@ export default function AIRecommendations() {
               </h2>
 
               <p className="mt-1 text-sm leading-6 text-slate-500">
-                پیشنهادها بر اساس سابقه فروش، چرخه خرید، تناژ، احتمال خرید و فعالیت CRM محاسبه می‌شوند.
+                پیشنهادها بر اساس سابقه فروش، چرخه خرید، تناژ، احتمال خرید،
+                فعالیت CRM و تحلیل یادداشت‌های تماس و پیگیری محاسبه می‌شوند.
               </p>
             </div>
           </div>
@@ -820,9 +830,7 @@ export default function AIRecommendations() {
           </Link>
         </div>
 
-        {!loading &&
-          !error &&
-          monthlyTargetReport ? (
+        {!loading && !error && monthlyTargetReport ? (
           <div className="mb-6 rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
             <div className="mb-4 flex items-center gap-2">
               <Target
@@ -837,10 +845,7 @@ export default function AIRecommendations() {
 
                 <p className="mt-1 text-xs leading-5 text-slate-500">
                   سناریوی پیشنهادی بر اساس{" "}
-                  {formatNumber(
-                    recommendations.length,
-                  )}{" "}
-                  مشتری منتخب امروز
+                  {formatNumber(recommendations.length)} مشتری منتخب امروز
                 </p>
               </div>
             </div>
@@ -852,9 +857,7 @@ export default function AIRecommendations() {
                 </p>
 
                 <p className="mt-1 text-lg font-black text-slate-900">
-                  {formatTonnage(
-                    monthlyTargetReport.targetTonnage,
-                  )}
+                  {formatTonnage(monthlyTargetReport.targetTonnage)}
                 </p>
               </div>
 
@@ -864,9 +867,7 @@ export default function AIRecommendations() {
                 </p>
 
                 <p className="mt-1 text-lg font-black text-emerald-700">
-                  {formatTonnage(
-                    monthlyTargetReport.achievedTonnage,
-                  )}
+                  {formatTonnage(monthlyTargetReport.achievedTonnage)}
                 </p>
               </div>
 
@@ -876,9 +877,7 @@ export default function AIRecommendations() {
                 </p>
 
                 <p className="mt-1 text-lg font-black text-amber-700">
-                  {formatTonnage(
-                    targetRemaining,
-                  )}
+                  {formatTonnage(targetRemaining)}
                 </p>
               </div>
 
@@ -888,9 +887,7 @@ export default function AIRecommendations() {
                 </p>
 
                 <p className="mt-1 text-lg font-black text-blue-700">
-                  {formatTonnage(
-                    suggestedTonnage,
-                  )}
+                  {formatTonnage(suggestedTonnage)}
                 </p>
               </div>
 
@@ -900,9 +897,7 @@ export default function AIRecommendations() {
                 </p>
 
                 <p className="mt-1 text-lg font-black text-violet-700">
-                  {formatTonnage(
-                    expectedSalesTonnage,
-                  )}
+                  {formatTonnage(expectedSalesTonnage)}
                 </p>
               </div>
             </div>
@@ -914,10 +909,7 @@ export default function AIRecommendations() {
                 </p>
 
                 <p className="mt-1 text-xl font-black text-blue-700">
-                  {formatPercent(
-                    targetCoverage,
-                  )}
-                  %
+                  {formatPercent(targetCoverage)}%
                 </p>
 
                 <p className="mt-1 text-xs leading-5 text-slate-500">
@@ -931,10 +923,7 @@ export default function AIRecommendations() {
                 </p>
 
                 <p className="mt-1 text-xl font-black text-violet-800">
-                  {formatPercent(
-                    expectedSalesCoverage,
-                  )}
-                  %
+                  {formatPercent(expectedSalesCoverage)}%
                 </p>
 
                 <p className="mt-1 text-xs leading-5 text-violet-700/70">
@@ -948,10 +937,7 @@ export default function AIRecommendations() {
                 </p>
 
                 <p className="mt-1 text-xl font-black text-emerald-800">
-                  {formatPercent(
-                    expectedDailyNeedCoverage,
-                  )}
-                  %
+                  {formatPercent(expectedDailyNeedCoverage)}%
                 </p>
 
                 <p className="mt-1 text-xs leading-5 text-emerald-700/70">
@@ -969,10 +955,7 @@ export default function AIRecommendations() {
                     </p>
 
                     <p className="mt-1 text-xl font-black text-slate-800">
-                      {formatNumber(
-                        remainingDays,
-                      )}{" "}
-                      روز
+                      {formatNumber(remainingDays)} روز
                     </p>
                   </div>
 
@@ -990,9 +973,7 @@ export default function AIRecommendations() {
                     </p>
 
                     <p className="mt-1 text-xl font-black text-slate-800">
-                      {formatTonnage(
-                        dailyRequiredTonnage,
-                      )}
+                      {formatTonnage(dailyRequiredTonnage)}
                     </p>
                   </div>
 
@@ -1011,19 +992,14 @@ export default function AIRecommendations() {
                   </p>
 
                   <p className="mt-1 text-sm font-black text-slate-800">
-                    {formatPercent(
-                      dailyNeedCoverage,
-                    )}
-                    %
+                    {formatPercent(dailyNeedCoverage)}%
                   </p>
                 </div>
 
                 <p className="text-xs leading-5 text-slate-500">
                   این شاخص نشان می‌دهد تناژ پیشنهادی{" "}
-                  {formatNumber(
-                    recommendations.length,
-                  )}{" "}
-                  مشتری منتخب امروز، معادل چند درصد از نیاز متوسط یک روز فروش تا پایان ماه است.
+                  {formatNumber(recommendations.length)} مشتری منتخب امروز،
+                  معادل چند درصد از نیاز متوسط یک روز فروش تا پایان ماه است.
                 </p>
               </div>
 
@@ -1032,10 +1008,7 @@ export default function AIRecommendations() {
                   className="h-full rounded-full bg-blue-500 transition-all duration-500"
                   style={{
                     width: `${Math.min(
-                      Math.max(
-                        dailyNeedCoverage,
-                        0,
-                      ),
+                      Math.max(dailyNeedCoverage, 0),
                       100,
                     )}%`,
                   }}
@@ -1051,21 +1024,21 @@ export default function AIRecommendations() {
                   </p>
 
                   <p className="mt-1 text-sm font-black text-violet-900">
-                    {formatTonnage(
-                      expectedSalesTonnage,
-                    )}
+                    {formatTonnage(expectedSalesTonnage)}
                   </p>
                 </div>
 
                 <p className="text-xs leading-5 text-violet-700/80">
-                  این عدد حاصل‌ضرب تناژ پیشنهادی هر مشتری در احتمال تقریبی تبدیل تماس به سفارش است و پیش‌بینی قطعی فروش نیست.
+                  این عدد حاصل‌ضرب تناژ پیشنهادی هر مشتری در احتمال تقریبی تبدیل
+                  تماس به سفارش است و پیش‌بینی قطعی فروش نیست.
                 </p>
               </div>
             </div>
 
             <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
               <p className="text-xs leading-6 text-amber-800">
-                احتمال خرید و فروش مورد انتظار شاخص‌های تحلیلی موتور پیشنهاد فروش هستند و به معنی تضمین ثبت سفارش نیستند.
+                احتمال خرید، فروش مورد انتظار و سیگنال‌های یادداشت، شاخص‌های
+                تحلیلی موتور پیشنهاد فروش هستند و به معنی تضمین ثبت سفارش نیستند.
               </p>
             </div>
           </div>
@@ -1085,8 +1058,7 @@ export default function AIRecommendations() {
           <div className="rounded-2xl border border-red-100 bg-red-50 p-5 text-sm font-medium leading-7 text-red-700">
             {error}
           </div>
-        ) : recommendations.length ===
-          0 ? (
+        ) : recommendations.length === 0 ? (
           <div className="rounded-2xl bg-slate-50 p-6 text-center">
             <p className="text-sm font-bold text-slate-700">
               در حال حاضر پیشنهاد هوشمندی برای نمایش وجود ندارد.
@@ -1098,22 +1070,13 @@ export default function AIRecommendations() {
           </div>
         ) : (
           <div className="space-y-3">
-            {recommendations.map(
-              (
-                customer,
-                index,
-              ) => (
-                <RecommendationCard
-                  key={
-                    customer.customerId
-                  }
-                  customer={
-                    customer
-                  }
-                  index={index}
-                />
-              ),
-            )}
+            {recommendations.map((customer, index) => (
+              <RecommendationCard
+                key={customer.customerId}
+                customer={customer}
+                index={index}
+              />
+            ))}
           </div>
         )}
       </div>

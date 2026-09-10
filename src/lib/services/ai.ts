@@ -4,6 +4,11 @@ import {
   toJalaali,
 } from "jalaali-js";
 
+import {
+  extractSalesNoteSignals,
+  type SalesNoteSignals,
+} from "@/src/lib/services/sales-intelligence";
+
 import { createSupabaseClient } from "@/src/lib/supabase";
 
 const COMPANY_ID =
@@ -31,28 +36,37 @@ export interface AIRecommendedCustomer {
   phone: string | null;
   customerType: string;
   isVip: boolean;
+
   city: {
     id: string;
     name: string;
     region_id?: string | null;
   } | null;
+
   score: number;
   priority: AIRecommendationPriority;
   opportunityType: AIOpportunityType;
+
   inactivityDays: number;
   lifetimeTonnage: number;
   orderCount: number;
   callCount: number;
+
   lastOrderDate: string | null;
   lastCallDate: string | null;
+
   daysSinceLastOrder: number;
+
   hasPendingFollowUp: boolean;
   calledToday: boolean;
+
   averageOrderTonnage: number;
   averageOrderIntervalDays: number;
+
   expectedNextOrderDate: string | null;
   daysUntilExpectedOrder: number | null;
   isOrderDue: boolean;
+
   suggestedOrderTonnage: number;
 
   /**
@@ -68,9 +82,15 @@ export interface AIRecommendedCustomer {
    */
   expectedSalesTonnage: number;
 
+  /**
+   * اطلاعات استخراج‌شده از یادداشت‌های تماس و پیگیری.
+   */
+  salesNoteSignals: SalesNoteSignals;
+
   suggestedAction: string;
   suggestedActionDescription: string;
   suggestedContactGoal: string;
+
   reasons: AIRecommendationReason[];
 }
 
@@ -82,6 +102,7 @@ interface CustomerRow {
   is_vip: boolean | null;
   city_id: string | null;
   created_at: string;
+
   city:
     | {
         id: string;
@@ -102,13 +123,18 @@ interface CallRow {
   id: string;
   customer_id: string;
   call_date: string;
+  outcome: string;
+  notes: string | null;
 }
 
 interface FollowUpRow {
   id: string;
   customer_id: string;
   scheduled_at: string;
+  completed_at: string | null;
   status: string;
+  subject: string | null;
+  notes: string | null;
 }
 
 interface MonthlyRegionTargetRow {
@@ -236,15 +262,6 @@ function getCurrentTargetPeriod(): {
 
 /**
  * محاسبه ابتدا و انتهای ماه جلالی جاری.
- *
- * این تابع برای فیلتر کردن سفارش‌های ماه جاری
- * استفاده می‌شود تا مشتری دارای سفارش تأییدشده
- * در ماه جاری، وارد پیشنهادهای روزانه نشود.
- *
- * مثال:
- * ماه ۱۴۰۵/۰۶
- * از 2026-08-23
- * تا 2026-09-22
  */
 function getCurrentJalaliMonthBounds(): {
   start: string;
@@ -734,14 +751,17 @@ function buildPeerTonnageMaps(
     string,
     PeerTonnageStats
   >;
+
   byType: Map<
     string,
     PeerTonnageStats
   >;
+
   byRegion: Map<
     string,
     PeerTonnageStats
   >;
+
   global: PeerTonnageStats;
 } {
   const byTypeAndRegion =
@@ -1045,13 +1065,36 @@ function estimatePurchaseProbability(
     averageOrderTonnage: number;
     averageOrderIntervalDays: number;
     daysSinceLastOrder: number;
-    daysUntilExpectedOrder: number | null;
+    daysUntilExpectedOrder:
+      | number
+      | null;
     isOrderDue: boolean;
     isVip: boolean;
     hasPendingFollowUp: boolean;
     calledToday: boolean;
     inactivityDays: number;
     customerType: string;
+
+    notePurchaseIntent:
+      SalesNoteSignals["purchaseIntent"];
+
+    noteSalesOpportunity:
+      SalesNoteSignals["salesOpportunity"];
+
+    noteHasRecontactIntent:
+      boolean;
+
+    noteDoNotContact: boolean;
+
+    notePriceObjection: boolean;
+
+    noteCompetitorMentioned: boolean;
+
+    noteProjectActive: boolean;
+
+    noteProjectPending: boolean;
+
+    noteStockBarrier: boolean;
   },
 ): number {
   /*
@@ -1104,7 +1147,6 @@ function estimatePurchaseProbability(
   }
 
   /*
-   * مهم‌ترین عامل:
    * اگر موعد خرید رسیده باشد،
    * احتمال تبدیل تماس به سفارش بالا می‌رود.
    */
@@ -1156,6 +1198,87 @@ function estimatePurchaseProbability(
     )
   ) {
     probability += 0.05;
+  }
+
+  /*
+   * ------------------------------------------
+   * SALES NOTE INTELLIGENCE
+   * ------------------------------------------
+   */
+
+  if (
+    customer.notePurchaseIntent ===
+    "high"
+  ) {
+    probability += 0.15;
+  } else if (
+    customer.notePurchaseIntent ===
+    "medium"
+  ) {
+    probability += 0.08;
+  } else if (
+    customer.notePurchaseIntent ===
+    "low"
+  ) {
+    probability -= 0.10;
+  }
+
+  if (
+    customer.noteSalesOpportunity ===
+    "high"
+  ) {
+    probability += 0.10;
+  } else if (
+    customer.noteSalesOpportunity ===
+    "medium"
+  ) {
+    probability += 0.05;
+  }
+
+  if (
+    customer.noteHasRecontactIntent
+  ) {
+    probability += 0.08;
+  }
+
+  if (
+    customer.noteProjectActive
+  ) {
+    probability += 0.08;
+  }
+
+  if (
+    customer.noteProjectPending
+  ) {
+    probability += 0.03;
+  }
+
+  if (
+    customer.notePriceObjection
+  ) {
+    /*
+     * اعتراض قیمت به‌تنهایی فرصت فروش را از بین نمی‌برد؛
+     * می‌تواند نشانه علاقه همراه با مانع قیمت باشد.
+     */
+    probability += 0.02;
+  }
+
+  if (
+    customer.noteCompetitorMentioned
+  ) {
+    probability += 0.01;
+  }
+
+  if (
+    customer.noteStockBarrier
+  ) {
+    probability -= 0.08;
+  }
+
+  if (
+    customer.noteDoNotContact
+  ) {
+    probability -= 0.25;
   }
 
   /*
@@ -1226,8 +1349,6 @@ function estimatePurchaseProbability(
 
   /*
    * احتمال نهایی بین 10٪ و 95٪ نگه داشته می‌شود.
-   * این عدد «پیش‌بینی قطعی» نیست؛
-   * صرفاً برای اولویت‌بندی تماس‌هاست.
    */
   return roundProbability(
     Math.min(
@@ -1248,6 +1369,7 @@ function getSuggestedAction(
   opportunityType: AIOpportunityType,
   isOrderDue: boolean,
   suggestedOrderTonnage: number,
+  signals: SalesNoteSignals,
 ): {
   action: string;
   description: string;
@@ -1258,6 +1380,43 @@ function getSuggestedAction(
           suggestedOrderTonnage,
         )
       : "";
+
+  if (
+    signals.doNotContact
+  ) {
+    return {
+      action:
+        "تماس فعلاً انجام نشود",
+      description:
+        "در یادداشت مشتری صراحتاً درخواست شده فعلاً تماس یا پیگیری انجام نشود؛ قبل از اقدام زمان مناسب بعدی را بررسی کن.",
+    };
+  }
+
+  if (
+    signals.priceObjection &&
+    signals.competitorMentioned
+  ) {
+    return {
+      action:
+        "مذاکره فروش و پاسخ به اعتراض قیمت",
+      description: signals.competitorName
+        ? `در یادداشت به قیمت یا ${signals.competitorName} اشاره شده است؛ قیمت، مزیت محصول و شرایط همکاری را مطرح کن${tonnage ? ` و برای سفارش حدود ${tonnage} تلاش کن.` : "."}`
+        : `در یادداشت اعتراض قیمت یا رقیب دیده شده است؛ روی ارزش محصول و شرایط همکاری مذاکره کن${tonnage ? ` و برای سفارش حدود ${tonnage} تلاش کن.` : "."}`,
+    };
+  }
+
+  if (
+    signals.customerInterested &&
+    signals.hasRecontactIntent
+  ) {
+    return {
+      action:
+        "پیگیری فرصت فروش گرم",
+      description: signals.nextActionHint
+        ? `${signals.nextActionHint}؛ نشانه علاقه مشتری به خرید در یادداشت ثبت شده است${tonnage ? ` و هدف مناسب حدود ${tonnage} است.` : "."}`
+        : `نشانه علاقه مشتری به خرید ثبت شده است${tonnage ? `؛ برای سفارش حدود ${tonnage} اقدام کن.` : "؛ فرصت را پیگیری کن."}`,
+    };
+  }
 
   if (
     opportunityType ===
@@ -1314,6 +1473,7 @@ function getSuggestedContactGoal(
   averageOrderTonnage: number,
   isOrderDue: boolean,
   hasPendingFollowUp: boolean,
+  signals: SalesNoteSignals,
 ): string {
   const tonnage =
     suggestedOrderTonnage > 0
@@ -1321,6 +1481,65 @@ function getSuggestedContactGoal(
           suggestedOrderTonnage,
         )
       : "";
+
+  if (
+    signals.doNotContact
+  ) {
+    return "فعلاً تماس نگیرید؛ درخواست مشتری در یادداشت ثبت شده است";
+  }
+
+  if (
+    signals.customerInterested &&
+    signals.hasRecontactIntent
+  ) {
+    if (
+      tonnage &&
+      signals.nextActionHint
+    ) {
+      return `${signals.nextActionHint} و تلاش برای ثبت سفارش حدود ${tonnage}`;
+    }
+
+    return (
+      signals.nextActionHint ??
+      "پیگیری مجدد مشتری و تبدیل علاقه خرید به سفارش"
+    );
+  }
+
+  if (
+    signals.priceObjection
+  ) {
+    if (
+      signals.competitorName &&
+      tonnage
+    ) {
+      return `پاسخ به اعتراض قیمت، مقایسه با ${signals.competitorName} و تلاش برای سفارش حدود ${tonnage}`;
+    }
+
+    return "بررسی اعتراض قیمت و ارائه شرایط مناسب‌تر برای تبدیل فرصت به سفارش";
+  }
+
+  if (
+    signals.projectActive
+  ) {
+    return tonnage
+      ? `بررسی نیاز پروژه فعال و تلاش برای سفارش حدود ${tonnage}`
+      : "بررسی نیاز پروژه فعال و ایجاد فرصت فروش";
+  }
+
+  if (
+    signals.projectPending
+  ) {
+    return (
+      signals.nextActionHint ??
+      "پیگیری وضعیت پروژه یا تأیید و تعیین زمان مناسب تماس"
+    );
+  }
+
+  if (
+    signals.stockBarrier
+  ) {
+    return "بررسی زمان تخلیه موجودی و تعیین بهترین زمان تماس مجدد";
+  }
 
   if (
     opportunityType ===
@@ -1606,7 +1825,27 @@ function getContactTimingPriority(
     | number
     | null,
   hasPendingFollowUp: boolean,
+  signals: SalesNoteSignals,
 ): number {
+  if (
+    signals.doNotContact
+  ) {
+    return 0;
+  }
+
+  if (
+    signals.customerInterested &&
+    signals.hasRecontactIntent
+  ) {
+    return 100;
+  }
+
+  if (
+    signals.projectActive
+  ) {
+    return 95;
+  }
+
   if (isOrderDue) {
     return 100;
   }
@@ -1634,7 +1873,15 @@ function getContactTimingPriority(
     return 70;
   }
 
-  if (hasPendingFollowUp) {
+  if (
+    hasPendingFollowUp
+  ) {
+    return 65;
+  }
+
+  if (
+    signals.hasRecontactIntent
+  ) {
     return 65;
   }
 
@@ -1682,6 +1929,14 @@ function getSalesOpportunityPriority(
   customer: AIRecommendedCustomer,
 ): number {
   if (
+    customer.salesNoteSignals
+      .salesOpportunity ===
+    "high"
+  ) {
+    return 100;
+  }
+
+  if (
     customer.opportunityType ===
     "reactivation"
   ) {
@@ -1701,6 +1956,14 @@ function getSalesOpportunityPriority(
     "retention"
   ) {
     return 75;
+  }
+
+  if (
+    customer.salesNoteSignals
+      .salesOpportunity ===
+    "medium"
+  ) {
+    return 70;
   }
 
   return 40;
@@ -1747,6 +2010,7 @@ function calculateSalesPriority(
       customer.isOrderDue,
       customer.daysUntilExpectedOrder,
       customer.hasPendingFollowUp,
+      customer.salesNoteSignals,
     );
 
   const purchaseHistoryPriority =
@@ -1783,6 +2047,65 @@ function calculateSalesPriority(
     customerTypePriority * 0.05 +
     salesOpportunityPriority *
       0.05;
+
+  /*
+   * تقویت بر اساس سیگنال‌های فروش موجود در یادداشت.
+   */
+  if (
+    customer.salesNoteSignals
+      .customerInterested
+  ) {
+    priority += 8;
+  }
+
+  if (
+    customer.salesNoteSignals
+      .hasRecontactIntent
+  ) {
+    priority += 6;
+  }
+
+  if (
+    customer.salesNoteSignals
+      .projectActive
+  ) {
+    priority += 6;
+  }
+
+  if (
+    customer.salesNoteSignals
+      .priceObjection
+  ) {
+    priority += 2;
+  }
+
+  if (
+    customer.salesNoteSignals
+      .competitorMentioned
+  ) {
+    priority += 2;
+  }
+
+  if (
+    customer.salesNoteSignals
+      .doNotContact
+  ) {
+    priority -= 30;
+  }
+
+  if (
+    customer.salesNoteSignals
+      .customerRefused
+  ) {
+    priority -= 12;
+  }
+
+  if (
+    customer.salesNoteSignals
+      .stockBarrier
+  ) {
+    priority -= 6;
+  }
 
   /*
    * مشتری دارای سابقه که موعد خریدش رسیده،
@@ -2071,7 +2394,9 @@ export const aiService = {
         .select(`
           id,
           customer_id,
-          call_date
+          call_date,
+          outcome,
+          notes
         `)
         .eq(
           "company_id",
@@ -2113,7 +2438,10 @@ export const aiService = {
           id,
           customer_id,
           scheduled_at,
-          status
+          completed_at,
+          status,
+          subject,
+          notes
         `)
         .eq(
           "company_id",
@@ -2411,15 +2739,87 @@ export const aiService = {
                     0,
               );
 
-            const activityDates = [
-              lastOrderDate,
-              lastCallDate,
-            ].filter(
-              (
-                value,
-              ): value is string =>
-                Boolean(value),
-            );
+            /*
+             * ------------------------------------------
+             * LAST ACTUAL ACTIVITY
+             * ------------------------------------------
+             *
+             * سفارش
+             * تماس گذشته
+             * پیگیری completed با completed_at
+             *
+             * پیگیری pending / cancelled یا scheduled_at
+             * فعالیت واقعی محسوب نمی‌شوند.
+             */
+
+            const activityDates: string[] =
+              [];
+
+            if (lastOrderDate) {
+              activityDates.push(
+                lastOrderDate,
+              );
+            }
+
+            for (
+              const call of customerCalls
+            ) {
+              const callTime =
+                new Date(
+                  call.call_date,
+                ).getTime();
+
+              if (
+                !Number.isNaN(
+                  callTime,
+                ) &&
+                callTime <=
+                  Date.now()
+              ) {
+                activityDates.push(
+                  call.call_date,
+                );
+                break;
+              }
+            }
+
+            for (
+              const followUp of customerFollowUps
+            ) {
+              if (
+                followUp.status !==
+                "completed"
+              ) {
+                continue;
+              }
+
+              if (
+                !followUp.completed_at
+              ) {
+                continue;
+              }
+
+              const completedTime =
+                new Date(
+                  followUp.completed_at,
+                ).getTime();
+
+              if (
+                Number.isNaN(
+                  completedTime,
+                ) ||
+                completedTime >
+                  Date.now()
+              ) {
+                continue;
+              }
+
+              activityDates.push(
+                followUp.completed_at,
+              );
+
+              break;
+            }
 
             const lastActivityDate =
               activityDates.length >
@@ -2455,6 +2855,79 @@ export const aiService = {
                   followUp.status ===
                   "pending",
               );
+
+            /* ==========================================
+               SALES NOTE INTELLIGENCE
+               ========================================== */
+
+            const recentCallNotes =
+              [...customerCalls]
+                .sort(
+                  (a, b) =>
+                    new Date(
+                      b.call_date,
+                    ).getTime() -
+                    new Date(
+                      a.call_date,
+                    ).getTime(),
+                )
+                .slice(
+                  0,
+                  5,
+                )
+                .map(
+                  (call) =>
+                    [
+                      call.outcome,
+                      call.notes,
+                    ]
+                      .filter(Boolean)
+                      .join(" - "),
+                );
+
+            const recentFollowUpNotes =
+              [...customerFollowUps]
+                .sort(
+                  (a, b) => {
+                    const aDate =
+                      a.completed_at ??
+                      a.scheduled_at;
+
+                    const bDate =
+                      b.completed_at ??
+                      b.scheduled_at;
+
+                    return (
+                      new Date(
+                        bDate,
+                      ).getTime() -
+                      new Date(
+                        aDate,
+                      ).getTime()
+                    );
+                  },
+                )
+                .slice(
+                  0,
+                  5,
+                )
+                .map(
+                  (followUp) =>
+                    [
+                      followUp.subject,
+                      followUp.notes,
+                    ]
+                      .filter(
+                        Boolean,
+                      )
+                      .join(" - "),
+                );
+
+            const salesNoteSignals =
+              extractSalesNoteSignals([
+                ...recentCallNotes,
+                ...recentFollowUpNotes,
+              ]);
 
             const opportunityType =
               getOpportunityType(
@@ -2829,6 +3302,131 @@ export const aiService = {
             }
 
             /* ==========================================
+               SALES NOTE INTELLIGENCE
+               ========================================== */
+
+            if (
+              salesNoteSignals.points !==
+              0
+            ) {
+              score +=
+                salesNoteSignals.points;
+            }
+
+            if (
+              salesNoteSignals.customerInterested
+            ) {
+              reasons.push({
+                code:
+                  "note_purchase_interest",
+                title:
+                  "در یادداشت نشانه‌ای از علاقه مشتری به خرید وجود دارد",
+                points: 18,
+              });
+            }
+
+            if (
+              salesNoteSignals.hasRecontactIntent
+            ) {
+              reasons.push({
+                code:
+                  "note_recontact_intent",
+                title:
+                  salesNoteSignals.nextActionHint ??
+                  "در یادداشت نیاز به تماس مجدد ثبت شده است",
+                points: 15,
+              });
+            }
+
+            if (
+              salesNoteSignals.projectActive
+            ) {
+              reasons.push({
+                code:
+                  "note_active_project",
+                title:
+                  "در یادداشت وجود پروژه یا فعالیت اجرایی فعال ثبت شده است",
+                points: 10,
+              });
+            }
+
+            if (
+              salesNoteSignals.projectPending
+            ) {
+              reasons.push({
+                code:
+                  "note_project_pending",
+                title:
+                  "مشتری به پروژه، تأیید یا شروع کار وابسته است",
+                points: 6,
+              });
+            }
+
+            if (
+              salesNoteSignals.priceObjection
+            ) {
+              reasons.push({
+                code:
+                  "note_price_objection",
+                title:
+                  salesNoteSignals.competitorName
+                    ? `اعتراض یا مذاکره قیمت؛ رقیب: ${salesNoteSignals.competitorName}`
+                    : "اعتراض یا مذاکره قیمت در یادداشت ثبت شده است",
+                points: 4,
+              });
+            }
+
+            if (
+              salesNoteSignals.competitorMentioned
+            ) {
+              reasons.push({
+                code:
+                  "note_competitor",
+                title:
+                  salesNoteSignals.competitorName
+                    ? `نام رقیب در یادداشت: ${salesNoteSignals.competitorName}`
+                    : "رقیب در یادداشت ذکر شده است",
+                points: 5,
+              });
+            }
+
+            if (
+              salesNoteSignals.stockBarrier
+            ) {
+              reasons.push({
+                code:
+                  "note_stock_barrier",
+                title:
+                  "موجودی فعلی مانع خرید فوری است",
+                points: -8,
+              });
+            }
+
+            if (
+              salesNoteSignals.customerRefused
+            ) {
+              reasons.push({
+                code:
+                  "note_customer_refused",
+                title:
+                  "در یادداشت عدم تمایل فعلی به خرید دیده می‌شود",
+                points: -15,
+              });
+            }
+
+            if (
+              salesNoteSignals.doNotContact
+            ) {
+              reasons.push({
+                code:
+                  "note_do_not_contact",
+                title:
+                  "در یادداشت درخواست شده فعلاً تماس یا پیگیری انجام نشود",
+                points: -35,
+              });
+            }
+
+            /* ==========================================
                TODAY CALL STATUS
                ========================================== */
 
@@ -2990,27 +3588,52 @@ export const aiService = {
               getPriority(score);
 
             const estimatedPurchaseProbability =
-              estimatePurchaseProbability(
-                {
-                  opportunityType,
-                  orderCount,
-                  lifetimeTonnage,
-                  averageOrderTonnage,
-                  averageOrderIntervalDays,
-                  daysSinceLastOrder,
-                  daysUntilExpectedOrder,
-                  isOrderDue,
-                  isVip:
-                    Boolean(
-                      customer.is_vip,
-                    ),
-                  hasPendingFollowUp,
-                  calledToday,
-                  inactivityDays,
-                  customerType:
-                    customer.customer_type,
-                },
-              );
+              estimatePurchaseProbability({
+                opportunityType,
+                orderCount,
+                lifetimeTonnage,
+                averageOrderTonnage,
+                averageOrderIntervalDays,
+                daysSinceLastOrder,
+                daysUntilExpectedOrder,
+                isOrderDue,
+                isVip:
+                  Boolean(
+                    customer.is_vip,
+                  ),
+                hasPendingFollowUp,
+                calledToday,
+                inactivityDays,
+                customerType:
+                  customer.customer_type,
+
+                notePurchaseIntent:
+                  salesNoteSignals.purchaseIntent,
+
+                noteSalesOpportunity:
+                  salesNoteSignals.salesOpportunity,
+
+                noteHasRecontactIntent:
+                  salesNoteSignals.hasRecontactIntent,
+
+                noteDoNotContact:
+                  salesNoteSignals.doNotContact,
+
+                notePriceObjection:
+                  salesNoteSignals.priceObjection,
+
+                noteCompetitorMentioned:
+                  salesNoteSignals.competitorMentioned,
+
+                noteProjectActive:
+                  salesNoteSignals.projectActive,
+
+                noteProjectPending:
+                  salesNoteSignals.projectPending,
+
+                noteStockBarrier:
+                  salesNoteSignals.stockBarrier,
+              });
 
             const expectedSalesTonnage =
               roundSuggestedTonnage(
@@ -3064,6 +3687,7 @@ export const aiService = {
                 opportunityType,
                 isOrderDue,
                 suggestedOrderTonnage,
+                salesNoteSignals,
               );
 
             const suggestedContactGoal =
@@ -3073,6 +3697,7 @@ export const aiService = {
                 averageOrderTonnage,
                 isOrderDue,
                 hasPendingFollowUp,
+                salesNoteSignals,
               );
 
             return {
@@ -3136,6 +3761,8 @@ export const aiService = {
 
               expectedSalesTonnage,
 
+              salesNoteSignals,
+
               suggestedAction:
                 suggestedAction.action,
 
@@ -3165,15 +3792,20 @@ export const aiService = {
 
       /*
        * مشتری دارای سفارش تأییدشده در ماه جاری
-       * نباید اصلاً وارد لیست پیشنهادهای تماس شود.
+       * نباید وارد لیست پیشنهادهای تماس شود.
        *
-       * همچنین مشتری‌ای که امروز تماس شده است
+       * مشتری‌ای که امروز تماس شده است
        * نیز از لیست حذف می‌شود.
+       *
+       * مشتری‌ای که در یادداشت صراحتاً گفته
+       * فعلاً تماس گرفته نشود نیز حذف می‌شود.
        */
       const eligibleRecommendations =
         recommendations.filter(
           (customer) =>
             !customer.calledToday &&
+            !customer.salesNoteSignals
+              .doNotContact &&
             !customersPurchasedThisMonth.has(
               customer.customerId,
             ),
@@ -3242,6 +3874,41 @@ export const aiService = {
                 return (
                   b.expectedSalesTonnage -
                   a.expectedSalesTonnage
+                );
+              }
+
+              /*
+               * فرصت فروش موجود در یادداشت
+               */
+              const aNoteOpportunity =
+                a.salesNoteSignals
+                  .salesOpportunity;
+
+              const bNoteOpportunity =
+                b.salesNoteSignals
+                  .salesOpportunity;
+
+              if (
+                aNoteOpportunity !==
+                bNoteOpportunity
+              ) {
+                const weight: Record<
+                  SalesNoteSignals["salesOpportunity"],
+                  number
+                > = {
+                  high: 3,
+                  medium: 2,
+                  low: 1,
+                  unknown: 0,
+                };
+
+                return (
+                  weight[
+                    bNoteOpportunity
+                  ] -
+                  weight[
+                    aNoteOpportunity
+                  ]
                 );
               }
 
@@ -3365,6 +4032,34 @@ export const aiService = {
                 return aStore
                   ? -1
                   : 1;
+              }
+
+              if (
+                b.salesNoteSignals
+                  .salesOpportunity !==
+                a.salesNoteSignals
+                  .salesOpportunity
+              ) {
+                const weight: Record<
+                  SalesNoteSignals["salesOpportunity"],
+                  number
+                > = {
+                  high: 3,
+                  medium: 2,
+                  low: 1,
+                  unknown: 0,
+                };
+
+                return (
+                  weight[
+                    b.salesNoteSignals
+                      .salesOpportunity
+                  ] -
+                  weight[
+                    a.salesNoteSignals
+                      .salesOpportunity
+                  ]
+                );
               }
 
               if (
