@@ -1216,7 +1216,7 @@ export default function WaybillsPage() {
                         <td className="px-5 py-5">
                           {order ? (
                             <Link
-                              href={`/customers/${order.customer_id}`}
+                              href={`/customers/view?id=${encodeURIComponent(order.customer_id)}`}
                               className="group/customer flex min-w-[240px] items-center gap-3"
                             >
                               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-sm font-black text-blue-700 transition group-hover/customer:bg-blue-100">
@@ -1278,7 +1278,7 @@ export default function WaybillsPage() {
 
                         <td className="px-5 py-5">
                           <Link
-                            href={`/orders/${waybill.order_id}`}
+                            href={`/orders/view?id=${encodeURIComponent(waybill.order_id)}`}
                             className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-blue-50 hover:text-blue-700"
                           >
                             <Package
@@ -1392,7 +1392,7 @@ export default function WaybillsPage() {
                         <td className="px-5 py-5">
                           <div className="flex flex-wrap gap-2">
                             <Link
-                              href={`/waybills/${waybill.id}`}
+                              href={`/waybills/view?id=${encodeURIComponent(waybill.id)}`}
                               className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-blue-600"
                             >
                               جزئیات حواله
@@ -1403,7 +1403,7 @@ export default function WaybillsPage() {
                             </Link>
 
                             <Link
-                              href={`/orders/${waybill.order_id}`}
+                              href={`/orders/view?id=${encodeURIComponent(waybill.order_id)}`}
                               className="inline-flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-2.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
                             >
                               سفارش
@@ -1622,7 +1622,7 @@ export default function WaybillsPage() {
 
                       <div className="mt-4 flex flex-col gap-2">
                         <Link
-                          href={`/waybills/${waybill.id}`}
+                          href={`/waybills/view?id=${encodeURIComponent(waybill.id)}`}
                           className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white transition hover:bg-blue-600"
                         >
                           جزئیات حواله
@@ -1633,7 +1633,7 @@ export default function WaybillsPage() {
                         </Link>
 
                         <Link
-                          href={`/orders/${waybill.order_id}`}
+                          href={`/orders/view?id=${encodeURIComponent(waybill.order_id)}`}
                           className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
                         >
                           مشاهده سفارش

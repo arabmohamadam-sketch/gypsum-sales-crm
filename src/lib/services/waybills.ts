@@ -102,24 +102,27 @@ function logWaybillError(
     if ("code" in error) {
       console.error(
         "code:",
-        (error as { code?: unknown })
-          .code
+        (error as {
+          code?: unknown;
+        }).code
       );
     }
 
     if ("details" in error) {
       console.error(
         "details:",
-        (error as { details?: unknown })
-          .details
+        (error as {
+          details?: unknown;
+        }).details
       );
     }
 
     if ("hint" in error) {
       console.error(
         "hint:",
-        (error as { hint?: unknown })
-          .hint
+        (error as {
+          hint?: unknown;
+        }).hint
       );
     }
   } else {
@@ -139,51 +142,63 @@ function normalizeWaybill(
 
   return {
     id: String(data.id),
+
     company_id: String(
       data.company_id
     ),
+
     order_id: String(
       data.order_id
     ),
+
     waybill_number: Number(
       data.waybill_number
     ),
+
     waybill_date: String(
       data.waybill_date
     ),
+
     status:
       data.status as Waybill["status"],
+
     notes:
       (data.notes as
         | string
         | null) ?? null,
+
     issued_at:
       (data.issued_at as
         | string
         | null) ?? null,
+
     issued_by:
       (data.issued_by as
         | string
         | null) ?? null,
+
     created_at: String(
       data.created_at
     ),
+
     updated_at: String(
       data.updated_at
     ),
+
     deleted_at:
       (data.deleted_at as
         | string
         | null) ?? null,
+
     items: Array.isArray(
       data.items
     )
       ? (data.items as WaybillItem[])
       : [],
+
     loading:
       data.loading &&
-      typeof data.loading ===
-        "object"
+      typeof data.loading === "object"
         ? (data.loading as Loading)
         : null,
   };
@@ -512,7 +527,9 @@ export const waybillsService = {
       .select(`
         id,
         company_id,
-        status
+        status,
+        sales_user_id,
+        customer_id
       `)
       .eq(
         "id",
@@ -614,7 +631,8 @@ export const waybillsService = {
           | string
           | null;
         quantity: number;
-        weight_kg_snapshot: number;
+        weight_kg_snapshot:
+          number;
         deleted_at:
           | string
           | null;
@@ -679,8 +697,7 @@ export const waybillsService = {
     }
 
     const {
-      data: waybill,
-      error: waybillError,
+      error: waybillInsertError,
     } = await supabase
       .from("waybills")
       .insert({
@@ -690,29 +707,79 @@ export const waybillsService = {
           input.order_id,
         waybill_date:
           input.waybill_date,
-        status: "draft",
+        status:
+          "draft",
         notes:
           input.notes ?? null,
-      })
-      .select(
-        WAYBILL_BASE_SELECT
-      )
-      .single();
+      });
 
-    if (waybillError) {
+    if (waybillInsertError) {
       logWaybillError(
         "CREATE",
-        waybillError
+        waybillInsertError
       );
 
       throw new Error(
         getErrorMessage(
-          waybillError
+          waybillInsertError
         )
       );
     }
 
-    const items: CreateWaybillItemInput[] =
+    const {
+      data: waybill,
+      error: waybillReadError,
+    } = await supabase
+      .from("waybills")
+      .select(
+        WAYBILL_BASE_SELECT
+      )
+      .eq(
+        "company_id",
+        COMPANY_ID
+      )
+      .eq(
+        "order_id",
+        input.order_id
+      )
+      .eq(
+        "status",
+        "draft"
+      )
+      .is(
+        "deleted_at",
+        null
+      )
+      .order(
+        "created_at",
+        {
+          ascending: false,
+        }
+      )
+      .limit(1)
+      .maybeSingle();
+
+    if (waybillReadError) {
+      logWaybillError(
+        "CREATE READ AFTER INSERT",
+        waybillReadError
+      );
+
+      throw new Error(
+        getErrorMessage(
+          waybillReadError
+        )
+      );
+    }
+
+    if (!waybill) {
+      throw new Error(
+        "حواله ایجاد شد اما اطلاعات آن قابل دریافت نیست."
+      );
+    }
+
+    const items:
+      CreateWaybillItemInput[] =
       activeOrderItems.map(
         (item) => ({
           company_id:
@@ -777,7 +844,8 @@ export const waybillsService = {
     } = await supabase
       .from("waybills")
       .update({
-        status: "issued",
+        status:
+          "issued",
         issued_at:
           new Date().toISOString(),
         issued_by:
@@ -1033,7 +1101,8 @@ export const waybillsService = {
     } = await supabase
       .from("loading")
       .update({
-        status: "confirmed",
+        status:
+          "confirmed",
         confirmed_at:
           new Date().toISOString(),
         confirmed_by:
@@ -1078,48 +1147,15 @@ export const waybillsService = {
     }
 
     /*
-     * وضعیت اصلی حواله نیز باید
-     * پس از تأیید بارگیری به
-     * loading_confirmed تبدیل شود.
+     * تغییر وضعیت waybill در اینجا انجام نمی‌شود.
      *
-     * این بخش برای هماهنگی با
-     * waybills.status اجرا می‌شود.
+     * Trigger دیتابیس:
+     * trg_sync_waybill_status_from_loading
+     *
+     * باید با confirmed شدن loading،
+     * وضعیت waybill را به loading_confirmed
+     * تغییر دهد.
      */
-    const {
-      error: waybillUpdateError,
-    } = await supabase
-      .from("waybills")
-      .update({
-        status:
-          "loading_confirmed",
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        "id",
-        waybillId
-      )
-      .eq(
-        "company_id",
-        COMPANY_ID
-      )
-      .is(
-        "deleted_at",
-        null
-      );
-
-    if (waybillUpdateError) {
-      logWaybillError(
-        "UPDATE WAYBILL AFTER LOADING",
-        waybillUpdateError
-      );
-
-      throw new Error(
-        getErrorMessage(
-          waybillUpdateError
-        )
-      );
-    }
 
     const result =
       await this.getById(

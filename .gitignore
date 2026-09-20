@@ -47,3 +47,12 @@ src.zip
 
 # Supabase local temporary files
 supabase/.temp/
+
+# Local backups / temporary working files
+*.bak
+*.backup
+*.mojibake-backup
+.tauri-static-backup-*/
+
+# Tauri build output
+src-tauri/target/

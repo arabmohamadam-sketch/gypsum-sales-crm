@@ -327,7 +327,7 @@ function RecommendationCard({
     <div className="rounded-2xl border border-slate-100 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-100 hover:bg-blue-50/20 hover:shadow-sm">
       <div className="flex flex-col gap-4">
         <Link
-          href={`/customers/${customer.customerId}`}
+          href={`/customers/view?id=${encodeURIComponent(customer.customerId)}`}
           className="flex min-w-0 items-start gap-3"
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-sm font-black text-white">

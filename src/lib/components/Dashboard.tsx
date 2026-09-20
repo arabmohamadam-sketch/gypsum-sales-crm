@@ -687,7 +687,7 @@ export default function Dashboard() {
                 (activity, index) => (
                   <Link
                     key={`${activity.customer_id}-${index}`}
-                    href={`/customers/${activity.customer_id}`}
+                    href={`/customers/view?id=${encodeURIComponent(activity.customer_id)}`}
                     className="flex flex-col gap-4 p-4 transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="flex min-w-0 items-start gap-3">

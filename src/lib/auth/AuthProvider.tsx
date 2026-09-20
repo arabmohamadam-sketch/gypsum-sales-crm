@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   createContext,
@@ -24,9 +24,17 @@ import {
   signOut as signOutUser,
 } from "@/src/lib/auth/auth";
 
+import {
+  getCurrentCompanyContext,
+  type CurrentCompany,
+  type CurrentCompanyProfile,
+} from "@/src/lib/services/current-company";
+
 type AuthContextValue = {
   user: User | null;
   session: Session | null;
+  profile: CurrentCompanyProfile | null;
+  company: CurrentCompany | null;
   loading: boolean;
   isAuthenticated: boolean;
   signOut: () => Promise<void>;
@@ -52,6 +60,14 @@ export function AuthProvider({
   const [session, setSession] =
     useState<Session | null>(null);
 
+  const [profile, setProfile] =
+    useState<CurrentCompanyProfile | null>(
+      null
+    );
+
+  const [company, setCompany] =
+    useState<CurrentCompany | null>(null);
+
   const [loading, setLoading] =
     useState(true);
 
@@ -60,6 +76,38 @@ export function AuthProvider({
       getSupabaseClient();
 
     let mounted = true;
+
+    async function loadCompanyContext() {
+      try {
+        const context =
+          await getCurrentCompanyContext();
+
+        if (!mounted) {
+          return;
+        }
+
+        if (!context) {
+          setProfile(null);
+          setCompany(null);
+          return;
+        }
+
+        setProfile(context.profile);
+        setCompany(context.company);
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+
+        console.error(
+          "FAILED TO LOAD COMPANY CONTEXT:",
+          error
+        );
+
+        setProfile(null);
+        setCompany(null);
+      }
+    }
 
     async function loadInitialSession() {
       try {
@@ -81,6 +129,8 @@ export function AuthProvider({
 
           setSession(null);
           setUser(null);
+          setProfile(null);
+          setCompany(null);
           setLoading(false);
 
           return;
@@ -96,6 +146,17 @@ export function AuthProvider({
           data.session?.user ?? null
         );
 
+        if (data.session) {
+          await loadCompanyContext();
+        } else {
+          setProfile(null);
+          setCompany(null);
+        }
+
+        if (!mounted) {
+          return;
+        }
+
         setLoading(false);
       } catch (error) {
         if (!mounted) {
@@ -109,6 +170,8 @@ export function AuthProvider({
 
         setSession(null);
         setUser(null);
+        setProfile(null);
+        setCompany(null);
         setLoading(false);
       }
     }
@@ -135,7 +198,6 @@ export function AuthProvider({
           );
 
           setSession(nextSession);
-
           setUser(
             nextSession?.user ?? null
           );
@@ -143,6 +205,9 @@ export function AuthProvider({
           if (
             event === "PASSWORD_RECOVERY"
           ) {
+            setProfile(null);
+            setCompany(null);
+
             console.log(
               "Supabase Auth: password recovery started"
             );
@@ -160,6 +225,17 @@ export function AuthProvider({
             console.log(
               "Supabase Auth: user signed in"
             );
+
+            setLoading(true);
+
+            void loadCompanyContext()
+              .finally(() => {
+                if (mounted) {
+                  setLoading(false);
+                }
+              });
+
+            return;
           }
 
           if (
@@ -168,6 +244,17 @@ export function AuthProvider({
             console.log(
               "Supabase Auth: user signed out"
             );
+
+            setProfile(null);
+            setCompany(null);
+            setLoading(false);
+
+            return;
+          }
+
+          if (!nextSession) {
+            setProfile(null);
+            setCompany(null);
           }
         }
       );
@@ -187,7 +274,14 @@ export function AuthProvider({
         "Sign out failed:",
         result.error
       );
+
+      return;
     }
+
+    setProfile(null);
+    setCompany(null);
+    setSession(null);
+    setUser(null);
   }
 
   const value =
@@ -195,10 +289,15 @@ export function AuthProvider({
       () => ({
         user,
         session,
+        profile,
+        company,
         loading,
         isAuthenticated:
           Boolean(
-            user && session
+            user &&
+            session &&
+            profile &&
+            company
           ),
         signOut:
           handleSignOut,
@@ -206,6 +305,8 @@ export function AuthProvider({
       [
         user,
         session,
+        profile,
+        company,
         loading,
       ]
     );

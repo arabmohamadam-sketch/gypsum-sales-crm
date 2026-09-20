@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
 import "./globals.css";
@@ -17,8 +17,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CRM فروش گچ آهوان",
-  description: "سیستم مدیریت فروش و مشتریان گچ آهوان",
+  title: "CRM مدیریت فروش",
+  description:
+    "سامانه جامع مدیریت فروش و مشتریان",
 };
 
 export default function RootLayout({

@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { settingsService } from "@/src/lib/services/settings";
+import { useAuth } from "@/src/lib/auth/AuthProvider";
 import {
   useEffect,
   useState,
   useSyncExternalStore,
 } from "react";
-
 import {
   Activity,
   BarChart3,
@@ -111,6 +112,25 @@ function isMenuActive(
   );
 }
 
+function getRoleDisplayName(
+  roleSlug: string | null | undefined,
+  roleName: string | null | undefined,
+): string {
+  switch (roleSlug) {
+    case "company_admin":
+      return "مدیر کل شرکت";
+
+    case "sales_manager":
+      return "مدیر فروش";
+
+    case "sales_rep":
+      return "کارشناس فروش";
+
+    default:
+      return roleName?.trim() || "بدون نقش";
+  }
+}
+
 /**
  * Sidebar collapse state
  *
@@ -165,6 +185,10 @@ type SidebarContentProps = {
   pathname: string;
   onNavigate?: () => void;
   onToggle?: () => void;
+  userName?: string;
+  roleName?: string;
+  brandName?: string;
+  brandLogo?: string;
 };
 
 function SidebarContent({
@@ -173,6 +197,10 @@ function SidebarContent({
   pathname,
   onNavigate,
   onToggle,
+  userName = "کاربر",
+  roleName = "بدون نقش",
+  brandName = "CRM مدیریت فروش",
+  brandLogo = "/logo.png",
 }: SidebarContentProps) {
   const showCompact = !mobile && collapsed;
 
@@ -197,8 +225,12 @@ function SidebarContent({
               : "gap-3"
           }`}
         >
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-yellow-500 text-lg font-black text-slate-950 shadow-lg shadow-amber-500/20">
-            گچ
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white shadow-lg shadow-black/20">
+            <img
+              src={brandLogo}
+              alt={brandName}
+              className="h-full w-full object-contain"
+            />
           </div>
 
           <div
@@ -209,7 +241,7 @@ function SidebarContent({
             }`}
           >
             <h1 className="truncate text-lg font-black tracking-tight">
-              گچ آهوان
+              {brandName}
             </h1>
 
             <p className="mt-1 whitespace-nowrap text-xs text-slate-400">
@@ -366,7 +398,8 @@ function SidebarContent({
               pathname,
               item.href,
             );
-            const isAI = item.title === "هوش مصنوعی";
+            const isAI =
+              item.title === "هوش مصنوعی";
 
             {/* Compact desktop */}
             if (showCompact) {
@@ -614,27 +647,27 @@ function SidebarContent({
         {showCompact ? (
           <div className="group relative flex justify-center">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-700 to-slate-600 text-sm font-black text-white shadow-sm">
-              م
+              {userName.charAt(0) || "ک"}
             </div>
 
             <div className="pointer-events-none absolute right-full top-1/2 z-50 mr-3 -translate-y-1/2 translate-x-2 whitespace-nowrap rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-white opacity-0 shadow-xl transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100">
-              محمد عرب · کارشناس فروش
+              {userName} · {roleName}
             </div>
           </div>
         ) : (
           <div className="rounded-2xl border border-white/5 bg-white/[0.04] p-4">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-700 to-slate-600 text-sm font-black text-white shadow-sm">
-                م
+                {userName.charAt(0) || "ک"}
               </div>
 
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-white">
-                  محمد عرب
+                  {userName}
                 </p>
 
                 <p className="mt-1 truncate text-xs text-slate-400">
-                  کارشناس فروش
+                  {roleName}
                 </p>
               </div>
             </div>
@@ -657,6 +690,11 @@ function SidebarContent({
 export default function Sidebar() {
   const pathname = usePathname();
 
+  const {
+    profile,
+    company,
+  } = useAuth();
+
   const collapsed = useSyncExternalStore(
     sidebarCollapsedStore.subscribe,
     sidebarCollapsedStore.getSnapshot,
@@ -665,6 +703,54 @@ export default function Sidebar() {
 
   const [mobileOpen, setMobileOpen] =
     useState(false);
+
+  const [roleName, setRoleName] =
+    useState("بدون نقش");
+
+  const userName =
+    profile?.full_name?.trim() ||
+    "کاربر";
+
+  const brandName =
+    company?.branding.display_name?.trim() ||
+    company?.name?.trim() ||
+    "CRM مدیریت فروش";
+
+  const brandLogo =
+    company?.branding.logo_url?.trim() ||
+    "/logo.png";
+
+  useEffect(() => {
+    let active = true;
+
+    settingsService
+      .getOverview()
+      .then((overview) => {
+        if (!active) {
+          return;
+        }
+
+        const primaryRole =
+          overview.roles[0] ?? null;
+
+        setRoleName(
+          getRoleDisplayName(
+            primaryRole?.slug,
+            primaryRole?.name,
+          ),
+        );
+      })
+      .catch((error) => {
+        console.error(
+          "Failed to load current user sidebar role:",
+          error,
+        );
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [profile?.id]);
 
   const handleDesktopToggle = () => {
     const nextValue = !collapsed;
@@ -741,6 +827,10 @@ export default function Sidebar() {
           collapsed={collapsed}
           pathname={pathname}
           onToggle={handleDesktopToggle}
+          userName={userName}
+          roleName={roleName}
+          brandName={brandName}
+          brandLogo={brandLogo}
         />
       </aside>
 
@@ -805,6 +895,10 @@ export default function Sidebar() {
               pathname={pathname}
               mobile
               onNavigate={closeMobile}
+              userName={userName}
+              roleName={roleName}
+              brandName={brandName}
+              brandLogo={brandLogo}
             />
           </div>
         </aside>

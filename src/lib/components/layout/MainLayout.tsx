@@ -1,6 +1,9 @@
-"use client";
+﻿"use client";
 
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
+
+import { useAuth } from "@/src/lib/auth/AuthProvider";
 
 import Sidebar from "./Sidebar";
 import Header from "./Header";
@@ -11,15 +14,77 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const {
+    loading,
+    isAuthenticated,
+    company,
+  } = useAuth();
 
   const isAuthPage =
     pathname === "/login" ||
     pathname === "/reset-password";
 
+  const brandName =
+    company?.branding.display_name?.trim() ||
+    company?.name?.trim() ||
+    "CRM مدیریت فروش";
+
+  useEffect(() => {
+    if (isAuthPage || loading) {
+      return;
+    }
+
+    if (!isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [
+    isAuthPage,
+    loading,
+    isAuthenticated,
+    router,
+  ]);
+
   if (isAuthPage) {
     return (
-      <div dir="rtl" className="min-h-screen bg-slate-50">
+      <div
+        dir="rtl"
+        className="min-h-screen bg-slate-50"
+      >
         {children}
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div
+        dir="rtl"
+        className="flex min-h-screen items-center justify-center bg-slate-50"
+      >
+        <div className="text-center">
+          <div className="mb-3 text-lg font-semibold text-slate-800">
+            {brandName}
+          </div>
+
+          <div className="text-sm text-slate-500">
+            در حال بررسی ورود کاربر...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div
+        dir="rtl"
+        className="flex min-h-screen items-center justify-center bg-slate-50"
+      >
+        <div className="text-sm text-slate-500">
+          در حال انتقال به صفحه ورود...
+        </div>
       </div>
     );
   }

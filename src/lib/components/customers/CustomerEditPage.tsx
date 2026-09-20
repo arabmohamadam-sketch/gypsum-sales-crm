@@ -335,7 +335,7 @@ export default function CustomerEditPage({
     >
       <div className="mb-6">
         <Link
-          href={`/customers/${customerId}`}
+          href={`/customers/view?id=${encodeURIComponent(customerId)}`}
           className="text-blue-600 hover:underline"
         >
           ← بازگشت به پروفایل مشتری
@@ -567,7 +567,7 @@ export default function CustomerEditPage({
 
           <div className="flex flex-col-reverse sm:flex-row gap-3 pt-6 border-t">
             <Link
-              href={`/customers/${customerId}`}
+              href={`/customers/view?id=${encodeURIComponent(customerId)}`}
               className="rounded-xl border px-6 py-3 text-center hover:bg-gray-50"
             >
               انصراف

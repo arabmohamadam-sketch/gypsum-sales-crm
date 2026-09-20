@@ -556,7 +556,7 @@ export default function CustomerTable({
                     {/* Customer */}
                     <td className="px-5 py-4">
                       <Link
-                        href={`/customers/${customer.id}`}
+                        href={`/customers/view?id=${encodeURIComponent(customer.id)}`}
                         className="flex items-center gap-3"
                       >
                         <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-cyan-50 font-black text-blue-700 ring-1 ring-blue-100">
@@ -646,7 +646,7 @@ export default function CustomerTable({
                     {/* Actions */}
                     <td className="px-5 py-4">
                       <Link
-                        href={`/customers/${customer.id}`}
+                        href={`/customers/view?id=${encodeURIComponent(customer.id)}`}
                         className="group/action inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3.5 py-2.5 text-xs font-black text-slate-700 transition hover:bg-blue-600 hover:text-white"
                       >
                         مشاهده
@@ -692,7 +692,7 @@ export default function CustomerTable({
               >
                 <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                   <Link
-                    href={`/customers/${customer.id}`}
+                    href={`/customers/view?id=${encodeURIComponent(customer.id)}`}
                     className="block"
                   >
                     <div className="flex items-start gap-3">

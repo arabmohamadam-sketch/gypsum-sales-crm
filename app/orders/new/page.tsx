@@ -1281,7 +1281,7 @@ function NewOrderForm() {
       window.setTimeout(
         () => {
           router.push(
-            `/orders/${order.id}`
+            `/orders/view?id=${encodeURIComponent(order.id)}`
           );
         },
         500

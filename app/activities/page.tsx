@@ -876,7 +876,7 @@ export default function ActivitiesPage() {
                             <td className="px-5 py-5">
                               <div className="flex items-center justify-end gap-2">
                                 <Link
-                                  href={`/activities/follow-ups/${followUp.id}/edit`}
+                                  href={`/activities/follow-ups/edit?id=${encodeURIComponent(followUp.id)}`}
                                   className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
                                 >
                                   ویرایش
@@ -1045,7 +1045,7 @@ export default function ActivitiesPage() {
 
                         <div className="mt-5 grid grid-cols-2 gap-2">
                           <Link
-                            href={`/activities/follow-ups/${followUp.id}/edit`}
+                            href={`/activities/follow-ups/edit?id=${encodeURIComponent(followUp.id)}`}
                             className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
                           >
                             ویرایش

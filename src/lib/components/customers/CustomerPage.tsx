@@ -59,6 +59,7 @@ import type {
 } from "@/src/lib/services/activities";
 
 import { customersService } from "@/src/lib/services/customers";
+import { settingsService } from "@/src/lib/services/settings";
 
 import type { Customer } from "@/src/lib/types/customer";
 
@@ -949,6 +950,11 @@ export default function CustomerPage({
   ] = useState(false);
 
   const [
+    canManageDelete,
+    setCanManageDelete,
+  ] = useState(false);
+
+  const [
 
     deleteError,
 
@@ -1051,6 +1057,45 @@ export default function CustomerPage({
     };
 
   }, [customerId]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadDeletePermission() {
+      try {
+        const overview =
+          await settingsService.getOverview();
+
+        if (!mounted) {
+          return;
+        }
+
+        const canManage =
+          overview.roles.some(
+            (role) =>
+              role.slug === "company_admin" ||
+              role.slug === "sales_manager"
+          );
+
+        setCanManageDelete(canManage);
+      } catch (err) {
+        console.error(
+          "خطا در بررسی دسترسی حذف مشتری:",
+          err
+        );
+
+        if (mounted) {
+          setCanManageDelete(false);
+        }
+      }
+    }
+
+    void loadDeletePermission();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
 
@@ -1509,10 +1554,8 @@ export default function CustomerPage({
 
   async function handleDeleteCustomer() {
 
-    if (!customer) {
-
+    if (!customer || !canManageDelete) {
       return;
-
     }
 
     try {
@@ -2089,7 +2132,7 @@ export default function CustomerPage({
 
                 <Link
 
-                  href={`/customers/${customer.id}/edit`}
+                  href={`/customers/edit?id=${encodeURIComponent(customer.id)}`}
 
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 transition hover:bg-slate-50"
 
@@ -2101,6 +2144,7 @@ export default function CustomerPage({
 
                 </Link>
 
+                {canManageDelete && (
                 <button
 
                   type="button"
@@ -2130,6 +2174,7 @@ export default function CustomerPage({
                   حذف مشتری
 
                 </button>
+                )}
 
               </div>
 
@@ -2752,7 +2797,7 @@ export default function CustomerPage({
 
                           <Link
 
-                            href={`/orders/${order.id}`}
+                            href={`/orders/view?id=${encodeURIComponent(order.id)}`}
 
                             className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-blue-600 hover:text-white"
 
@@ -3014,7 +3059,7 @@ export default function CustomerPage({
 
                           <Link
 
-                            href={`/activities/calls/${call.id}/edit`}
+                            href={`/activities/calls/edit?id=${encodeURIComponent(call.id)}`}
 
                             className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-blue-600 hover:text-white"
 
@@ -3278,7 +3323,7 @@ export default function CustomerPage({
 
                           <Link
 
-                            href={`/activities/follow-ups/${followUp.id}/edit`}
+                            href={`/activities/follow-ups/edit?id=${encodeURIComponent(followUp.id)}`}
 
                             className="inline-flex items-center gap-1 rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-emerald-600 hover:text-white"
 
@@ -3314,7 +3359,7 @@ export default function CustomerPage({
 
       </div>
 
-      {showDeleteModal && (
+      {showDeleteModal && canManageDelete && (
 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
 

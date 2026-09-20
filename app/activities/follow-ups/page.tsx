@@ -442,7 +442,7 @@ export default function FollowUpsPage() {
                           <td className="px-5 py-4">
                             {followUp.customer?.id ? (
                               <Link
-                                href={`/customers/${followUp.customer.id}`}
+                                href={`/customers/view?id=${encodeURIComponent(followUp.customer.id)}`}
                                 className="group flex items-center gap-3"
                               >
                                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-sm font-black text-blue-700">
@@ -553,7 +553,7 @@ export default function FollowUpsPage() {
                               )}
 
                               <Link
-                                href={`/activities/follow-ups/${followUp.id}/edit`}
+                                href={`/activities/follow-ups/edit?id=${encodeURIComponent(followUp.id)}`}
                                 className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-200"
                               >
                                 ویرایش
@@ -597,7 +597,7 @@ export default function FollowUpsPage() {
                       <div className="flex items-start justify-between gap-3">
                         {followUp.customer?.id ? (
                           <Link
-                            href={`/customers/${followUp.customer.id}`}
+                            href={`/customers/view?id=${encodeURIComponent(followUp.customer.id)}`}
                             className="flex min-w-0 items-center gap-3"
                           >
                             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-sm font-black text-blue-700">
@@ -734,7 +734,7 @@ export default function FollowUpsPage() {
                         )}
 
                         <Link
-                          href={`/activities/follow-ups/${followUp.id}/edit`}
+                          href={`/activities/follow-ups/edit?id=${encodeURIComponent(followUp.id)}`}
                           className="flex-1 rounded-xl bg-gray-100 px-4 py-3 text-center text-xs font-black text-gray-700 transition hover:bg-gray-200"
                         >
                           ویرایش

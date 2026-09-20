@@ -586,6 +586,7 @@ export const customersService = {
         | "is_vip"
         | "is_active"
         | "city_id"
+        | "assigned_user_id"
         | "metadata"
       >
     >
@@ -726,6 +727,18 @@ export const customersService = {
             ).trim()
           : null;
     }
+    if (
+      values.assigned_user_id !==
+      undefined
+    ) {
+      updateData.assigned_user_id =
+        values.assigned_user_id
+          ? String(
+              values.assigned_user_id
+            ).trim()
+          : null;
+    }
+
 
     if (
       values.metadata !==
@@ -924,6 +937,7 @@ export const customersService = {
       new Date().toISOString();
 
     const {
+      data: deletedRows,
       error,
     } = await supabase
       .from("customers")
@@ -942,7 +956,8 @@ export const customersService = {
       .is(
         "deleted_at",
         null
-      );
+      )
+      .select("id");
 
     if (error) {
       logSupabaseError(
@@ -951,6 +966,12 @@ export const customersService = {
       );
 
       throw error;
+    }
+
+    if (!deletedRows || deletedRows.length === 0) {
+      throw new Error(
+        "شما اجازه حذف این مشتری را ندارید."
+      );
     }
   },
 };

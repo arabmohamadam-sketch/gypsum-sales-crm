@@ -703,7 +703,7 @@ export default function CallsPage() {
                               href={
                                 call.customer
                                   ?.id
-                                  ? `/customers/${call.customer.id}`
+                                  ? `/customers/view?id=${encodeURIComponent(call.customer.id)}`
                                   : "#"
                               }
                               className="group flex items-center gap-3"
@@ -795,7 +795,7 @@ export default function CallsPage() {
                           <td className="px-5 py-4">
                             <div className="flex flex-wrap gap-2">
                               <Link
-                                href={`/activities/calls/${call.id}/edit`}
+                                href={`/activities/calls/edit?id=${encodeURIComponent(call.id)}`}
                                 className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-200"
                               >
                                 ویرایش
@@ -842,7 +842,7 @@ export default function CallsPage() {
                           href={
                             call.customer
                               ?.id
-                              ? `/customers/${call.customer.id}`
+                              ? `/customers/view?id=${encodeURIComponent(call.customer.id)}`
                               : "#"
                           }
                           className="flex min-w-0 items-center gap-3"
@@ -959,7 +959,7 @@ export default function CallsPage() {
 
                       <div className="mt-4 flex gap-2">
                         <Link
-                          href={`/activities/calls/${call.id}/edit`}
+                          href={`/activities/calls/edit?id=${encodeURIComponent(call.id)}`}
                           className="flex-1 rounded-xl bg-slate-100 px-4 py-3 text-center text-xs font-black text-slate-700 transition hover:bg-slate-200"
                         >
                           ویرایش

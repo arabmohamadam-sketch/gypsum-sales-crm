@@ -466,7 +466,7 @@ export default function NewCustomerPage() {
       setError(null);
 
       router.push(
-        `/customers/${customer.id}`
+        `/customers/view?id=${encodeURIComponent(customer.id)}`
       );
     } catch (err) {
       setError(

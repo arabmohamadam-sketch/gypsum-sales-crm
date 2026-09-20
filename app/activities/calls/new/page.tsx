@@ -823,7 +823,7 @@ function NewCallForm() {
 
                   <div className="flex flex-wrap gap-2">
                     <Link
-                      href={`/customers/${selectedCustomer.id}`}
+                      href={`/customers/view?id=${encodeURIComponent(selectedCustomer.id)}`}
                       className="rounded-xl bg-blue-50 px-4 py-2.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100"
                     >
                       مشاهده پروفایل
