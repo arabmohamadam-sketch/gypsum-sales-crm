@@ -194,7 +194,7 @@ export default function LoginPage() {
 
                   <div>
                     <h2 className="text-2xl font-black tracking-tight text-white">
-                      گچ آهوان
+                      CRM مدیریت فروش
                     </h2>
 
                     <p className="mt-1 text-sm text-slate-400">
@@ -277,7 +277,7 @@ export default function LoginPage() {
                 </div>
 
                 <h2 className="mt-4 text-2xl font-black text-slate-900">
-                  گچ آهوان
+                  CRM مدیریت فروش
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
@@ -445,7 +445,7 @@ export default function LoginPage() {
               <div className="mt-8 border-t border-slate-100 pt-6">
                 <div className="flex items-center justify-center gap-2 text-xs text-slate-400">
                   <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  سیستم مدیریت فروش گچ آهوان
+                  سیستم مدیریت فروش
                 </div>
 
                 <p className="mt-2 text-center text-[11px] text-slate-400">

@@ -88,10 +88,14 @@ function formatDate(value?: string | null): string {
     date.getDate(),
   );
 
-  return `${new Intl.NumberFormat("fa-IR").format(jy)}/${String(jm).padStart(
-    2,
-    "0",
-  )}/${String(jd).padStart(2, "0")}`;
+  const toPersianDigits = (input: string | number): string =>
+    String(input).replace(/\d/g, (digit) =>
+      String.fromCharCode(0x06f0 + Number(digit)),
+    );
+
+  return `${toPersianDigits(jy)}/${toPersianDigits(
+    String(jm).padStart(2, "0"),
+  )}/${toPersianDigits(String(jd).padStart(2, "0"))}`;
 }
 
 function getTodayGregorianDate(): string {
