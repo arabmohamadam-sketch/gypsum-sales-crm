@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   QueryClient,
   QueryClientProvider,
@@ -61,19 +61,33 @@ function getMonthName(month: number): string {
   return MONTH_NAMES[month - 1] ?? `ماه ${month}`;
 }
 
-function getInitialPeriod(): { year: number; month: number } {
-  const today = gregorianToJalali(new Date());
+function getInitialPeriod(): {
+  year: number;
+  month: number;
+} {
+  const today = gregorianToJalali(
+    new Date(),
+  );
 
   return today
-    ? { year: today.year, month: today.month }
-    : { year: 1405, month: 7 };
+    ? {
+        year: today.year,
+        month: today.month,
+      }
+    : {
+        year: 1405,
+        month: 7,
+      };
 }
 
 function moveMonth(
   year: number,
   month: number,
   delta: number,
-): { year: number; month: number } {
+): {
+  year: number;
+  month: number;
+} {
   let nextYear = year;
   let nextMonth = month + delta;
 
@@ -93,7 +107,9 @@ function moveMonth(
   };
 }
 
-function getErrorMessage(error: unknown): string {
+function getErrorMessage(
+  error: unknown,
+): string {
   let message: string | null = null;
 
   if (error instanceof Error) {
@@ -119,14 +135,30 @@ function getErrorMessage(error: unknown): string {
     return "این بخش فقط برای مدیر منطقه قابل دسترسی است.";
   }
 
-  if (message.includes("Authentication is required")) {
+  if (
+    message.includes(
+      "Authentication is required",
+    )
+  ) {
     return "نشست کاربر معتبر نیست. لطفاً دوباره وارد سامانه شوید.";
+  }
+
+  if (
+    message.includes(
+      "Active user not found",
+    )
+  ) {
+    return "کاربر فعال در سامانه پیدا نشد.";
   }
 
   return message;
 }
 
-function ProgressBar({ rate }: { rate: number | null }) {
+function ProgressBar({
+  rate,
+}: {
+  rate: number | null;
+}) {
   const percentage = Math.max(
     0,
     Math.min(rate ?? 0, 100),
@@ -135,7 +167,9 @@ function ProgressBar({ rate }: { rate: number | null }) {
   return (
     <div className="mt-4">
       <div className="mb-2 flex items-center justify-between gap-3 text-xs">
-        <span className="font-bold text-slate-500">نرخ تحقق</span>
+        <span className="font-bold text-slate-500">
+          نرخ تحقق
+        </span>
         <span className="font-black text-slate-800">
           {formatDecimal(rate ?? 0)}٪
         </span>
@@ -144,7 +178,9 @@ function ProgressBar({ rate }: { rate: number | null }) {
       <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
         <div
           className="h-full rounded-full bg-emerald-500 transition-all duration-500"
-          style={{ width: `${percentage}%` }}
+          style={{
+            width: `${percentage}%`,
+          }}
         />
       </div>
     </div>
@@ -168,17 +204,20 @@ function SummaryCard({
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-sm font-bold text-slate-500">{title}</p>
+          <p className="text-sm font-bold text-slate-500">
+            {title}
+          </p>
 
           <div className="mt-3 flex items-baseline gap-1.5">
             <span className="text-3xl font-black tracking-tight text-slate-900">
               {value}
             </span>
-            {suffix && (
+
+            {suffix ? (
               <span className="text-xs font-bold text-slate-400">
                 {suffix}
               </span>
-            )}
+            ) : null}
           </div>
 
           <p className="mt-1 text-xs leading-5 text-slate-400">
@@ -194,7 +233,11 @@ function SummaryCard({
   );
 }
 
-function RegionCard({ row }: { row: RegionalPlanRow }) {
+function RegionCard({
+  row,
+}: {
+  row: RegionalPlanRow;
+}) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-start justify-between gap-4">
@@ -215,26 +258,42 @@ function RegionCard({ row }: { row: RegionalPlanRow }) {
         </div>
 
         <div className="shrink-0 rounded-2xl bg-emerald-50 px-3 py-2 text-center">
-          <p className="text-[10px] font-bold text-emerald-600">تحقق</p>
+          <p className="text-[10px] font-bold text-emerald-600">
+            تحقق
+          </p>
           <p className="mt-0.5 text-lg font-black text-emerald-700">
-            {formatDecimal(row.achieved_tonnage)}
-            <span className="mr-1 text-[10px]">تن</span>
+            {formatDecimal(
+              row.achieved_tonnage,
+            )}
+            <span className="mr-1 text-[10px]">
+              تن
+            </span>
           </p>
         </div>
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3">
         <div className="rounded-2xl bg-slate-50 p-3">
-          <p className="text-[11px] font-bold text-slate-400">هدف</p>
+          <p className="text-[11px] font-bold text-slate-400">
+            هدف
+          </p>
           <p className="mt-1 text-sm font-black text-slate-900">
-            {formatDecimal(row.target_tonnage)} تن
+            {formatDecimal(
+              row.target_tonnage,
+            )}{" "}
+            تن
           </p>
         </div>
 
         <div className="rounded-2xl bg-slate-50 p-3">
-          <p className="text-[11px] font-bold text-slate-400">باقی‌مانده</p>
+          <p className="text-[11px] font-bold text-slate-400">
+            باقی‌مانده
+          </p>
           <p className="mt-1 text-sm font-black text-slate-900">
-            {formatDecimal(row.remaining_tonnage)} تن
+            {formatDecimal(
+              row.remaining_tonnage,
+            )}{" "}
+            تن
           </p>
         </div>
       </div>
@@ -243,34 +302,69 @@ function RegionCard({ row }: { row: RegionalPlanRow }) {
         <span className="text-[11px] font-bold text-slate-400">
           سفارش‌های بارگیری‌شده
         </span>
+
         <span className="text-sm font-black text-slate-900">
-          {formatNumber(row.loaded_order_count)} سفارش
+          {formatNumber(
+            row.loaded_order_count,
+          )}{" "}
+          سفارش
         </span>
       </div>
 
-      <ProgressBar rate={row.achievement_rate} />
+      <ProgressBar
+        rate={row.achievement_rate}
+      />
     </div>
   );
 }
 
 function RegionalPlanContent() {
-  const initialPeriod = useMemo(
-    () => getInitialPeriod(),
-    [],
-  );
+  const [period, setPeriod] =
+    useState(getInitialPeriod);
 
-  const [year, setYear] = useState(initialPeriod.year);
-  const [month, setMonth] = useState(initialPeriod.month);
+  const planQuery =
+    useQuery<RegionalPlanResult, Error>({
+      queryKey: [
+        "regional-plan",
+        period.year,
+        period.month,
+      ],
+      queryFn: () =>
+        regionalPlanService.getMyPlan(
+          period.year,
+          period.month,
+        ),
+    });
 
-  const planQuery = useQuery<RegionalPlanResult, Error>({
-    queryKey: ["regional-plan", year, month],
-    queryFn: () =>
-      regionalPlanService.getMyPlan(year, month),
-  });
+  const result =
+    planQuery.data ?? null;
 
-  const result = planQuery.data ?? null;
-  const overall = result?.overall ?? null;
-  const periodLabel = `${getMonthName(month)} ${formatYear(year)}`;
+  const overall =
+    result?.overall ?? null;
+
+  const periodLabel = `${getMonthName(
+    period.month,
+  )} ${formatYear(period.year)}`;
+
+  const goToPreviousMonth = () => {
+    setPeriod((current) =>
+      moveMonth(
+        current.year,
+        current.month,
+        -1,
+      ),
+    );
+  };
+
+  const goToNextMonth = () => {
+    setPeriod((current) =>
+      moveMonth(
+        current.year,
+        current.month,
+        1,
+      ),
+    );
+  };
 
   return (
     <main className="space-y-5">
@@ -283,7 +377,9 @@ function RegionalPlanContent() {
             <div>
               <div className="mb-3 flex items-center gap-2 text-blue-200">
                 <Target size={18} />
-                <span className="text-xs font-bold">Plan Manager V2</span>
+                <span className="text-xs font-bold">
+                  Plan Manager V2
+                </span>
               </div>
 
               <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
@@ -298,11 +394,7 @@ function RegionalPlanContent() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  const previous = moveMonth(year, month, -1);
-                  setYear(previous.year);
-                  setMonth(previous.month);
-                }}
+                onClick={goToPreviousMonth}
                 className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-slate-200 hover:bg-white/[0.1]"
                 title="ماه قبل"
                 aria-label="ماه قبل"
@@ -311,17 +403,18 @@ function RegionalPlanContent() {
               </button>
 
               <div className="flex h-11 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4">
-                <CalendarRange size={17} className="text-blue-200" />
-                <span className="text-sm font-black">{periodLabel}</span>
+                <CalendarRange
+                  size={17}
+                  className="text-blue-200"
+                />
+                <span className="text-sm font-black">
+                  {periodLabel}
+                </span>
               </div>
 
               <button
                 type="button"
-                onClick={() => {
-                  const next = moveMonth(year, month, 1);
-                  setYear(next.year);
-                  setMonth(next.month);
-                }}
+                onClick={goToNextMonth}
                 className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-slate-200 hover:bg-white/[0.1]"
                 title="ماه بعد"
                 aria-label="ماه بعد"
@@ -331,13 +424,21 @@ function RegionalPlanContent() {
 
               <button
                 type="button"
-                onClick={() => void planQuery.refetch()}
-                disabled={planQuery.isFetching}
+                onClick={() =>
+                  void planQuery.refetch()
+                }
+                disabled={
+                  planQuery.isFetching
+                }
                 className="inline-flex h-11 items-center gap-2 rounded-xl bg-white px-4 text-sm font-black text-slate-950 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <RefreshCw
                   size={16}
-                  className={planQuery.isFetching ? "animate-spin" : ""}
+                  className={
+                    planQuery.isFetching
+                      ? "animate-spin"
+                      : ""
+                  }
                 />
                 بروزرسانی
               </button>
@@ -349,10 +450,21 @@ function RegionalPlanContent() {
       {planQuery.error ? (
         <section className="rounded-3xl border border-red-200 bg-red-50 p-5 text-red-800">
           <div className="flex items-start gap-3">
-            <AlertCircle size={19} className="mt-0.5 shrink-0" />
+            <AlertCircle
+              size={19}
+              className="mt-0.5 shrink-0"
+            />
+
             <div>
-              <p className="font-black">دریافت برنامه منطقه‌ای ناموفق بود</p>
-              <p className="mt-1 text-sm leading-6 text-red-700">{getErrorMessage(planQuery.error)}</p>
+              <p className="font-black">
+                دریافت برنامه منطقه‌ای ناموفق بود
+              </p>
+
+              <p className="mt-1 text-sm leading-6 text-red-700">
+                {getErrorMessage(
+                  planQuery.error,
+                )}
+              </p>
             </div>
           </div>
         </section>
@@ -368,12 +480,17 @@ function RegionalPlanContent() {
             در حال دریافت عملکرد منطقه‌ای...
           </p>
         </section>
-      ) : result ? (
+      ) : null}
+
+      {planQuery.isSuccess && result ? (
         <>
-          {overall && (
+          {overall ? (
             <section>
               <div className="mb-3 flex items-center gap-2 px-1">
-                <ClipboardCheck size={18} className="text-blue-600" />
+                <ClipboardCheck
+                  size={18}
+                  className="text-blue-600"
+                />
                 <h2 className="text-lg font-black text-slate-900">
                   جمع عملکرد مدیر منطقه
                 </h2>
@@ -382,7 +499,9 @@ function RegionalPlanContent() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <SummaryCard
                   title="هدف کل"
-                  value={formatDecimal(overall.target_tonnage)}
+                  value={formatDecimal(
+                    overall.target_tonnage,
+                  )}
                   suffix="تن"
                   icon={<Target size={21} />}
                   description={`هدف ثبت‌شده برای ${periodLabel}`}
@@ -390,7 +509,9 @@ function RegionalPlanContent() {
 
                 <SummaryCard
                   title="تحقق واقعی"
-                  value={formatDecimal(overall.achieved_tonnage)}
+                  value={formatDecimal(
+                    overall.achieved_tonnage,
+                  )}
                   suffix="تن"
                   icon={<Truck size={21} />}
                   description="تناژ بارگیری و تأییدشده"
@@ -398,7 +519,9 @@ function RegionalPlanContent() {
 
                 <SummaryCard
                   title="باقی‌مانده هدف"
-                  value={formatDecimal(overall.remaining_tonnage)}
+                  value={formatDecimal(
+                    overall.remaining_tonnage,
+                  )}
                   suffix="تن"
                   icon={<Target size={21} />}
                   description="فاصله تا هدف ماه"
@@ -406,14 +529,21 @@ function RegionalPlanContent() {
 
                 <SummaryCard
                   title="نرخ تحقق"
-                  value={formatDecimal(overall.achievement_rate ?? 0)}
+                  value={formatDecimal(
+                    overall.achievement_rate ??
+                      0,
+                  )}
                   suffix="٪"
-                  icon={<CheckCircle2 size={21} />}
-                  description={`${formatNumber(overall.loaded_order_count)} سفارش بارگیری‌شده`}
+                  icon={
+                    <CheckCircle2 size={21} />
+                  }
+                  description={`${formatNumber(
+                    overall.loaded_order_count,
+                  )} سفارش بارگیری‌شده`}
                 />
               </div>
             </section>
-          )}
+          ) : null}
 
           <section>
             <div className="mb-3 flex items-center justify-between gap-3 px-1">
@@ -421,6 +551,7 @@ function RegionalPlanContent() {
                 <h2 className="text-lg font-black text-slate-900">
                   عملکرد مناطق
                 </h2>
+
                 <p className="mt-1 text-xs text-slate-400">
                   محاسبه بر اساس تاریخ واقعی بارگیری تأییدشده
                 </p>
@@ -429,9 +560,17 @@ function RegionalPlanContent() {
 
             {result.regions.length > 0 ? (
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                {result.regions.map((row) => (
-                  <RegionCard key={row.region_id} row={row} />
-                ))}
+                {result.regions.map(
+                  (row: RegionalPlanRow) => (
+                    <RegionCard
+                      key={
+                        row.region_id ??
+                        row.region_name
+                      }
+                      row={row}
+                    />
+                  ),
+                )}
               </div>
             ) : (
               <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center">
@@ -439,6 +578,7 @@ function RegionalPlanContent() {
                   size={28}
                   className="mx-auto text-slate-300"
                 />
+
                 <p className="mt-4 font-bold text-slate-600">
                   منطقه‌ای برای این مدیر ثبت نشده است.
                 </p>
@@ -452,10 +592,12 @@ function RegionalPlanContent() {
                 className="mt-0.5 shrink-0 text-blue-600"
                 size={18}
               />
+
               <div>
                 <p className="text-sm font-black text-slate-800">
                   مبنای محاسبه
                 </p>
+
                 <p className="mt-1 text-xs leading-6 text-slate-600">
                   فقط آیتم‌های بارنامه‌ای که وضعیت بارنامه آن‌ها «بارگیری تأییدشده» و وضعیت بارگیری آن‌ها «تأییدشده» است در تحقق ماه لحاظ می‌شوند. تاریخ مبنای گزارش، تاریخ واقعی بارگیری است.
                 </p>
@@ -468,12 +610,14 @@ function RegionalPlanContent() {
   );
 }
 
-
 export default function RegionalPlanPage() {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] =
+    useState(() => new QueryClient());
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider
+      client={queryClient}
+    >
       <RegionalPlanContent />
     </QueryClientProvider>
   );

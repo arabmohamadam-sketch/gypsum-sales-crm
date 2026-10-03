@@ -68,6 +68,11 @@ const menus: MenuItem[] = [
     icon: Target,
   },
   {
+    title: "برنامه منطقه‌ای",
+    href: "/regional-plan",
+    icon: Target,
+  },
+  {
     title: "گزارش‌ها",
     href: "/reports",
     icon: BarChart3,
@@ -125,6 +130,9 @@ function getRoleDisplayName(
 
     case "sales_rep":
       return "کارشناس فروش";
+
+    case "regional_manager":
+      return "مدیر منطقه";
 
     default:
       return roleName?.trim() || "بدون نقش";
@@ -189,6 +197,7 @@ type SidebarContentProps = {
   roleName?: string;
   brandName?: string;
   brandLogo?: string;
+  showRegionalPlan?: boolean;
 };
 
 function SidebarContent({
@@ -201,6 +210,7 @@ function SidebarContent({
   roleName = "بدون نقش",
   brandName = "CRM مدیریت فروش",
   brandLogo = "/logo.png",
+  showRegionalPlan = false,
 }: SidebarContentProps) {
   const showCompact = !mobile && collapsed;
 
@@ -392,7 +402,13 @@ function SidebarContent({
         </div>
 
         <nav className="space-y-1.5">
-          {menus.map((item) => {
+          {(showRegionalPlan
+          ? menus
+          : menus.filter(
+              (item) =>
+                item.href !== "/regional-plan",
+            )
+        ).map((item) => {
             const Icon = item.icon;
             const active = isMenuActive(
               pathname,
@@ -707,6 +723,9 @@ export default function Sidebar() {
   const [roleName, setRoleName] =
     useState("بدون نقش");
 
+  const [isRegionalManager, setIsRegionalManager] =
+    useState(false);
+
   const userName =
     profile?.full_name?.trim() ||
     "کاربر";
@@ -739,12 +758,21 @@ export default function Sidebar() {
             primaryRole?.name,
           ),
         );
+
+        setIsRegionalManager(
+          overview.roles.some(
+            (role) =>
+              role.slug === "regional_manager",
+          ),
+        );
       })
       .catch((error) => {
         console.error(
           "Failed to load current user sidebar role:",
           error,
         );
+
+        setIsRegionalManager(false);
       });
 
     return () => {
@@ -831,6 +859,7 @@ export default function Sidebar() {
           roleName={roleName}
           brandName={brandName}
           brandLogo={brandLogo}
+          showRegionalPlan={isRegionalManager}
         />
       </aside>
 
@@ -899,6 +928,7 @@ export default function Sidebar() {
               roleName={roleName}
               brandName={brandName}
               brandLogo={brandLogo}
+              showRegionalPlan={isRegionalManager}
             />
           </div>
         </aside>
