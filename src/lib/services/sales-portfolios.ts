@@ -41,6 +41,24 @@ export interface SalesPortfolioManagementData {
   managers: SalesPortfolioManager[];
 }
 
+export interface SalesPortfolioAssignmentHistory {
+  id: string;
+  plan_area_id: string;
+  manager_user_id: string;
+  manager_name: string;
+  manager_role_name: string | null;
+  effective_from: string;
+  effective_to: string | null;
+  assigned_by: string;
+  assigned_by_name: string;
+  assigned_at: string;
+  ended_by: string | null;
+  ended_by_name: string | null;
+  ended_at: string | null;
+  assignment_reason: string;
+  end_reason: string | null;
+}
+
 interface UserRow {
   id: string;
   full_name: string;
@@ -78,6 +96,20 @@ interface AssignmentRow {
   effective_from: string;
   effective_to: string | null;
   assignment_reason: string;
+}
+
+interface AssignmentHistoryRow {
+  id: string;
+  plan_area_id: string;
+  manager_user_id: string;
+  effective_from: string;
+  effective_to: string | null;
+  assigned_by: string;
+  assigned_at: string;
+  ended_by: string | null;
+  ended_at: string | null;
+  assignment_reason: string;
+  end_reason: string | null;
 }
 
 interface UserLookupRow {
@@ -501,6 +533,166 @@ export const salesPortfoliosService = {
       portfolios,
       managers,
     };
+  },
+
+  async getAssignmentHistory(
+    portfolioId: string
+  ): Promise<SalesPortfolioAssignmentHistory[]> {
+    const supabase = getSupabaseClient();
+
+    if (!portfolioId) {
+      throw new Error("سبد فروش انتخاب نشده است.");
+    }
+
+    const {
+      data: planArea,
+      error: planAreaError,
+    } = await supabase
+      .from("v2_plan_areas")
+      .select("id, sales_portfolio_id")
+      .eq("sales_portfolio_id", portfolioId)
+      .eq("area_type", "portfolio")
+      .eq("is_active", true)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (planAreaError) {
+      throw new Error(getErrorMessage(planAreaError));
+    }
+
+    if (!planArea?.id) {
+      throw new Error("Plan Area متناظر با این سبد فروش پیدا نشد.");
+    }
+
+    const {
+      data: historyRows,
+      error: historyError,
+    } = await supabase
+      .from("v2_plan_area_manager_assignment_history")
+      .select(
+        `
+          id,
+          plan_area_id,
+          manager_user_id,
+          effective_from,
+          effective_to,
+          assigned_by,
+          assigned_at,
+          ended_by,
+          ended_at,
+          assignment_reason,
+          end_reason
+        `
+      )
+      .eq("plan_area_id", planArea.id)
+      .order("effective_from", {
+        ascending: false,
+      })
+      .order("created_at", {
+        ascending: false,
+      });
+
+    if (historyError) {
+      throw new Error(getErrorMessage(historyError));
+    }
+
+    const rows = (historyRows ?? []) as AssignmentHistoryRow[];
+
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const userIds = Array.from(
+      new Set(
+        rows.flatMap((row) =>
+          [row.manager_user_id, row.assigned_by, row.ended_by].filter(
+            (id): id is string => Boolean(id)
+          )
+        )
+      )
+    );
+
+    const {
+      data: users,
+      error: usersError,
+    } = await supabase
+      .from("users")
+      .select("id, full_name, email")
+      .in("id", userIds)
+      .is("deleted_at", null);
+
+    if (usersError) {
+      throw new Error(getErrorMessage(usersError));
+    }
+
+    const userLookup = new Map<string, UserLookupRow>();
+
+    for (const user of (users ?? []) as UserLookupRow[]) {
+      userLookup.set(user.id, user);
+    }
+
+    const roleUserIds = Array.from(
+      new Set(rows.map((row) => row.manager_user_id))
+    );
+
+    const managerRoleByUserId = new Map<string, string>();
+
+    if (roleUserIds.length > 0) {
+      const {
+        data: managerRoles,
+        error: managerRolesError,
+      } = await supabase
+        .from("user_roles")
+        .select(
+          `
+            user_id,
+            role:roles (
+              name,
+              slug
+            )
+          `
+        )
+        .in("user_id", roleUserIds)
+        .is("deleted_at", null);
+
+      if (managerRolesError) {
+        throw new Error(getErrorMessage(managerRolesError));
+      }
+
+      for (const row of (managerRoles ?? []) as UserRoleRow[]) {
+        const role = getSingleRole(row.role);
+        if (!role) {
+          continue;
+        }
+
+        if (role.slug === "sales_manager" || role.slug === "regional_manager") {
+          managerRoleByUserId.set(row.user_id, role.name);
+        }
+      }
+    }
+
+    return rows.map((row) => ({
+      id: row.id,
+      plan_area_id: row.plan_area_id,
+      manager_user_id: row.manager_user_id,
+      manager_name:
+        userLookup.get(row.manager_user_id)?.full_name ?? "کاربر نامشخص",
+      manager_role_name:
+        managerRoleByUserId.get(row.manager_user_id) ?? null,
+      effective_from: row.effective_from,
+      effective_to: row.effective_to,
+      assigned_by: row.assigned_by,
+      assigned_by_name:
+        userLookup.get(row.assigned_by)?.full_name ?? "کاربر نامشخص",
+      assigned_at: row.assigned_at,
+      ended_by: row.ended_by,
+      ended_by_name: row.ended_by
+        ? userLookup.get(row.ended_by)?.full_name ?? "کاربر نامشخص"
+        : null,
+      ended_at: row.ended_at,
+      assignment_reason: row.assignment_reason,
+      end_reason: row.end_reason,
+    }));
   },
 
   async assignManager(

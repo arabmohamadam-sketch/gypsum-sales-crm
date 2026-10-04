@@ -6,6 +6,7 @@ import {
   ArrowRight,
   BriefcaseBusiness,
   CheckCircle2,
+  Clock3,
   ChevronDown,
   Filter,
   Loader2,
@@ -18,6 +19,7 @@ import {
 import {
   salesPortfoliosService,
   type ManagedSalesPortfolio,
+  type SalesPortfolioAssignmentHistory,
   type SalesPortfolioKind,
   type SalesPortfolioManager,
 } from "@/src/lib/services/sales-portfolios";
@@ -134,6 +136,15 @@ export default function SalesPortfoliosManagementPage() {
   const [pendingManagers, setPendingManagers] =
     useState<Record<string, string>>({});
 
+  const [historyPortfolio, setHistoryPortfolio] =
+    useState<ManagedSalesPortfolio | null>(null);
+  const [historyRows, setHistoryRows] =
+    useState<SalesPortfolioAssignmentHistory[]>([]);
+  const [historyLoading, setHistoryLoading] =
+    useState(false);
+  const [historyError, setHistoryError] =
+    useState<string | null>(null);
+
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
@@ -211,6 +222,42 @@ export default function SalesPortfoliosManagementPage() {
 
   const unassignedCount =
     portfolios.length - assignedCount;
+
+  async function handleOpenHistory(
+    portfolio: ManagedSalesPortfolio
+  ) {
+    try {
+      setHistoryPortfolio(portfolio);
+      setHistoryRows([]);
+      setHistoryError(null);
+      setHistoryLoading(true);
+
+      const rows =
+        await salesPortfoliosService.getAssignmentHistory(
+          portfolio.id
+        );
+
+      setHistoryRows(rows);
+    } catch (err) {
+      console.error(
+        "Failed to load sales portfolio assignment history:",
+        err
+      );
+      setHistoryError(getErrorMessage(err));
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  function closeHistory() {
+    if (historyLoading) {
+      return;
+    }
+
+    setHistoryPortfolio(null);
+    setHistoryRows([]);
+    setHistoryError(null);
+  }
 
   async function handleAssign(
     portfolio: ManagedSalesPortfolio
@@ -658,30 +705,43 @@ export default function SalesPortfoliosManagementPage() {
                     </td>
 
                     <td className="px-5 py-5 text-center align-top">
-                      <button
-                        type="button"
-                        disabled={
-                          isSaving ||
-                          isUnchanged ||
-                          !portfolio.plan_area_id
-                        }
-                        onClick={() => {
-                          void handleAssign(portfolio);
-                        }}
-                        className="inline-flex min-w-[110px] items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
-                      >
-                        {isSaving ? (
-                          <Loader2
-                            size={15}
-                            className="animate-spin"
-                          />
-                        ) : (
-                          <CheckCircle2 size={15} />
-                        )}
-                        {isSaving
-                          ? "در حال ثبت"
-                          : "ثبت واگذاری"}
-                      </button>
+                      <div className="flex flex-col items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={
+                            isSaving ||
+                            isUnchanged ||
+                            !portfolio.plan_area_id
+                          }
+                          onClick={() => {
+                            void handleAssign(portfolio);
+                          }}
+                          className="inline-flex min-w-[130px] items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+                        >
+                          {isSaving ? (
+                            <Loader2
+                              size={15}
+                              className="animate-spin"
+                            />
+                          ) : (
+                            <CheckCircle2 size={15} />
+                          )}
+                          {isSaving
+                            ? "در حال ثبت"
+                            : "ثبت واگذاری"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void handleOpenHistory(portfolio);
+                          }}
+                          className="inline-flex min-w-[130px] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                        >
+                          <Clock3 size={15} />
+                          سوابق واگذاری
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -698,6 +758,169 @@ export default function SalesPortfoliosManagementPage() {
           </div>
         )}
       </section>
+
+      {historyPortfolio && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeHistory();
+            }
+          }}
+        >
+          <section
+            dir="rtl"
+            className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="portfolio-history-title"
+          >
+            <div className="flex items-center justify-between gap-4 border-b border-slate-200 p-5 sm:p-6">
+              <div>
+                <div className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700">
+                  <Clock3 size={15} />
+                  تاریخچه سازمانی
+                </div>
+                <h2
+                  id="portfolio-history-title"
+                  className="mt-3 text-xl font-black text-slate-900"
+                >
+                  سوابق واگذاری «{historyPortfolio.name}»
+                </h2>
+                <p className="mt-1 text-xs leading-6 text-slate-500">
+                  سوابق قبلی حذف نمی‌شوند و هر مسئولیت با بازه زمانی مستقل نگهداری می‌شود.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeHistory}
+                disabled={historyLoading}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="بستن"
+              >
+                <span className="text-xl leading-none">×</span>
+              </button>
+            </div>
+
+            <div className="max-h-[62vh] overflow-y-auto p-5 sm:p-6">
+              {historyLoading ? (
+                <div className="flex min-h-[240px] items-center justify-center">
+                  <div className="text-center">
+                    <Loader2
+                      size={26}
+                      className="mx-auto animate-spin text-blue-600"
+                    />
+                    <p className="mt-3 text-sm font-bold text-slate-600">
+                      در حال دریافت سوابق...
+                    </p>
+                  </div>
+                </div>
+              ) : historyError ? (
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-bold leading-7 text-red-700">
+                  {historyError}
+                </div>
+              ) : historyRows.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center">
+                  <Clock3 size={24} className="mx-auto text-slate-400" />
+                  <p className="mt-3 text-sm font-black text-slate-700">
+                    هنوز سابقه‌ای برای این پورتفولیو ثبت نشده است.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                  <table className="min-w-[1050px] w-full border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50">
+                        <th className="px-4 py-3 text-right text-xs font-black text-slate-500">
+                          مدیر مسئول
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-black text-slate-500">
+                          بازه مسئولیت
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-black text-slate-500">
+                          علت واگذاری
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-black text-slate-500">
+                          ثبت‌کننده
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-black text-slate-500">
+                          پایان‌دهنده / علت پایان
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyRows.map((history) => (
+                        <tr
+                          key={history.id}
+                          className="border-b border-slate-100 last:border-b-0"
+                        >
+                          <td className="px-4 py-4 align-top">
+                            <p className="text-sm font-black text-slate-800">
+                              {history.manager_name}
+                            </p>
+                            {history.manager_role_name && (
+                              <p className="mt-1 text-[11px] font-bold text-slate-400">
+                                {history.manager_role_name}
+                              </p>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 align-top">
+                            <p className="text-sm font-bold text-slate-700">
+                              {formatJalaliDate(history.effective_from)}
+                              <span className="mx-1 text-slate-300">→</span>
+                              {history.effective_to
+                                ? formatJalaliDate(history.effective_to)
+                                : "در حال مسئولیت"}
+                            </p>
+                            <p className="mt-1 text-[11px] font-medium text-slate-400">
+                              ثبت: {new Date(history.assigned_at).toLocaleString("fa-IR")}
+                            </p>
+                          </td>
+                          <td className="max-w-[260px] px-4 py-4 align-top">
+                            <p className="text-xs font-medium leading-6 text-slate-600">
+                              {history.assignment_reason}
+                            </p>
+                          </td>
+                          <td className="px-4 py-4 align-top">
+                            <p className="text-sm font-bold text-slate-700">
+                              {history.assigned_by_name}
+                            </p>
+                          </td>
+                          <td className="px-4 py-4 align-top">
+                            {history.ended_by_name ? (
+                              <div>
+                                <p className="text-sm font-bold text-slate-700">
+                                  {history.ended_by_name}
+                                </p>
+                                {history.end_reason && (
+                                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                                    {history.end_reason}
+                                  </p>
+                                )}
+                                {history.ended_at && (
+                                  <p className="mt-1 text-[11px] font-medium text-slate-400">
+                                    ثبت پایان: {new Date(history.ended_at).toLocaleString("fa-IR")}
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="inline-flex rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                                سابقه جاری
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
 
       <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5">
         <div className="flex items-start gap-3">
