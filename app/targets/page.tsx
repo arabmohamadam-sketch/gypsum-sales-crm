@@ -234,7 +234,7 @@ export default function TargetsPage() {
 
   const canManageTargets =
     !permissionsLoading &&
-    hasPermission("targets.write");
+    hasPermission("targets.manage");
 
   const {
     targets,
