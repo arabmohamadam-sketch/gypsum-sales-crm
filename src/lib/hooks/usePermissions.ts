@@ -20,6 +20,9 @@ interface UsePermissionsResult {
   hasPermission: (
     permissionSlug: string
   ) => boolean;
+  hasAnyPermission: (
+    permissionSlugs: readonly string[]
+  ) => boolean;
   refresh: () => Promise<void>;
 }
 
@@ -107,12 +110,24 @@ export function usePermissions(): UsePermissionsResult {
     [permissions]
   );
 
+  const hasAnyPermission = useCallback(
+    (
+      permissionSlugs: readonly string[]
+    ) =>
+      permissionsService.hasAnyPermission(
+        permissions,
+        permissionSlugs
+      ),
+    [permissions]
+  );
+
   return {
     permissions,
     loading,
     error,
     isAdmin,
     hasPermission,
+    hasAnyPermission,
     refresh,
   };
 }
