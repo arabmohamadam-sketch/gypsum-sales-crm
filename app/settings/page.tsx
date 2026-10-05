@@ -1,22 +1,37 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Building2,
   CheckCircle2,
   Loader2,
+  Palette,
   RefreshCw,
-  Settings as SettingsIcon,
   ShieldCheck,
+  Trash2,
+  Upload,
   UserRound,
+  Settings as SettingsIcon,
+  Save,
 } from "lucide-react";
 
+import { useAuth } from "@/src/lib/auth/AuthProvider";
 import { usePermissions } from "@/src/lib/hooks/usePermissions";
 import {
   settingsService,
   type SettingsOverview,
 } from "@/src/lib/services/settings";
+import {
+  companyBrandingService,
+} from "@/src/lib/services/company-branding";
+import type { CurrentCompany } from "@/src/lib/services/current-company";
 
 function formatSettingValue(value: Record<string, unknown>): string {
   if (Object.keys(value).length === 0) {
@@ -42,7 +57,348 @@ function getErrorMessage(error: unknown): string {
     return error.message;
   }
 
-  return "خطا در دریافت تنظیمات.";
+  return "خطا در دریافت یا ذخیره تنظیمات.";
+}
+
+const MAX_LOGO_SIZE = 2 * 1024 * 1024;
+const ALLOWED_LOGO_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+]);
+
+
+type CompanyBrandingSectionProps = {
+  authCompany: CurrentCompany | null;
+  canManageSettings: boolean;
+  refreshCompany: () => Promise<void>;
+  loadSettings: () => Promise<void>;
+};
+
+function CompanyBrandingSection({
+  authCompany,
+  canManageSettings,
+  refreshCompany,
+  loadSettings,
+}: CompanyBrandingSectionProps) {
+  const [brandingError, setBrandingError] = useState<string | null>(null);
+  const [brandingSuccess, setBrandingSuccess] = useState<string | null>(null);
+  const [brandingSaving, setBrandingSaving] = useState(false);
+  const [displayName, setDisplayName] = useState(
+    authCompany?.branding.display_name?.trim() ||
+      authCompany?.name?.trim() ||
+      ""
+  );
+  const [selectedLogo, setSelectedLogo] = useState<File | null>(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const previewObjectUrlRef = useRef<string | null>(null);
+
+  const currentLogoUrl =
+    authCompany?.branding.logo_url?.trim() || "/logo.png";
+  const effectiveLogoPreviewUrl = logoPreviewUrl || currentLogoUrl;
+
+  useEffect(() => {
+    return () => {
+      if (previewObjectUrlRef.current) {
+        URL.revokeObjectURL(previewObjectUrlRef.current);
+        previewObjectUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  function clearPreviewObjectUrl() {
+    if (previewObjectUrlRef.current) {
+      URL.revokeObjectURL(previewObjectUrlRef.current);
+      previewObjectUrlRef.current = null;
+    }
+  }
+
+  function handleLogoSelected(file: File | null) {
+    setBrandingError(null);
+    setBrandingSuccess(null);
+    clearPreviewObjectUrl();
+
+    if (!file) {
+      setSelectedLogo(null);
+      setLogoPreviewUrl(null);
+      return;
+    }
+
+    if (!ALLOWED_LOGO_TYPES.has(file.type)) {
+      setSelectedLogo(null);
+      setLogoPreviewUrl(null);
+      setBrandingError("فرمت لوگو باید PNG، JPG یا WEBP باشد.");
+      return;
+    }
+
+    if (file.size <= 0) {
+      setSelectedLogo(null);
+      setLogoPreviewUrl(null);
+      setBrandingError("فایل لوگو خالی است.");
+      return;
+    }
+
+    if (file.size > MAX_LOGO_SIZE) {
+      setSelectedLogo(null);
+      setLogoPreviewUrl(null);
+      setBrandingError("حجم فایل لوگو نباید بیشتر از ۲ مگابایت باشد.");
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(file);
+    previewObjectUrlRef.current = objectUrl;
+    setSelectedLogo(file);
+    setLogoPreviewUrl(objectUrl);
+  }
+
+  async function handleBrandingSave() {
+    if (!canManageSettings) {
+      return;
+    }
+
+    try {
+      setBrandingSaving(true);
+      setBrandingError(null);
+      setBrandingSuccess(null);
+
+      const trimmedDisplayName = displayName.trim();
+
+      if (!trimmedDisplayName) {
+        throw new Error("نام نمایشی شرکت نمی‌تواند خالی باشد.");
+      }
+
+      let uploadedLogoPath: string | undefined;
+
+      if (selectedLogo) {
+        uploadedLogoPath =
+          await companyBrandingService.uploadLogo(selectedLogo);
+      }
+
+      await companyBrandingService.updateBranding({
+        displayName: trimmedDisplayName,
+        ...(uploadedLogoPath
+          ? { logoPath: uploadedLogoPath }
+          : {}),
+      });
+
+      await refreshCompany();
+      await loadSettings();
+
+      clearPreviewObjectUrl();
+      setSelectedLogo(null);
+      setLogoPreviewUrl(null);
+      setBrandingSuccess("هویت بصری شرکت با موفقیت ذخیره شد.");
+    } catch (err) {
+      console.error("Failed to save company branding:", err);
+      setBrandingError(getErrorMessage(err));
+    } finally {
+      setBrandingSaving(false);
+    }
+  }
+
+  async function handleLogoRemove() {
+    if (!canManageSettings || !authCompany?.branding.logo_url) {
+      return;
+    }
+
+    try {
+      setBrandingSaving(true);
+      setBrandingError(null);
+      setBrandingSuccess(null);
+
+      await companyBrandingService.removeLogo();
+      await refreshCompany();
+      await loadSettings();
+
+      clearPreviewObjectUrl();
+      setSelectedLogo(null);
+      setLogoPreviewUrl(null);
+      setBrandingSuccess("لوگوی اختصاصی شرکت حذف شد و لوگوی پیش‌فرض فعال شد.");
+    } catch (err) {
+      console.error("Failed to remove company branding logo:", err);
+      setBrandingError(getErrorMessage(err));
+    } finally {
+      setBrandingSaving(false);
+    }
+  }
+
+  return (
+    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-600">
+            <Palette size={21} />
+          </div>
+
+          <div>
+            <h2 className="text-lg font-black text-slate-900">
+              هویت بصری شرکت
+            </h2>
+
+            <p className="mt-1 max-w-2xl text-xs leading-6 text-slate-400">
+              نام نمایشی و لوگوی اختصاصی شرکت از این بخش مدیریت می‌شود و در
+              کل نرم‌افزارهای متصل به همین شرکت نمایش داده خواهد شد.
+            </p>
+          </div>
+        </div>
+
+        {!canManageSettings && (
+          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-500">
+            فقط مشاهده
+          </span>
+        )}
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+          <div className="mx-auto flex h-40 w-40 items-center justify-center overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div
+              role="img"
+              aria-label="پیش‌نمایش لوگوی شرکت"
+              className="h-full w-full bg-contain bg-center bg-no-repeat"
+              style={{
+                backgroundImage: `url("${effectiveLogoPreviewUrl.replace(/"/g, "%22")}")`,
+              }}
+            />
+          </div>
+
+          {canManageSettings && (
+            <div className="mt-4 space-y-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={brandingSaving}
+              >
+                <Upload size={15} />
+                انتخاب لوگو
+              </button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(event) => {
+                  handleLogoSelected(event.target.files?.[0] ?? null);
+                  event.currentTarget.value = "";
+                }}
+              />
+
+              {authCompany?.branding.logo_url &&
+                authCompany.branding.logo_url !== "/logo.png" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleLogoRemove();
+                    }}
+                    className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-xs font-bold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={brandingSaving}
+                  >
+                    <Trash2 size={15} />
+                    حذف لوگوی اختصاصی
+                  </button>
+                )}
+            </div>
+          )}
+        </div>
+
+        <div className="min-w-0">
+          <div className="grid gap-5 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label
+                htmlFor="company-display-name"
+                className="text-xs font-bold text-slate-500"
+              >
+                نام نمایشی شرکت
+              </label>
+
+              <input
+                id="company-display-name"
+                value={displayName}
+                onChange={(event) => {
+                  setDisplayName(event.target.value);
+                  setBrandingError(null);
+                  setBrandingSuccess(null);
+                }}
+                disabled={!canManageSettings || brandingSaving}
+                maxLength={160}
+                className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-800 outline-none transition placeholder:text-slate-300 focus:border-blue-400 focus:ring-4 focus:ring-blue-50 disabled:cursor-not-allowed disabled:bg-slate-50"
+                placeholder="نام نمایشی شرکت"
+              />
+
+              <p className="mt-2 text-[11px] leading-5 text-slate-400">
+                این نام در Header، Sidebar، عنوان صفحات و سایر بخش‌های برندینگ
+                استفاده می‌شود.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[11px] font-bold text-slate-400">
+                لوگوی فعلی
+              </p>
+
+              <p className="mt-2 text-sm font-black text-slate-700">
+                {authCompany?.branding.logo_url === "/logo.png"
+                  ? "لوگوی پیش‌فرض سیستم"
+                  : "لوگوی اختصاصی شرکت"}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[11px] font-bold text-slate-400">
+                محدودیت فایل
+              </p>
+
+              <p className="mt-2 text-sm font-black text-slate-700">
+                PNG / JPG / WEBP — حداکثر ۲ مگابایت
+              </p>
+            </div>
+          </div>
+
+          {(brandingError || brandingSuccess) && (
+            <div
+              className={`mt-5 rounded-2xl border p-4 text-sm font-medium ${
+                brandingError
+                  ? "border-red-200 bg-red-50 text-red-700"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
+              }`}
+              role="alert"
+            >
+              {brandingError || brandingSuccess}
+            </div>
+          )}
+
+          {canManageSettings && (
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  void handleBrandingSave();
+                }}
+                disabled={brandingSaving}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {brandingSaving ? (
+                  <Loader2 size={17} className="animate-spin" />
+                ) : (
+                  <Save size={17} />
+                )}
+                ذخیره هویت بصری
+              </button>
+
+              {selectedLogo && (
+                <span className="rounded-xl bg-violet-50 px-3 py-2 text-xs font-bold text-violet-700">
+                  لوگوی جدید انتخاب شده و با ذخیره ارسال می‌شود.
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 export default function SettingsPage() {
@@ -51,6 +407,11 @@ export default function SettingsPage() {
     error: permissionsError,
     hasPermission,
   } = usePermissions();
+
+  const {
+    company: authCompany,
+    refreshCompany,
+  } = useAuth();
 
   const [overview, setOverview] = useState<SettingsOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -188,7 +549,7 @@ export default function SettingsPage() {
             </h1>
 
             <p className="mt-2 text-sm leading-7 text-slate-500">
-              مدیریت پروفایل، نقش‌ها و تنظیمات شرکت.
+              مدیریت پروفایل، هویت بصری، نقش‌ها و تنظیمات شرکت.
             </p>
           </div>
 
@@ -380,6 +741,14 @@ export default function SettingsPage() {
           </div>
         </section>
       </div>
+
+      <CompanyBrandingSection
+        key={authCompany?.id ?? "no-company"}
+        authCompany={authCompany}
+        canManageSettings={canManageSettings}
+        refreshCompany={refreshCompany}
+        loadSettings={loadSettings}
+      />
 
       {/* Roles & access */}
       {canReadUsers && (

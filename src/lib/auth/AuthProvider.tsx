@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -37,6 +38,7 @@ type AuthContextValue = {
   company: CurrentCompany | null;
   loading: boolean;
   isAuthenticated: boolean;
+  refreshCompany: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -70,6 +72,23 @@ export function AuthProvider({
 
   const [loading, setLoading] =
     useState(true);
+
+  const refreshCompany = useCallback(
+    async () => {
+      const context =
+        await getCurrentCompanyContext();
+
+      if (!context) {
+        setProfile(null);
+        setCompany(null);
+        return;
+      }
+
+      setProfile(context.profile);
+      setCompany(context.company);
+    },
+    []
+  );
 
   useEffect(() => {
     const supabase =
@@ -299,6 +318,7 @@ export function AuthProvider({
             profile &&
             company
           ),
+        refreshCompany,
         signOut:
           handleSignOut,
       }),
@@ -308,6 +328,7 @@ export function AuthProvider({
         profile,
         company,
         loading,
+        refreshCompany,
       ]
     );
 
@@ -320,15 +341,13 @@ export function AuthProvider({
   );
 }
 
-export function useAuth(): AuthContextValue {
+export function useAuth() {
   const context =
-    useContext(
-      AuthContext
-    );
+    useContext(AuthContext);
 
   if (!context) {
     throw new Error(
-      "useAuth must be used inside an AuthProvider"
+      "useAuth must be used inside AuthProvider"
     );
   }
 

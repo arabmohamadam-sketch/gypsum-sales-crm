@@ -16,6 +16,7 @@ export interface CompanyBranding {
   display_name: string;
   logo_url: string;
   primary_color?: string;
+  secondary_color?: string;
 }
 
 export interface CurrentCompany {
@@ -39,7 +40,7 @@ const DEFAULT_BRANDING: CompanyBranding = {
   logo_url: "/logo.png",
 };
 
-function parseBranding(
+function parseLegacyBranding(
   metadata: Record<string, unknown> | null
 ): CompanyBranding {
   const branding =
@@ -53,23 +54,53 @@ function parseBranding(
     display_name:
       typeof branding.display_name === "string" &&
       branding.display_name.trim()
-        ? branding.display_name
+        ? branding.display_name.trim()
         : DEFAULT_BRANDING.display_name,
 
     logo_url:
       typeof branding.logo_url === "string" &&
       branding.logo_url.trim()
-        ? branding.logo_url
+        ? branding.logo_url.trim()
         : DEFAULT_BRANDING.logo_url,
 
     ...(typeof branding.primary_color === "string" &&
     branding.primary_color.trim()
       ? {
-          primary_color:
-            branding.primary_color,
+          primary_color: branding.primary_color.trim(),
+        }
+      : {}),
+
+    ...(typeof branding.secondary_color === "string" &&
+    branding.secondary_color.trim()
+      ? {
+          secondary_color: branding.secondary_color.trim(),
         }
       : {}),
   };
+}
+
+function toPublicLogoUrl(
+  logoPath: string | null,
+  updatedAt: string | null
+): string {
+  if (!logoPath) {
+    return "/logo.png";
+  }
+
+  const supabase = getSupabaseClient();
+  const { data } = supabase.storage
+    .from("company-branding")
+    .getPublicUrl(logoPath);
+
+  if (!data.publicUrl) {
+    return "/logo.png";
+  }
+
+  if (!updatedAt) {
+    return data.publicUrl;
+  }
+
+  return `${data.publicUrl}?v=${encodeURIComponent(updatedAt)}`;
 }
 
 export async function getCurrentCompanyContext(): Promise<
@@ -115,13 +146,11 @@ export async function getCurrentCompanyContext(): Promise<
   }
 
   if (!profile?.company_id) {
-    throw new Error(
-      "شرکت کاربر مشخص نشده است."
-    );
+    throw new Error("شرکت کاربر مشخص نشده است.");
   }
 
-  const { data: company, error: companyError } =
-    await supabase
+  const [companyResult, brandingResult] = await Promise.all([
+    supabase
       .from("companies")
       .select(
         `
@@ -136,43 +165,85 @@ export async function getCurrentCompanyContext(): Promise<
       )
       .eq("id", profile.company_id)
       .is("deleted_at", null)
-      .maybeSingle();
+      .maybeSingle(),
 
-  if (companyError) {
-    throw companyError;
+    supabase
+      .from("company_branding")
+      .select(
+        `
+          company_id,
+          display_name,
+          logo_path,
+          primary_color,
+          secondary_color,
+          updated_at
+        `
+      )
+      .eq("company_id", profile.company_id)
+      .maybeSingle(),
+  ]);
+
+  if (companyResult.error) {
+    throw companyResult.error;
   }
 
-  if (!company) {
-    throw new Error(
-      "شرکت کاربر پیدا نشد."
-    );
+  if (brandingResult.error) {
+    throw brandingResult.error;
+  }
+
+  if (!companyResult.data) {
+    throw new Error("شرکت کاربر پیدا نشد.");
   }
 
   const metadata =
-    company.metadata &&
-    typeof company.metadata === "object"
-      ? (company.metadata as Record<
-          string,
-          unknown
-        >)
+    companyResult.data.metadata &&
+    typeof companyResult.data.metadata === "object"
+      ? (companyResult.data.metadata as Record<string, unknown>)
       : {};
 
+  const legacyBranding = parseLegacyBranding(metadata);
+  const brandingRecord = brandingResult.data;
+
   return {
-    profile:
-      profile as CurrentCompanyProfile,
+    profile: profile as CurrentCompanyProfile,
     company: {
-      id: company.id,
-      name: company.name,
-      legal_name: company.legal_name,
-      timezone: company.timezone,
-      locale: company.locale,
-      is_active: company.is_active,
+      id: companyResult.data.id,
+      name: companyResult.data.name,
+      legal_name: companyResult.data.legal_name,
+      timezone: companyResult.data.timezone,
+      locale: companyResult.data.locale,
+      is_active: companyResult.data.is_active,
       metadata,
-      branding: parseBranding(metadata),
+      branding: {
+        display_name:
+          brandingRecord?.display_name?.trim() ||
+          legacyBranding.display_name,
+        logo_url: brandingRecord
+          ? toPublicLogoUrl(
+              brandingRecord.logo_path,
+              brandingRecord.updated_at
+            )
+          : legacyBranding.logo_url,
+        ...(brandingRecord?.primary_color?.trim() ||
+        legacyBranding.primary_color
+          ? {
+              primary_color:
+                brandingRecord?.primary_color?.trim() ||
+                legacyBranding.primary_color,
+            }
+          : {}),
+        ...(brandingRecord?.secondary_color?.trim() ||
+        legacyBranding.secondary_color
+          ? {
+              secondary_color:
+                brandingRecord?.secondary_color?.trim() ||
+                legacyBranding.secondary_color,
+            }
+          : {}),
+      },
     },
   };
 }
-
 
 export async function getRequiredCurrentCompanyId(): Promise<string> {
   const context = await getCurrentCompanyContext();
