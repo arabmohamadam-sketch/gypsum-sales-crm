@@ -1,3 +1,5 @@
+import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
+
 import * as XLSX from "xlsx";
 
 import { readSheet } from "./excel";
@@ -46,6 +48,7 @@ function normalizeCityName(
 export async function analyzeWorkbook(
   workbook: XLSX.WorkBook
 ): Promise<CustomerImportRow[]> {
+  const companyId = await getRequiredCurrentCompanyId();
   let customers: CustomerImportRow[] = [];
 
   for (const sheetName of SHEETS) {
@@ -85,7 +88,8 @@ export async function analyzeWorkbook(
             const customer =
               mapExcelRow(
                 row,
-                cityName
+                cityName,
+                companyId
               );
 
             return {

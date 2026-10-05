@@ -1,3 +1,4 @@
+import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
 import {
   isValidJalaaliDate,
   toGregorian,
@@ -5,9 +6,6 @@ import {
 } from "jalaali-js";
 
 import { createSupabaseClient } from "@/src/lib/supabase";
-
-const COMPANY_ID =
-  "11111111-1111-1111-1111-111111111111";
 
 export interface TargetRegion {
   id: string;
@@ -346,6 +344,7 @@ export const targetsService = {
   async getRegions(): Promise<
     TargetRegion[]
   > {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -365,7 +364,7 @@ export const targetsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .eq(
         "is_active",
@@ -418,6 +417,7 @@ export const targetsService = {
     year: number,
     month: number
   ): Promise<MonthlyTarget[]> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -459,7 +459,7 @@ export const targetsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .eq(
         "target_year",
@@ -549,7 +549,7 @@ export const targetsService = {
         )
         .eq(
           "company_id",
-          COMPANY_ID
+          companyId
         )
         .in(
           "id",
@@ -573,7 +573,7 @@ export const targetsService = {
             )
             .eq(
               "company_id",
-              COMPANY_ID
+              companyId
             )
             .in(
               "id",
@@ -607,7 +607,7 @@ export const targetsService = {
         )
         .eq(
           "company_id",
-          COMPANY_ID
+          companyId
         )
         .eq(
           "progress_year",
@@ -856,6 +856,7 @@ export const targetsService = {
   async createTarget(
     input: CreateTargetInput
   ): Promise<MonthlyTarget> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -883,7 +884,7 @@ export const targetsService = {
       .from("monthly_targets")
       .insert({
         company_id:
-          COMPANY_ID,
+          companyId,
 
         user_id:
           input.user_id,
@@ -976,6 +977,7 @@ export const targetsService = {
     targetId: string,
     input: UpdateTargetInput
   ): Promise<MonthlyTarget> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1001,7 +1003,7 @@ export const targetsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -1102,7 +1104,7 @@ export const targetsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -1147,6 +1149,7 @@ export const targetsService = {
   async deleteTarget(
     targetId: string
   ): Promise<void> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1177,7 +1180,7 @@ export const targetsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -1220,7 +1223,7 @@ export const targetsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",

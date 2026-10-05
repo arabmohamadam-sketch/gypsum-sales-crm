@@ -1,7 +1,5 @@
+import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
 import { createSupabaseClient } from "@/src/lib/supabase";
-
-const COMPANY_ID =
-  "11111111-1111-1111-1111-111111111111";
 
 export interface ReportDateRange {
   from?: string;
@@ -340,6 +338,7 @@ export const reportsService = {
   async getReports(
     range: ReportDateRange = {}
   ): Promise<ReportsData> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -416,7 +415,7 @@ export const reportsService = {
       `)
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .eq(
         "is_active",
@@ -482,7 +481,7 @@ export const reportsService = {
       `)
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .eq(
         "status",
@@ -576,7 +575,7 @@ export const reportsService = {
       `)
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -682,7 +681,7 @@ export const reportsService = {
         `)
         .eq(
           "company_id",
-          COMPANY_ID
+          companyId
         )
         .is(
           "deleted_at",
@@ -753,7 +752,7 @@ export const reportsService = {
         `)
         .eq(
           "company_id",
-          COMPANY_ID
+          companyId
         )
         .in(
           "waybill_id",
@@ -888,7 +887,7 @@ export const reportsService = {
       `)
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -955,7 +954,7 @@ export const reportsService = {
         `)
         .eq(
           "company_id",
-          COMPANY_ID
+          companyId
         )
         .is(
           "deleted_at",
@@ -1022,7 +1021,7 @@ export const reportsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .eq(
         "is_active",

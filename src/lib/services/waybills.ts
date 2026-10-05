@@ -1,3 +1,4 @@
+import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
 import { createSupabaseClient } from "@/src/lib/supabase";
 
 import type {
@@ -9,9 +10,6 @@ import type {
   UpdateWaybillInput,
   UpdateLoadingInput,
 } from "@/src/lib/types/waybill";
-
-const COMPANY_ID =
-  "11111111-1111-1111-1111-111111111111";
 
 const WAYBILL_BASE_SELECT = `
   id,
@@ -207,6 +205,7 @@ function normalizeWaybill(
 async function getWaybillItems(
   waybillId: string
 ): Promise<WaybillItem[]> {
+  const companyId = await getRequiredCurrentCompanyId();
   const supabase =
     createSupabaseClient();
 
@@ -224,7 +223,7 @@ async function getWaybillItems(
     )
     .eq(
       "company_id",
-      COMPANY_ID
+      companyId
     )
     .is(
       "deleted_at",
@@ -257,6 +256,7 @@ async function getWaybillItems(
 async function getWaybillLoading(
   waybillId: string
 ): Promise<Loading | null> {
+  const companyId = await getRequiredCurrentCompanyId();
   const supabase =
     createSupabaseClient();
 
@@ -274,7 +274,7 @@ async function getWaybillLoading(
     )
     .eq(
       "company_id",
-      COMPANY_ID
+      companyId
     )
     .is(
       "deleted_at",
@@ -322,6 +322,7 @@ async function hydrateWaybill(
 
 export const waybillsService = {
   async getAll(): Promise<Waybill[]> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -335,7 +336,7 @@ export const waybillsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -380,6 +381,7 @@ export const waybillsService = {
   async getById(
     id: string
   ): Promise<Waybill | null> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -397,7 +399,7 @@ export const waybillsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -428,6 +430,7 @@ export const waybillsService = {
   async getByOrderId(
     orderId: string
   ): Promise<Waybill[]> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -445,7 +448,7 @@ export const waybillsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .eq(
         "order_id",
@@ -504,6 +507,7 @@ export const waybillsService = {
   async create(
     input: CreateWaybillInput
   ): Promise<Waybill> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -537,7 +541,7 @@ export const waybillsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -594,7 +598,7 @@ export const waybillsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -663,7 +667,7 @@ export const waybillsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .in(
         "order_item_id",
@@ -702,7 +706,7 @@ export const waybillsService = {
       .from("waybills")
       .insert({
         company_id:
-          COMPANY_ID,
+          companyId,
         order_id:
           input.order_id,
         waybill_date:
@@ -736,7 +740,7 @@ export const waybillsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .eq(
         "order_id",
@@ -783,7 +787,7 @@ export const waybillsService = {
       activeOrderItems.map(
         (item) => ({
           company_id:
-            COMPANY_ID,
+            companyId,
           waybill_id:
             waybill.id,
           order_item_id:
@@ -824,7 +828,7 @@ export const waybillsService = {
         )
         .eq(
           "company_id",
-          COMPANY_ID
+          companyId
         );
 
       throw new Error(
@@ -858,7 +862,7 @@ export const waybillsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -896,6 +900,7 @@ export const waybillsService = {
     id: string,
     input: UpdateWaybillInput
   ): Promise<Waybill> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -948,7 +953,7 @@ export const waybillsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -998,6 +1003,7 @@ export const waybillsService = {
     waybillId: string,
     input: UpdateLoadingInput
   ): Promise<Loading> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1053,7 +1059,7 @@ export const waybillsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -1081,6 +1087,7 @@ export const waybillsService = {
   async confirmLoading(
     waybillId: string
   ): Promise<Waybill> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1114,7 +1121,7 @@ export const waybillsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .eq(
         "status",
@@ -1174,6 +1181,7 @@ export const waybillsService = {
   async cancelLoading(
     waybillId: string
   ): Promise<Waybill> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1191,7 +1199,7 @@ export const waybillsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .eq(
         "status",
@@ -1230,6 +1238,7 @@ export const waybillsService = {
   async cancel(
     id: string
   ): Promise<Waybill> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1251,7 +1260,7 @@ export const waybillsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -1296,7 +1305,7 @@ export const waybillsService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",

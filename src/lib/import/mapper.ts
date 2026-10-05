@@ -1,7 +1,4 @@
-﻿const COMPANY_ID =
-  "11111111-1111-1111-1111-111111111111";
-
-const CITY_IDS: Record<string, string> = {
+﻿const CITY_IDS: Record<string, string> = {
   "گرمسار":
     "dd74dcfd-8a02-41d5-afb1-6ed577ffdace",
 
@@ -200,7 +197,8 @@ export interface CustomerImportRow {
 
 export function mapExcelRow(
   row: Record<string, unknown>,
-  city: string
+  city: string,
+  companyId: string
 ): CustomerImportRow {
   const cityId =
     CITY_IDS[city];
@@ -227,8 +225,7 @@ export function mapExcelRow(
     "";
 
   return {
-    companyId:
-      COMPANY_ID,
+    companyId: companyId,
 
     cityId,
 

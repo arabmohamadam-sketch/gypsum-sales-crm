@@ -1,8 +1,6 @@
+import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
 import { createSupabaseClient } from "@/src/lib/supabase";
 import type { Call, FollowUp } from "@/src/lib/types/activity";
-
-const COMPANY_ID =
-  "11111111-1111-1111-1111-111111111111";
 
 export interface CallWithRelations extends Call {
   customer: {
@@ -366,6 +364,7 @@ export const activitiesService = {
   async getCalls(): Promise<
     CallWithRelations[]
   > {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -377,7 +376,7 @@ export const activitiesService = {
       .select(CALL_SELECT)
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is("deleted_at", null)
       .order("call_date", {
@@ -400,6 +399,7 @@ export const activitiesService = {
   async getCallById(
     id: string
   ): Promise<CallWithRelations> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -417,7 +417,7 @@ export const activitiesService = {
       .eq("id", callId)
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is("deleted_at", null)
       .single();
@@ -437,6 +437,7 @@ export const activitiesService = {
   async getCallsByCustomerId(
     customerId: string
   ): Promise<CallWithRelations[]> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -457,7 +458,7 @@ export const activitiesService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is("deleted_at", null)
       .order("call_date", {
@@ -480,6 +481,7 @@ export const activitiesService = {
   async createCall(
     input: CreateCallInput
   ): Promise<CallWithRelations> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -508,7 +510,7 @@ export const activitiesService = {
       );
 
     const payload = {
-      company_id: COMPANY_ID,
+      company_id: companyId,
       customer_id: customerId,
       user_id: userId,
 
@@ -586,6 +588,7 @@ export const activitiesService = {
     id: string,
     input: UpdateCallInput
   ): Promise<CallWithRelations> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -655,7 +658,7 @@ export const activitiesService = {
       .eq("id", callId)
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is("deleted_at", null)
       .select(CALL_SELECT)
@@ -681,6 +684,7 @@ export const activitiesService = {
   async softDeleteCall(
     id: string
   ): Promise<void> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -703,7 +707,7 @@ export const activitiesService = {
       .eq("id", callId)
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is("deleted_at", null);
 
@@ -729,6 +733,7 @@ export const activitiesService = {
   async getFollowUps(): Promise<
     FollowUpWithRelations[]
   > {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -740,7 +745,7 @@ export const activitiesService = {
       .select(FOLLOW_UP_SELECT)
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is("deleted_at", null)
       .order("scheduled_at", {
@@ -763,6 +768,7 @@ export const activitiesService = {
   async getFollowUpById(
     id: string
   ): Promise<FollowUpWithRelations> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -781,7 +787,7 @@ export const activitiesService = {
       .eq("id", followUpId)
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is("deleted_at", null)
       .single();
@@ -801,6 +807,7 @@ export const activitiesService = {
   async getFollowUpsByCustomerId(
     customerId: string
   ): Promise<FollowUpWithRelations[]> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -821,7 +828,7 @@ export const activitiesService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is("deleted_at", null)
       .order("scheduled_at", {
@@ -844,6 +851,7 @@ export const activitiesService = {
   async createFollowUp(
     input: CreateFollowUpInput
   ): Promise<FollowUpWithRelations> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -872,7 +880,7 @@ export const activitiesService = {
         : null;
 
     const payload = {
-      company_id: COMPANY_ID,
+      company_id: companyId,
       customer_id: customerId,
       user_id: userId,
       scheduled_at:
@@ -938,6 +946,7 @@ export const activitiesService = {
     id: string,
     input: UpdateFollowUpInput
   ): Promise<FollowUpWithRelations> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1014,7 +1023,7 @@ export const activitiesService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is("deleted_at", null)
       .select(FOLLOW_UP_SELECT)
@@ -1040,6 +1049,7 @@ export const activitiesService = {
   async completeFollowUp(
     id: string
   ): Promise<FollowUpWithRelations> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1070,7 +1080,7 @@ export const activitiesService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is("deleted_at", null)
       .select(FOLLOW_UP_SELECT)
@@ -1096,6 +1106,7 @@ export const activitiesService = {
   async softDeleteFollowUp(
     id: string
   ): Promise<void> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1122,7 +1133,7 @@ export const activitiesService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is("deleted_at", null);
 
@@ -1161,6 +1172,7 @@ export const activitiesService = {
   async getLastActualActivityByCustomerId(
     customerId: string
   ): Promise<CustomerLastActivity> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1183,7 +1195,7 @@ export const activitiesService = {
         )
         .eq(
           "company_id",
-          COMPANY_ID
+          companyId
         )
         .eq(
           "customer_id",
@@ -1206,7 +1218,7 @@ export const activitiesService = {
         )
         .eq(
           "company_id",
-          COMPANY_ID
+          companyId
         )
         .eq(
           "customer_id",
@@ -1303,6 +1315,7 @@ export const activitiesService = {
   ): Promise<
     Map<string, CustomerLastActivity>
   > {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1350,7 +1363,7 @@ export const activitiesService = {
         )
         .eq(
           "company_id",
-          COMPANY_ID
+          companyId
         )
         .in(
           "customer_id",
@@ -1372,7 +1385,7 @@ export const activitiesService = {
         )
         .eq(
           "company_id",
-          COMPANY_ID
+          companyId
         )
         .in(
           "customer_id",

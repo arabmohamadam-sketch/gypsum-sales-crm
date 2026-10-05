@@ -1,12 +1,10 @@
+import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
 import {
   isValidJalaaliDate,
   toGregorian,
 } from "jalaali-js";
 
 import { createSupabaseClient } from "@/src/lib/supabase";
-
-const COMPANY_ID =
-  "11111111-1111-1111-1111-111111111111";
 
 export interface MonthlyTargetReportRegion {
   regionId: string;
@@ -191,6 +189,7 @@ export const reportTargetsService = {
     year: number,
     month: number
   ): Promise<MonthlyTargetReport> {
+    const companyId = await getRequiredCurrentCompanyId();
     /*
      * UI با تقویم جلالی کار می‌کند،
      * اما monthly_targets و monthly_progress
@@ -226,7 +225,7 @@ export const reportTargetsService = {
         )
         .eq(
           "company_id",
-          COMPANY_ID
+          companyId
         )
         .eq(
           "target_year",
@@ -252,7 +251,7 @@ export const reportTargetsService = {
         )
         .eq(
           "company_id",
-          COMPANY_ID
+          companyId
         )
         .eq(
           "progress_year",
@@ -277,7 +276,7 @@ export const reportTargetsService = {
         )
         .eq(
           "company_id",
-          COMPANY_ID
+          companyId
         )
         .eq(
           "is_active",

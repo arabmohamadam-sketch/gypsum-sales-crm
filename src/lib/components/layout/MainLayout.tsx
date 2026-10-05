@@ -32,6 +32,14 @@ export default function MainLayout({
     "CRM مدیریت فروش";
 
   useEffect(() => {
+    if (!company) {
+      return;
+    }
+
+    document.title = `${company.branding.display_name?.trim() || company.name} — CRM مدیریت فروش`;
+  }, [company]);
+
+  useEffect(() => {
     if (isAuthPage || loading) {
       return;
     }

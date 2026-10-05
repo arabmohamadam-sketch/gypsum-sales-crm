@@ -1,6 +1,5 @@
+import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
 import { createSupabaseClient } from "@/src/lib/supabase";
-
-const COMPANY_ID = "11111111-1111-1111-1111-111111111111";
 
 export interface SalesUser {
   id: string;
@@ -16,6 +15,7 @@ export interface SalesUser {
 
 export const usersService = {
   async getSalesUsers(): Promise<SalesUser[]> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase = createSupabaseClient();
 
     const { data, error } = await supabase
@@ -33,7 +33,7 @@ export const usersService = {
           is_active
         `
       )
-      .eq("company_id", COMPANY_ID)
+      .eq("company_id", companyId)
       .eq("is_active", true)
       .is("deleted_at", null)
       .order("full_name", {

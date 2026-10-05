@@ -1,7 +1,5 @@
+import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
 import { createSupabaseClient } from "@/src/lib/supabase";
-
-const COMPANY_ID =
-  "11111111-1111-1111-1111-111111111111";
 
 export interface DashboardStats {
   customersCount: number;
@@ -233,6 +231,7 @@ function getWaybillItemTonnage(
 
 export const dashboardService = {
   async getDashboardData(): Promise<DashboardData> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -273,7 +272,7 @@ export const dashboardService = {
       `)
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -320,7 +319,7 @@ export const dashboardService = {
       `)
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .eq(
         "status",
@@ -365,7 +364,7 @@ export const dashboardService = {
       `)
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -407,7 +406,7 @@ export const dashboardService = {
       `)
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -449,7 +448,7 @@ export const dashboardService = {
       `)
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -499,7 +498,7 @@ export const dashboardService = {
         `)
         .eq(
           "company_id",
-          COMPANY_ID
+          companyId
         )
         .in(
           "waybill_id",

@@ -1,5 +1,7 @@
 "use client";
 
+import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
+
 import {
   useCallback,
   useEffect,
@@ -89,6 +91,7 @@ export function useTargets(
   const refresh =
     useCallback(
       async () => {
+        const companyId = await getRequiredCurrentCompanyId();
         try {
           setLoading(true);
           setError(null);
@@ -157,7 +160,7 @@ export function useTargets(
                 `)
                 .eq(
                   "company_id",
-                  "11111111-1111-1111-1111-111111111111"
+                  companyId
                 )
                 .eq(
                   "is_active",

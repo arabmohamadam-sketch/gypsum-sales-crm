@@ -1,3 +1,4 @@
+import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
 import {
   isLeapJalaaliYear,
   toGregorian,
@@ -10,9 +11,6 @@ import {
 } from "@/src/lib/services/sales-intelligence";
 
 import { createSupabaseClient } from "@/src/lib/supabase";
-
-const COMPANY_ID =
-  "11111111-1111-1111-1111-111111111111";
 
 export type AIRecommendationPriority =
   | "high"
@@ -2219,6 +2217,7 @@ export const aiService = {
   ): Promise<
     AIRecommendedCustomer[]
   > {
+    const companyId = await getRequiredCurrentCompanyId();
     const safeLimit =
       Math.min(
         Math.max(
@@ -2271,7 +2270,7 @@ export const aiService = {
         `)
         .eq(
           "company_id",
-          COMPANY_ID,
+          companyId,
         )
         .eq(
           "is_active",
@@ -2319,7 +2318,7 @@ export const aiService = {
         `)
         .eq(
           "company_id",
-          COMPANY_ID,
+          companyId,
         )
         .eq(
           "status",
@@ -2400,7 +2399,7 @@ export const aiService = {
         `)
         .eq(
           "company_id",
-          COMPANY_ID,
+          companyId,
         )
         .is(
           "deleted_at",
@@ -2445,7 +2444,7 @@ export const aiService = {
         `)
         .eq(
           "company_id",
-          COMPANY_ID,
+          companyId,
         )
         .is(
           "deleted_at",
@@ -2486,7 +2485,7 @@ export const aiService = {
         `)
         .eq(
           "company_id",
-          COMPANY_ID,
+          companyId,
         )
         .eq(
           "target_year",
@@ -2525,7 +2524,7 @@ export const aiService = {
         `)
         .eq(
           "company_id",
-          COMPANY_ID,
+          companyId,
         )
         .eq(
           "progress_year",

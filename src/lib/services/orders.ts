@@ -1,3 +1,4 @@
+import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
 import { createSupabaseClient } from "@/src/lib/supabase";
 
 import type {
@@ -9,8 +10,6 @@ import type {
 } from "@/src/lib/types/order";
 
 export type { OrderItemInput } from "@/src/lib/types/order";
-
-const COMPANY_ID = "11111111-1111-1111-1111-111111111111";
 
 export interface CreateOrderInput {
   company_id?: string;
@@ -331,6 +330,7 @@ function createManualSku(): string {
 async function getProductById(
   productId: string
 ): Promise<ProductRecord> {
+  const companyId = await getRequiredCurrentCompanyId();
   const supabase =
     createSupabaseClient();
 
@@ -341,7 +341,7 @@ async function getProductById(
     .from("products")
     .select(PRODUCT_SELECT)
     .eq("id", productId)
-    .eq("company_id", COMPANY_ID)
+    .eq("company_id", companyId)
     .eq("is_active", true)
     .is("deleted_at", null)
     .maybeSingle();
@@ -373,6 +373,7 @@ async function createManualProduct(
   name: string,
   weightKg: number
 ): Promise<ProductRecord> {
+  const companyId = await getRequiredCurrentCompanyId();
   const supabase =
     createSupabaseClient();
 
@@ -395,7 +396,7 @@ async function createManualProduct(
   }
 
   const productPayload = {
-    company_id: COMPANY_ID,
+    company_id: companyId,
     name: productName,
     sku: createManualSku(),
     product_line: "Manual",
@@ -538,6 +539,7 @@ async function resolveOrderItems(
 async function getOrdersWithRelations(
   orderRows: Order[]
 ): Promise<OrderWithRelations[]> {
+  const companyId = await getRequiredCurrentCompanyId();
   if (orderRows.length === 0) {
     return [];
   }
@@ -672,7 +674,7 @@ async function getOrdersWithRelations(
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -769,6 +771,7 @@ async function getOrdersWithRelations(
 
 export const ordersService = {
   async getAll(): Promise<OrderWithRelations[]> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase = createSupabaseClient();
   
     // اطمینان از آماده بودن Session قبل از Query
@@ -816,7 +819,7 @@ export const ordersService = {
       .select("*")
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -873,6 +876,7 @@ export const ordersService = {
   async getById(
     id: string
   ): Promise<OrderWithRelations> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -894,7 +898,7 @@ export const ordersService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -936,6 +940,7 @@ export const ordersService = {
   async getByCustomerId(
     customerId: string
   ): Promise<OrderWithRelations[]> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -957,7 +962,7 @@ export const ordersService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -1000,6 +1005,7 @@ export const ordersService = {
     startDate: string,
     endDate: string
   ): Promise<OrderWithRelations[]> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1029,7 +1035,7 @@ export const ordersService = {
       .select("*")
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .gte(
         "order_date",
@@ -1077,6 +1083,7 @@ export const ordersService = {
   },
 
   async getProducts(): Promise<ProductRecord[]> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1088,7 +1095,7 @@ export const ordersService = {
       .select(PRODUCT_SELECT)
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .eq(
         "is_active",
@@ -1134,6 +1141,7 @@ export const ordersService = {
   async create(
     input: CreateOrderInput
   ): Promise<OrderWithRelations> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1199,7 +1207,7 @@ export const ordersService = {
       .from("orders")
       .insert({
         company_id:
-          COMPANY_ID,
+          companyId,
         customer_id:
           customerId,
         sales_user_id:
@@ -1240,7 +1248,7 @@ export const ordersService = {
         resolvedItems.map(
           (item) => ({
             company_id:
-              COMPANY_ID,
+              companyId,
             order_id:
               order.id,
             product_id:
@@ -1292,7 +1300,7 @@ export const ordersService = {
           )
           .eq(
             "company_id",
-            COMPANY_ID
+            companyId
           );
 
         throw new Error(
@@ -1329,6 +1337,7 @@ export const ordersService = {
     id: string,
     input: UpdateOrderInput
   ): Promise<OrderWithRelations> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1443,7 +1452,7 @@ export const ordersService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -1474,6 +1483,7 @@ export const ordersService = {
   async getItems(
     orderId: string
   ): Promise<OrderItem[]> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1497,7 +1507,7 @@ export const ordersService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -1534,6 +1544,7 @@ export const ordersService = {
     orderId: string,
     input: OrderItemInput
   ): Promise<OrderItem> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1570,7 +1581,7 @@ export const ordersService = {
       .from("order_items")
       .insert({
         company_id:
-          COMPANY_ID,
+          companyId,
         order_id:
           id,
         product_id:
@@ -1614,6 +1625,7 @@ export const ordersService = {
     itemId: string,
     input: OrderItemInput
   ): Promise<OrderItem> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1672,7 +1684,7 @@ export const ordersService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -1703,6 +1715,7 @@ export const ordersService = {
   async deleteItem(
     itemId: string
   ): Promise<void> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1732,7 +1745,7 @@ export const ordersService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -1765,6 +1778,7 @@ export const ordersService = {
   async softDelete(
     id: string
   ): Promise<void> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1794,7 +1808,7 @@ export const ordersService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -1827,6 +1841,7 @@ export const ordersService = {
   async restore(
     id: string
   ): Promise<OrderWithRelations> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -1853,7 +1868,7 @@ export const ordersService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .not(
         "deleted_at",

@@ -1,9 +1,7 @@
+import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
 import { createSupabaseClient } from "@/src/lib/supabase";
 
 import type { Customer } from "@/src/lib/types/customer";
-
-const COMPANY_ID =
-  "11111111-1111-1111-1111-111111111111";
 
 export interface CustomerCity {
   id: string;
@@ -114,6 +112,7 @@ async function validatePhoneDuplicates(
   secondaryPhone: string | null | undefined,
   excludeCustomerId?: string
 ): Promise<void> {
+  const companyId = await getRequiredCurrentCompanyId();
   const normalizedPhone =
     normalizePhone(phone);
 
@@ -161,7 +160,7 @@ async function validatePhoneDuplicates(
     )
     .eq(
       "company_id",
-      COMPANY_ID
+      companyId
     )
     .is(
       "deleted_at",
@@ -240,6 +239,7 @@ async function validatePhoneDuplicates(
 
 export const customersService = {
   async getAll(): Promise<Customer[]> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -251,7 +251,7 @@ export const customersService = {
       .select("*")
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -309,7 +309,7 @@ export const customersService = {
         )
         .eq(
           "company_id",
-          COMPANY_ID
+          companyId
         )
         .is(
           "deleted_at",
@@ -373,6 +373,7 @@ export const customersService = {
   async getById(
     id: string
   ): Promise<Customer> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -397,7 +398,7 @@ export const customersService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -450,6 +451,7 @@ export const customersService = {
   },
 
   async getCities(): Promise<CustomerCity[]> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -463,7 +465,7 @@ export const customersService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -506,6 +508,7 @@ export const customersService = {
   async getCityById(
     cityId: string
   ): Promise<CustomerCity | null> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -533,7 +536,7 @@ export const customersService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -591,6 +594,7 @@ export const customersService = {
       >
     >
   ): Promise<Customer> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -759,7 +763,7 @@ export const customersService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -799,6 +803,7 @@ export const customersService = {
       >
     >
   ): Promise<Customer> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -844,7 +849,7 @@ export const customersService = {
       unknown
     > = {
       company_id:
-        COMPANY_ID,
+        companyId,
       city_id:
         values.city_id.trim(),
       name:
@@ -921,6 +926,7 @@ export const customersService = {
   async delete(
     id: string
   ): Promise<void> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -951,7 +957,7 @@ export const customersService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",

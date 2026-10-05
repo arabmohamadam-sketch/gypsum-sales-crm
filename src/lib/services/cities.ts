@@ -1,7 +1,5 @@
+import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
 import { createSupabaseClient } from "@/src/lib/supabase";
-
-const COMPANY_ID =
-  "11111111-1111-1111-1111-111111111111";
 
 export interface City {
   id: string;
@@ -69,6 +67,7 @@ function normalizeName(
 
 export const citiesService = {
   async getAll(): Promise<City[]> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -82,7 +81,7 @@ export const citiesService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -122,6 +121,7 @@ export const citiesService = {
   },
 
   async getRegions(): Promise<Region[]> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -135,7 +135,7 @@ export const citiesService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .order("name");
 
@@ -163,6 +163,7 @@ export const citiesService = {
   async create(
     input: CreateCityInput
   ): Promise<City> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase =
       createSupabaseClient();
 
@@ -205,7 +206,7 @@ export const citiesService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .maybeSingle();
 
@@ -236,7 +237,7 @@ export const citiesService = {
       )
       .eq(
         "company_id",
-        COMPANY_ID
+        companyId
       )
       .is(
         "deleted_at",
@@ -291,7 +292,7 @@ export const citiesService = {
       .from("cities")
       .insert({
         company_id:
-          COMPANY_ID,
+          companyId,
         region_id:
           regionId,
         name,

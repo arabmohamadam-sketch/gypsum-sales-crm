@@ -172,3 +172,18 @@ export async function getCurrentCompanyContext(): Promise<
     },
   };
 }
+
+
+export async function getRequiredCurrentCompanyId(): Promise<string> {
+  const context = await getCurrentCompanyContext();
+
+  if (!context) {
+    throw new Error("کاربر وارد نشده است.");
+  }
+
+  if (!context.company.is_active) {
+    throw new Error("شرکت فعال کاربر غیرفعال است.");
+  }
+
+  return context.company.id;
+}

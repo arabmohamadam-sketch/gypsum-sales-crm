@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "gypsum-sales-crm CRM گچ آهوان",
+        "title": "Gypsum Sales Management",
         "width": 800,
         "height": 600,
         "resizable": true,

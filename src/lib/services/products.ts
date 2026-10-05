@@ -1,7 +1,5 @@
-﻿import { createSupabaseClient } from "@/src/lib/supabase";
-
-const COMPANY_ID =
-  "11111111-1111-1111-1111-111111111111";
+﻿import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
+import { createSupabaseClient } from "@/src/lib/supabase";
 
 export interface Product {
   id: string;
@@ -20,6 +18,7 @@ export interface Product {
 
 export const productsService = {
   async getAll(): Promise<Product[]> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase = createSupabaseClient();
 
     const { data, error } = await supabase
@@ -38,7 +37,7 @@ export const productsService = {
         updated_at,
         deleted_at
       `)
-      .eq("company_id", COMPANY_ID)
+      .eq("company_id", companyId)
       .eq("is_active", true)
       .is("deleted_at", null)
       .order("sort_order", {
@@ -63,6 +62,7 @@ export const productsService = {
   async getById(
     id: string
   ): Promise<Product> {
+    const companyId = await getRequiredCurrentCompanyId();
     const supabase = createSupabaseClient();
 
     if (!id?.trim()) {
@@ -88,7 +88,7 @@ export const productsService = {
         deleted_at
       `)
       .eq("id", id.trim())
-      .eq("company_id", COMPANY_ID)
+      .eq("company_id", companyId)
       .eq("is_active", true)
       .is("deleted_at", null)
       .single();

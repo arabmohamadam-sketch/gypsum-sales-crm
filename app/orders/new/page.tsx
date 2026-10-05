@@ -1,5 +1,7 @@
 "use client";
 
+import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
+
 import Link from "next/link";
 
 import {
@@ -54,9 +56,6 @@ import {
 } from "@/src/lib/services/orders";
 
 import type { Customer } from "@/src/lib/types/customer";
-
-const COMPANY_ID =
-  "11111111-1111-1111-1111-111111111111";
 
 
 
@@ -1011,6 +1010,7 @@ function NewOrderForm() {
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>
   ) {
+    const companyId = await getRequiredCurrentCompanyId();
     event.preventDefault();
 
     setError("");
@@ -1234,7 +1234,7 @@ function NewOrderForm() {
         CreateOrderInput =
         {
           company_id:
-            COMPANY_ID,
+            companyId,
 
           customer_id:
             selectedCustomer.id,
