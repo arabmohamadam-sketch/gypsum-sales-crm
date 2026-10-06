@@ -77,8 +77,8 @@ export default function SettingsUsersPage() {
     hasPermission,
   } = usePermissions();
 
-  const canReadUsers = hasPermission("users.read");
-  const canManageUsers = hasPermission("users.write");
+  const canReadUsers = hasPermission("users.view");
+  const canManageUsers = hasPermission("users.edit");
 
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [roles, setRoles] = useState<ManagedRole[]>([]);
