@@ -875,6 +875,15 @@ export default function CustomerPage({
 
     useState<CustomerV2Completeness | null>(null);
 
+  const [showIncompleteOrderModal, setShowIncompleteOrderModal] =
+    useState(false);
+
+  const [orderCheckError, setOrderCheckError] =
+    useState<string | null>(null);
+
+  const [checkingOrderAccess, setCheckingOrderAccess] =
+    useState(false);
+
   const [regionalManagers, setRegionalManagers] =
 
     useState<V2RegionalManager[]>([]);
@@ -1640,6 +1649,62 @@ export default function CustomerPage({
       ]
     );
 
+  async function handleStartOrder() {
+
+    if (!customer || checkingOrderAccess) {
+      return;
+    }
+
+    try {
+      setCheckingOrderAccess(true);
+      setOrderCheckError(null);
+
+      const completeness =
+        await customersService.checkV2Completeness(
+          customer.id
+        );
+
+      if (!completeness.is_complete) {
+        setShowIncompleteOrderModal(true);
+        return;
+      }
+
+      router.push(
+        `/orders/new?customerId=${encodeURIComponent(
+          customer.id
+        )}`
+      );
+    } catch (err) {
+      console.error(
+        "CHECK CUSTOMER COMPLETENESS BEFORE ORDER ERROR:",
+        err
+      );
+
+      setOrderCheckError(
+        err instanceof Error
+          ? err.message
+          : "بررسی مشخصات مشتری برای ثبت سفارش انجام نشد."
+      );
+      setShowIncompleteOrderModal(true);
+    } finally {
+      setCheckingOrderAccess(false);
+    }
+  }
+
+  function handleIncompleteOrderModalClose() {
+    if (!customer) {
+      return;
+    }
+
+    setShowIncompleteOrderModal(false);
+    setOrderCheckError(null);
+    router.push(
+      `/customers/edit?id=${encodeURIComponent(
+        customer.id
+      )}`
+    );
+  }
+
   async function handleDeleteCustomer() {
 
     if (!customer || !canManageDelete) {
@@ -2237,11 +2302,15 @@ export default function CustomerPage({
 
                 )}
 
-                <Link
+                <button
 
-                  href={`/orders/new?customerId=${customer.id}`}
+                  type="button"
 
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-xs font-black text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md"
+                  onClick={() => void handleStartOrder()}
+
+                  disabled={checkingOrderAccess}
+
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-xs font-black text-white shadow-sm transition hover:bg-slate-800 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
 
                 >
 
@@ -2251,9 +2320,11 @@ export default function CustomerPage({
 
                   />
 
-                  ثبت سفارش
+                  {checkingOrderAccess
+                    ? "در حال بررسی..."
+                    : "ثبت سفارش"}
 
-                </Link>
+                </button>
 
                 <Link
 
@@ -2923,11 +2994,15 @@ export default function CustomerPage({
 
             action={
 
-              <Link
+              <button
 
-                href={`/orders/new?customerId=${customer.id}`}
+                type="button"
 
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800"
+                onClick={() => void handleStartOrder()}
+
+                disabled={checkingOrderAccess}
+
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
 
               >
 
@@ -2937,9 +3012,11 @@ export default function CustomerPage({
 
                 />
 
-                ثبت سفارش
+                {checkingOrderAccess
+                  ? "در حال بررسی..."
+                  : "ثبت سفارش"}
 
-              </Link>
+              </button>
 
             }
 
@@ -3682,6 +3759,98 @@ export default function CustomerPage({
         </section>
 
       </div>
+
+      {showIncompleteOrderModal && customer && (
+
+        <div
+
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+
+          role="dialog"
+
+          aria-modal="true"
+
+          aria-labelledby="customer-order-gate-title"
+
+        >
+
+          <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-amber-100 bg-white shadow-2xl">
+
+            <div className="h-1.5 bg-gradient-to-l from-amber-500 via-orange-500 to-red-500" />
+
+            <div className="flex items-start gap-4 p-6">
+
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+
+                <AlertTriangle size={21} />
+
+              </div>
+
+              <div className="min-w-0 flex-1">
+
+                <h2
+
+                  id="customer-order-gate-title"
+
+                  className="text-lg font-black text-slate-900"
+
+                >
+
+                  مشخصات مشتری نیاز به اصلاح و یا تکمیل دارد
+
+                </h2>
+
+                <p className="mt-2 text-sm leading-7 text-slate-600">
+
+                  {orderCheckError
+                    ? "برای ادامه ثبت سفارش، ابتدا مشخصات این مشتری را بررسی و اصلاح کنید."
+                    : `اطلاعات مشتری «${customer.name}» برای ثبت سفارش V2 کامل نیست. ابتدا مشخصات مشتری را تکمیل یا اصلاح کنید.`}
+
+                </p>
+
+              </div>
+
+              <button
+
+                type="button"
+
+                onClick={handleIncompleteOrderModalClose}
+
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700"
+
+                aria-label="بستن و رفتن به ویرایش مشتری"
+
+              >
+
+                <X size={17} />
+
+              </button>
+
+            </div>
+
+            <div className="border-t border-slate-100 bg-slate-50 p-5">
+
+              <button
+
+                type="button"
+
+                onClick={handleIncompleteOrderModalClose}
+
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-6 py-3.5 text-sm font-black text-white transition hover:bg-blue-600"
+
+              >
+
+                تکمیل و اصلاح مشخصات مشتری
+
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      )}
 
       {showDeleteModal && canManageDelete && (
 

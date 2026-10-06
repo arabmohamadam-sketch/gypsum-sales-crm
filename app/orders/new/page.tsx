@@ -570,6 +570,58 @@ function NewOrderForm() {
     };
   }, [customerIdFromUrl]);
 
+  const directCustomerCompletenessCheckedRef =
+    useRef(false);
+
+  useEffect(() => {
+    if (
+      !customerIdFromUrl ||
+      !selectedCustomer ||
+      loadingCustomers ||
+      directCustomerCompletenessCheckedRef.current
+    ) {
+      return;
+    }
+
+    directCustomerCompletenessCheckedRef.current = true;
+
+    const selectedCustomerId = selectedCustomer.id;
+    let mounted = true;
+
+    async function checkDirectCustomer() {
+      try {
+        const completeness =
+          await customersService.checkV2Completeness(
+            selectedCustomerId
+          );
+
+        if (mounted && !completeness.is_complete) {
+          setShowIncompleteCustomerModal(true);
+        }
+      } catch (err) {
+        if (!mounted) {
+          return;
+        }
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "بررسی کامل بودن مشخصات مشتری انجام نشد."
+        );
+      }
+    }
+
+    void checkDirectCustomer();
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    customerIdFromUrl,
+    loadingCustomers,
+    selectedCustomer,
+  ]);
+
   /* ========================================================
      LOAD SALES USERS
      ======================================================== */
@@ -1015,7 +1067,6 @@ function NewOrderForm() {
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>
   ) {
-    const companyId = await getRequiredCurrentCompanyId();
     event.preventDefault();
 
     setError("");
@@ -1035,17 +1086,21 @@ function NewOrderForm() {
       return;
     }
 
-    const customerCompleteness =
-      await customersService.checkV2Completeness(
-        selectedCustomer.id
-      );
+    try {
+      const customerCompleteness =
+        await customersService.checkV2Completeness(
+          selectedCustomer.id
+        );
 
-    if (!customerCompleteness.is_complete) {
-      setShowIncompleteCustomerModal(true);
-      return;
-    }
+      if (!customerCompleteness.is_complete) {
+        setShowIncompleteCustomerModal(true);
+        return;
+      }
 
-    if (
+      const companyId =
+        await getRequiredCurrentCompanyId();
+
+      if (
       !jalaliYear ||
       !jalaliMonth ||
       !jalaliDay
@@ -1242,9 +1297,8 @@ function NewOrderForm() {
         })
       );
 
-    setSaving(true);
+      setSaving(true);
 
-    try {
       const input:
         CreateOrderInput =
         {
@@ -1302,11 +1356,6 @@ function NewOrderForm() {
         500
       );
     } catch (err) {
-      console.error(
-        "New order submit error:",
-        err
-      );
-
       setError(
         err instanceof Error
           ? err.message
@@ -1388,25 +1437,36 @@ function NewOrderForm() {
           ===================================================== */}
 
       {error && (
-        <section className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
-          <div className="h-1 bg-red-500" />
+        <div className="fixed inset-x-4 top-4 z-[120] mx-auto max-w-lg sm:left-auto sm:right-6 sm:inset-x-auto">
+          <div className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-2xl shadow-red-200/40">
+            <div className="h-1.5 bg-gradient-to-l from-red-600 via-red-500 to-orange-400" />
 
-          <div className="flex items-start gap-3 p-5">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
-              <X size={18} />
-            </div>
+            <div className="flex items-start gap-3 p-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+                <X size={19} />
+              </div>
 
-            <div>
-              <p className="font-black text-red-800">
-                ثبت سفارش انجام نشد
-              </p>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-black text-red-800">
+                  ثبت سفارش انجام نشد
+                </p>
 
-              <p className="mt-1 text-sm leading-6 text-red-600">
-                {error}
-              </p>
+                <p className="mt-1 text-sm leading-6 text-red-600">
+                  {error}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setError("")}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                aria-label="بستن پیام خطا"
+              >
+                <X size={17} />
+              </button>
             </div>
           </div>
-        </section>
+        </div>
       )}
 
       {success && (
