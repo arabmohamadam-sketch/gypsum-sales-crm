@@ -3,20 +3,30 @@ import { createSupabaseClient } from "@/src/lib/supabase";
 
 import type {
   Order,
+  OrderApproval,
+  OrderApprovalStage,
+  OrderApprovalStatus,
   OrderCustomer,
-  OrderSalesUser,
+  OrderDeliveryStatus,
+  OrderFulfillmentStatus,
   OrderItem,
   OrderItemInput,
+  OrderSalesUser,
 } from "@/src/lib/types/order";
 
 export type { OrderItemInput } from "@/src/lib/types/order";
+
+export type OrderApprovalDecision =
+  | "approve"
+  | "reject"
+  | "return";
 
 export interface CreateOrderInput {
   company_id?: string;
   customer_id: string;
   sales_user_id: string;
   order_date: string;
-  status: string;
+  status?: string;
   total_tonnage: number;
   notes?: string | null;
   source: string;
@@ -31,6 +41,61 @@ export interface UpdateOrderInput {
   total_tonnage?: number;
   notes?: string | null;
   source?: string;
+}
+
+export interface SubmitOrderForApprovalInput {
+  order_id: string;
+  idempotency_key?: string;
+  notes?: string | null;
+}
+
+export interface DecideOrderApprovalInput {
+  order_id: string;
+  stage: OrderApprovalStage;
+  decision: OrderApprovalDecision;
+  idempotency_key?: string;
+  reason?: string | null;
+  notes?: string | null;
+}
+
+export interface OrderApprovalHistoryItem extends OrderApproval {
+  return_reason?: string | null;
+}
+
+export interface OrderApprovalQueueItem {
+  order: OrderWithRelations;
+  approval: OrderApprovalHistoryItem;
+}
+
+export interface SubmitOrderForApprovalResponse {
+  success: boolean;
+  operation: string;
+  order_id: string;
+  approval_stage: "regional";
+  approval_id: string;
+  cycle_number: number;
+  approval_status: "pending";
+}
+
+export interface DecideOrderApprovalResponse {
+  success: boolean;
+  operation: string;
+  order_id: string;
+  stage: OrderApprovalStage;
+  decision: OrderApprovalDecision;
+  approval_id: string;
+  next_approval_id?: string;
+  next_stage?: OrderApprovalStage;
+  approval_status: OrderApprovalStatus;
+  fulfillment_status?: OrderFulfillmentStatus;
+  reason?: string | null;
+}
+
+export interface OrderWorkflowSummary {
+  approval_status: OrderApprovalStatus | null;
+  fulfillment_status: OrderFulfillmentStatus | null;
+  delivery_status: OrderDeliveryStatus | null;
+  pending_stage: OrderApprovalStage | null;
 }
 
 export interface OrderWithRelations extends Order {
@@ -52,6 +117,13 @@ interface ProductRecord {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+}
+
+interface SupabaseErrorLike {
+  message?: string;
+  code?: string;
+  details?: string;
+  hint?: string;
 }
 
 const ORDER_ITEM_SELECT = `
@@ -84,12 +156,22 @@ const PRODUCT_SELECT = `
   deleted_at
 `;
 
-interface SupabaseErrorLike {
-  message?: string;
-  code?: string;
-  details?: string;
-  hint?: string;
-}
+const ORDER_APPROVAL_SELECT = `
+  id,
+  company_id,
+  order_id,
+  approval_stage,
+  cycle_number,
+  status,
+  acted_by,
+  acted_at,
+  rejection_reason,
+  return_reason,
+  notes,
+  created_at,
+  updated_at,
+  deleted_at
+`;
 
 function isSupabaseError(
   error: unknown
@@ -327,10 +409,69 @@ function createManualSku(): string {
   return `manual-${timestamp}-${randomPart}`;
 }
 
+function createIdempotencyKey(
+  operation: string,
+  orderId: string
+): string {
+  const cryptoApi =
+    globalThis.crypto;
+
+  if (
+    typeof cryptoApi?.randomUUID ===
+    "function"
+  ) {
+    return `v2:${operation}:${orderId}:${cryptoApi.randomUUID()}`;
+  }
+
+  return `v2:${operation}:${orderId}:${Date.now()}:${Math.random()
+    .toString(36)
+    .slice(2, 10)}`;
+}
+
+function ensureRpcObject(
+  data: unknown,
+  fallbackMessage: string
+): Record<string, unknown> {
+  if (
+    typeof data !== "object" ||
+    data === null ||
+    Array.isArray(data)
+  ) {
+    throw new Error(fallbackMessage);
+  }
+
+  return data as Record<string, unknown>;
+}
+
+function getStringField(
+  data: Record<string, unknown>,
+  field: string,
+  fallback = ""
+): string {
+  const value = data[field];
+
+  return typeof value === "string"
+    ? value
+    : fallback;
+}
+
+function getNumberField(
+  data: Record<string, unknown>,
+  field: string
+): number {
+  const value = Number(data[field]);
+
+  return Number.isFinite(value)
+    ? value
+    : 0;
+}
+
 async function getProductById(
   productId: string
 ): Promise<ProductRecord> {
-  const companyId = await getRequiredCurrentCompanyId();
+  const companyId =
+    await getRequiredCurrentCompanyId();
+
   const supabase =
     createSupabaseClient();
 
@@ -373,7 +514,9 @@ async function createManualProduct(
   name: string,
   weightKg: number
 ): Promise<ProductRecord> {
-  const companyId = await getRequiredCurrentCompanyId();
+  const companyId =
+    await getRequiredCurrentCompanyId();
+
   const supabase =
     createSupabaseClient();
 
@@ -530,16 +673,18 @@ async function resolveOrderItems(
 }
 
 /**
- * دریافت سفارش‌ها بدون JOIN مستقیم
+ * دریافت سفارش‌ها بدون JOIN مستقیم.
  *
- * ابتدا خود orders خوانده می‌شود و سپس
+ * ابتدا orders خوانده می‌شود و سپس
  * customers / users / order_items جداگانه
  * دریافت و به سفارش‌ها متصل می‌شوند.
  */
 async function getOrdersWithRelations(
   orderRows: Order[]
 ): Promise<OrderWithRelations[]> {
-  const companyId = await getRequiredCurrentCompanyId();
+  const companyId =
+    await getRequiredCurrentCompanyId();
+
   if (orderRows.length === 0) {
     return [];
   }
@@ -547,46 +692,53 @@ async function getOrdersWithRelations(
   const supabase =
     createSupabaseClient();
 
-  const customerIds = Array.from(
-    new Set(
-      orderRows
-        .map(
-          (order) =>
-            order.customer_id
-        )
-        .filter(
-          (
-            id
-          ): id is string =>
-            Boolean(id)
-        )
-    )
-  );
+  const customerIds =
+    Array.from(
+      new Set(
+        orderRows
+          .map(
+            (order) =>
+              order.customer_id
+          )
+          .filter(
+            (
+              id
+            ): id is string =>
+              Boolean(id)
+          )
+      )
+    );
 
-  const salesUserIds = Array.from(
-    new Set(
-      orderRows
-        .map(
-          (order) =>
-            order.sales_user_id
-        )
-        .filter(
-          (
-            id
-          ): id is string =>
-            Boolean(id)
-        )
-    )
-  );
+  const salesUserIds =
+    Array.from(
+      new Set(
+        orderRows
+          .map(
+            (order) =>
+              order.sales_user_id
+          )
+          .filter(
+            (
+              id
+            ): id is string =>
+              Boolean(id)
+          )
+      )
+    );
 
   const orderIds =
     orderRows.map(
       (order) => order.id
     );
 
-  let customers: OrderCustomer[] = [];
-  let salesUsers: OrderSalesUser[] = [];
-  let items: OrderItem[] = [];
+  let customers:
+    OrderCustomer[] = [];
+
+  let salesUsers:
+    OrderSalesUser[] = [];
+
+  let items:
+    OrderItem[] = [];
 
   if (customerIds.length > 0) {
     const {
@@ -739,6 +891,7 @@ async function getOrdersWithRelations(
       ) ?? [];
 
     current.push(item);
+
     itemsByOrderId.set(
       item.order_id,
       current
@@ -770,47 +923,54 @@ async function getOrdersWithRelations(
 }
 
 export const ordersService = {
-  async getAll(): Promise<OrderWithRelations[]> {
-    const companyId = await getRequiredCurrentCompanyId();
-    const supabase = createSupabaseClient();
-  
-    // اطمینان از آماده بودن Session قبل از Query
+  async getAll(): Promise<
+    OrderWithRelations[]
+  > {
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
+    const supabase =
+      createSupabaseClient();
+
     const {
-      data: { session },
+      data: {
+        session,
+      },
       error: sessionError,
-    } = await supabase.auth.getSession();
-  
+    } =
+      await supabase.auth.getSession();
+
     if (sessionError) {
       console.error(
         "ORDERS SESSION ERROR:",
         sessionError
       );
-  
+
       throw new Error(
         "نشست کاربر معتبر نیست. لطفاً دوباره وارد شوید."
       );
     }
-  
+
     if (!session) {
       console.error(
         "ORDERS GET ALL: هیچ Session فعالی وجود ندارد."
       );
-  
+
       throw new Error(
         "نشست ورود شما فعال نیست. لطفاً دوباره وارد شوید."
       );
     }
-  
+
     console.log(
       "ORDERS AUTH USER:",
       session.user.id
     );
-  
+
     console.log(
       "ORDERS AUTH EMAIL:",
       session.user.email
     );
-  
+
     const {
       data,
       error,
@@ -837,13 +997,13 @@ export const ordersService = {
           ascending: false,
         }
       );
-  
+
     if (error) {
       logSupabaseError(
         "GET ALL",
         error
       );
-  
+
       throw new Error(
         getErrorMessage(
           error,
@@ -851,32 +1011,34 @@ export const ordersService = {
         )
       );
     }
-  
+
     const orderRows =
       (data ?? []) as Order[];
-  
+
     console.log(
       "ORDERS GET ALL: تعداد سفارش‌های اصلی =",
       orderRows.length
     );
-  
+
     const result =
       await getOrdersWithRelations(
         orderRows
       );
-  
+
     console.log(
       "ORDERS GET ALL: تعداد نهایی =",
       result.length
     );
-  
+
     return result;
   },
 
   async getById(
     id: string
   ): Promise<OrderWithRelations> {
-    const companyId = await getRequiredCurrentCompanyId();
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
     const supabase =
       createSupabaseClient();
 
@@ -940,7 +1102,9 @@ export const ordersService = {
   async getByCustomerId(
     customerId: string
   ): Promise<OrderWithRelations[]> {
-    const companyId = await getRequiredCurrentCompanyId();
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
     const supabase =
       createSupabaseClient();
 
@@ -1005,7 +1169,9 @@ export const ordersService = {
     startDate: string,
     endDate: string
   ): Promise<OrderWithRelations[]> {
-    const companyId = await getRequiredCurrentCompanyId();
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
     const supabase =
       createSupabaseClient();
 
@@ -1082,8 +1248,12 @@ export const ordersService = {
     );
   },
 
-  async getProducts(): Promise<ProductRecord[]> {
-    const companyId = await getRequiredCurrentCompanyId();
+  async getProducts(): Promise<
+    ProductRecord[]
+  > {
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
     const supabase =
       createSupabaseClient();
 
@@ -1141,7 +1311,9 @@ export const ordersService = {
   async create(
     input: CreateOrderInput
   ): Promise<OrderWithRelations> {
-    const companyId = await getRequiredCurrentCompanyId();
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
     const supabase =
       createSupabaseClient();
 
@@ -1164,31 +1336,32 @@ export const ordersService = {
       );
 
     const status =
-      validateStatus(
-        input.status
-      );
+      input.status?.trim() ||
+      "draft";
 
     const source =
-      validateSource(
-        input.source
-      );
+      input.source?.trim() ||
+      "manual";
 
     const inputTonnage =
       Number(
         input.total_tonnage
       );
 
+    validateStatus(status);
+    validateSource(source);
     validateTonnage(
       inputTonnage
     );
 
-    let resolvedItems: Array<{
-      product_id: string;
-      product_name_snapshot: string;
-      quantity: number;
-      weight_kg_snapshot: number;
-      bag_weight_kg: number;
-    }> = [];
+    let resolvedItems:
+      Array<{
+        product_id: string;
+        product_name_snapshot: string;
+        quantity: number;
+        weight_kg_snapshot: number;
+        bag_weight_kg: number;
+      }> = [];
 
     if (
       input.items &&
@@ -1203,26 +1376,27 @@ export const ordersService = {
     const {
       data: order,
       error: orderError,
-    } = await supabase
-      .from("orders")
-      .insert({
-        company_id:
-          companyId,
-        customer_id:
-          customerId,
-        sales_user_id:
-          salesUserId,
-        order_date:
-          orderDate,
-        status,
-        total_tonnage:
-          inputTonnage,
-        notes:
-          input.notes ?? null,
-        source,
-      })
-      .select("*")
-      .single();
+    } =
+      await supabase
+        .from("orders")
+        .insert({
+          company_id:
+            companyId,
+          customer_id:
+            customerId,
+          sales_user_id:
+            salesUserId,
+          order_date:
+            orderDate,
+          status,
+          total_tonnage:
+            inputTonnage,
+          notes:
+            input.notes ?? null,
+          source,
+        })
+        .select("*")
+        .single();
 
     if (orderError) {
       logSupabaseError(
@@ -1337,7 +1511,9 @@ export const ordersService = {
     id: string,
     input: UpdateOrderInput
   ): Promise<OrderWithRelations> {
-    const companyId = await getRequiredCurrentCompanyId();
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
     const supabase =
       createSupabaseClient();
 
@@ -1347,10 +1523,8 @@ export const ordersService = {
         "شناسه سفارش الزامی است."
       );
 
-    const updateData: Record<
-      string,
-      unknown
-    > = {};
+    const updateData:
+      Record<string, unknown> = {};
 
     if (
       input.customer_id !==
@@ -1441,25 +1615,26 @@ export const ordersService = {
     const {
       data,
       error,
-    } = await supabase
-      .from("orders")
-      .update(
-        updateData
-      )
-      .eq(
-        "id",
-        orderId
-      )
-      .eq(
-        "company_id",
-        companyId
-      )
-      .is(
-        "deleted_at",
-        null
-      )
-      .select("*")
-      .single();
+    } =
+      await supabase
+        .from("orders")
+        .update(
+          updateData
+        )
+        .eq(
+          "id",
+          orderId
+        )
+        .eq(
+          "company_id",
+          companyId
+        )
+        .is(
+          "deleted_at",
+          null
+        )
+        .select("*")
+        .single();
 
     if (error) {
       logSupabaseError(
@@ -1483,7 +1658,9 @@ export const ordersService = {
   async getItems(
     orderId: string
   ): Promise<OrderItem[]> {
-    const companyId = await getRequiredCurrentCompanyId();
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
     const supabase =
       createSupabaseClient();
 
@@ -1496,29 +1673,30 @@ export const ordersService = {
     const {
       data,
       error,
-    } = await supabase
-      .from("order_items")
-      .select(
-        ORDER_ITEM_SELECT
-      )
-      .eq(
-        "order_id",
-        id
-      )
-      .eq(
-        "company_id",
-        companyId
-      )
-      .is(
-        "deleted_at",
-        null
-      )
-      .order(
-        "created_at",
-        {
-          ascending: true,
-        }
-      );
+    } =
+      await supabase
+        .from("order_items")
+        .select(
+          ORDER_ITEM_SELECT
+        )
+        .eq(
+          "order_id",
+          id
+        )
+        .eq(
+          "company_id",
+          companyId
+        )
+        .is(
+          "deleted_at",
+          null
+        )
+        .order(
+          "created_at",
+          {
+            ascending: true,
+          }
+        );
 
     if (error) {
       logSupabaseError(
@@ -1544,7 +1722,9 @@ export const ordersService = {
     orderId: string,
     input: OrderItemInput
   ): Promise<OrderItem> {
-    const companyId = await getRequiredCurrentCompanyId();
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
     const supabase =
       createSupabaseClient();
 
@@ -1577,32 +1757,33 @@ export const ordersService = {
     const {
       data,
       error,
-    } = await supabase
-      .from("order_items")
-      .insert({
-        company_id:
-          companyId,
-        order_id:
-          id,
-        product_id:
-          productId,
-        product_name_snapshot:
-          product.name,
-        quantity:
-          Math.trunc(
-            normalized.quantity
-          ),
-        weight_kg_snapshot:
-          Math.round(
-            weightKg
-          ),
-        bag_weight_kg:
-          normalized.bag_weight_kg,
-      })
-      .select(
-        ORDER_ITEM_SELECT
-      )
-      .single();
+    } =
+      await supabase
+        .from("order_items")
+        .insert({
+          company_id:
+            companyId,
+          order_id:
+            id,
+          product_id:
+            productId,
+          product_name_snapshot:
+            product.name,
+          quantity:
+            Math.trunc(
+              normalized.quantity
+            ),
+          weight_kg_snapshot:
+            Math.round(
+              weightKg
+            ),
+          bag_weight_kg:
+            normalized.bag_weight_kg,
+        })
+        .select(
+          ORDER_ITEM_SELECT
+        )
+        .single();
 
     if (error) {
       logSupabaseError(
@@ -1625,7 +1806,9 @@ export const ordersService = {
     itemId: string,
     input: OrderItemInput
   ): Promise<OrderItem> {
-    const companyId = await getRequiredCurrentCompanyId();
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
     const supabase =
       createSupabaseClient();
 
@@ -1658,42 +1841,43 @@ export const ordersService = {
     const {
       data,
       error,
-    } = await supabase
-      .from("order_items")
-      .update({
-        product_id:
-          productId,
-        product_name_snapshot:
-          product.name,
-        quantity:
-          Math.trunc(
-            normalized.quantity
-          ),
-        weight_kg_snapshot:
-          Math.round(
-            weightKg
-          ),
-        bag_weight_kg:
-          normalized.bag_weight_kg,
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        "id",
-        id
-      )
-      .eq(
-        "company_id",
-        companyId
-      )
-      .is(
-        "deleted_at",
-        null
-      )
-      .select(
-        ORDER_ITEM_SELECT
-      )
-      .single();
+    } =
+      await supabase
+        .from("order_items")
+        .update({
+          product_id:
+            productId,
+          product_name_snapshot:
+            product.name,
+          quantity:
+            Math.trunc(
+              normalized.quantity
+            ),
+          weight_kg_snapshot:
+            Math.round(
+              weightKg
+            ),
+          bag_weight_kg:
+            normalized.bag_weight_kg,
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          "id",
+          id
+        )
+        .eq(
+          "company_id",
+          companyId
+        )
+        .is(
+          "deleted_at",
+          null
+        )
+        .select(
+          ORDER_ITEM_SELECT
+        )
+        .single();
 
     if (error) {
       logSupabaseError(
@@ -1715,7 +1899,9 @@ export const ordersService = {
   async deleteItem(
     itemId: string
   ): Promise<void> {
-    const companyId = await getRequiredCurrentCompanyId();
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
     const supabase =
       createSupabaseClient();
 
@@ -1731,28 +1917,29 @@ export const ordersService = {
     const {
       data,
       error,
-    } = await supabase
-      .from("order_items")
-      .update({
-        deleted_at:
-          now,
-        updated_at:
-          now,
-      })
-      .eq(
-        "id",
-        id
-      )
-      .eq(
-        "company_id",
-        companyId
-      )
-      .is(
-        "deleted_at",
-        null
-      )
-      .select("id")
-      .maybeSingle();
+    } =
+      await supabase
+        .from("order_items")
+        .update({
+          deleted_at:
+            now,
+          updated_at:
+            now,
+        })
+        .eq(
+          "id",
+          id
+        )
+        .eq(
+          "company_id",
+          companyId
+        )
+        .is(
+          "deleted_at",
+          null
+        )
+        .select("id")
+        .maybeSingle();
 
     if (error) {
       logSupabaseError(
@@ -1778,7 +1965,9 @@ export const ordersService = {
   async softDelete(
     id: string
   ): Promise<void> {
-    const companyId = await getRequiredCurrentCompanyId();
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
     const supabase =
       createSupabaseClient();
 
@@ -1794,28 +1983,29 @@ export const ordersService = {
     const {
       data,
       error,
-    } = await supabase
-      .from("orders")
-      .update({
-        deleted_at:
-          now,
-        updated_at:
-          now,
-      })
-      .eq(
-        "id",
-        orderId
-      )
-      .eq(
-        "company_id",
-        companyId
-      )
-      .is(
-        "deleted_at",
-        null
-      )
-      .select("id")
-      .maybeSingle();
+    } =
+      await supabase
+        .from("orders")
+        .update({
+          deleted_at:
+            now,
+          updated_at:
+            now,
+        })
+        .eq(
+          "id",
+          orderId
+        )
+        .eq(
+          "company_id",
+          companyId
+        )
+        .is(
+          "deleted_at",
+          null
+        )
+        .select("id")
+        .maybeSingle();
 
     if (error) {
       logSupabaseError(
@@ -1841,7 +2031,9 @@ export const ordersService = {
   async restore(
     id: string
   ): Promise<OrderWithRelations> {
-    const companyId = await getRequiredCurrentCompanyId();
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
     const supabase =
       createSupabaseClient();
 
@@ -1854,29 +2046,30 @@ export const ordersService = {
     const {
       data,
       error,
-    } = await supabase
-      .from("orders")
-      .update({
-        deleted_at:
-          null,
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        "id",
-        orderId
-      )
-      .eq(
-        "company_id",
-        companyId
-      )
-      .not(
-        "deleted_at",
-        "is",
-        null
-      )
-      .select("*")
-      .single();
+    } =
+      await supabase
+        .from("orders")
+        .update({
+          deleted_at:
+            null,
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          "id",
+          orderId
+        )
+        .eq(
+          "company_id",
+          companyId
+        )
+        .not(
+          "deleted_at",
+          "is",
+          null
+        )
+        .select("*")
+        .single();
 
     if (error) {
       logSupabaseError(
@@ -1895,5 +2088,696 @@ export const ordersService = {
     return this.getById(
       data.id
     );
+  },
+
+  /**
+   * ارسال یک سفارش برای شروع چرخه Approval V2.
+   *
+   * Backend:
+   *   v2_submit_order_for_approval
+   *
+   * نتیجه این عملیات:
+   *   Draft/Returned -> pending regional approval
+   */
+  async submitForApproval(
+    input:
+      SubmitOrderForApprovalInput
+  ): Promise<
+    SubmitOrderForApprovalResponse
+  > {
+    const orderId =
+      validateId(
+        input.order_id,
+        "شناسه سفارش الزامی است."
+      );
+
+    const supabase =
+      createSupabaseClient();
+
+    const idempotencyKey =
+      input.idempotency_key?.trim() ||
+      createIdempotencyKey(
+        "submit",
+        orderId
+      );
+
+    const {
+      data,
+      error,
+    } =
+      await supabase.rpc(
+        "v2_submit_order_for_approval",
+        {
+          p_order_id:
+            orderId,
+          p_idempotency_key:
+            idempotencyKey,
+          p_notes:
+            input.notes?.trim() ||
+            null,
+        }
+      );
+
+    if (error) {
+      logSupabaseError(
+        "SUBMIT FOR APPROVAL",
+        error
+      );
+
+      throw new Error(
+        getErrorMessage(
+          error,
+          "خطا در ارسال سفارش برای بررسی مدیر منطقه."
+        )
+      );
+    }
+
+    const rpcData =
+      ensureRpcObject(
+        data,
+        "پاسخ نامعتبر از سرویس ارسال سفارش برای تأیید."
+      );
+
+    return {
+      success:
+        rpcData.success ===
+        true,
+      operation:
+        getStringField(
+          rpcData,
+          "operation",
+          "order.submit_for_approval"
+        ),
+      order_id:
+        getStringField(
+          rpcData,
+          "order_id",
+          orderId
+        ),
+      approval_stage:
+        "regional",
+      approval_id:
+        getStringField(
+          rpcData,
+          "approval_id"
+        ),
+      cycle_number:
+        getNumberField(
+          rpcData,
+          "cycle_number"
+        ),
+      approval_status:
+        "pending",
+    };
+  },
+
+  /**
+   * ثبت تصمیم مدیر منطقه یا مدیر فروش.
+   *
+   * Regional:
+   *   approve -> creates pending sales approval
+   *
+   * Sales:
+   *   approve -> approval_status=approved
+   *           -> fulfillment_status=ready
+   *
+   * Reject / Return:
+   *   دلیل باید در Backend ارسال شود.
+   */
+  async decideApproval(
+    input:
+      DecideOrderApprovalInput
+  ): Promise<
+    DecideOrderApprovalResponse
+  > {
+    const orderId =
+      validateId(
+        input.order_id,
+        "شناسه سفارش الزامی است."
+      );
+
+    if (
+      input.decision !==
+        "approve" &&
+      input.decision !==
+        "reject" &&
+      input.decision !==
+        "return"
+    ) {
+      throw new Error(
+        "تصمیم تأیید سفارش معتبر نیست."
+      );
+    }
+
+    if (
+      input.stage !==
+        "regional" &&
+      input.stage !==
+        "sales"
+    ) {
+      throw new Error(
+        "مرحله تأیید سفارش معتبر نیست."
+      );
+    }
+
+    if (
+      (
+        input.decision ===
+          "reject" ||
+        input.decision ===
+          "return"
+      ) &&
+      !input.reason?.trim()
+    ) {
+      throw new Error(
+        "برای رد یا برگشت سفارش، دلیل الزامی است."
+      );
+    }
+
+    const supabase =
+      createSupabaseClient();
+
+    const idempotencyKey =
+      input.idempotency_key?.trim() ||
+      createIdempotencyKey(
+        `approval-${input.stage}-${input.decision}`,
+        orderId
+      );
+
+    const {
+      data,
+      error,
+    } =
+      await supabase.rpc(
+        "v2_decide_order_approval",
+        {
+          p_order_id:
+            orderId,
+          p_stage:
+            input.stage,
+          p_decision:
+            input.decision,
+          p_idempotency_key:
+            idempotencyKey,
+          p_reason:
+            input.reason?.trim() ||
+            null,
+          p_notes:
+            input.notes?.trim() ||
+            null,
+        }
+      );
+
+    if (error) {
+      logSupabaseError(
+        "DECIDE ORDER APPROVAL",
+        error
+      );
+
+      throw new Error(
+        getErrorMessage(
+          error,
+          "خطا در ثبت تصمیم تأیید سفارش."
+        )
+      );
+    }
+
+    const rpcData =
+      ensureRpcObject(
+        data,
+        "پاسخ نامعتبر از سرویس تأیید سفارش."
+      );
+
+    const approvalStatus =
+      getStringField(
+        rpcData,
+        "approval_status"
+      );
+
+    if (
+      approvalStatus !==
+        "pending" &&
+      approvalStatus !==
+        "approved" &&
+      approvalStatus !==
+        "rejected" &&
+      approvalStatus !==
+        "returned" &&
+      approvalStatus !==
+        "cancelled"
+    ) {
+      throw new Error(
+        "وضعیت بازگشتی تأیید سفارش معتبر نیست."
+      );
+    }
+
+    const fulfillmentStatus =
+      getStringField(
+        rpcData,
+        "fulfillment_status"
+      );
+
+    let normalizedFulfillmentStatus:
+      | OrderFulfillmentStatus
+      | undefined;
+
+    if (
+      fulfillmentStatus ===
+        "not_ready" ||
+      fulfillmentStatus ===
+        "ready" ||
+      fulfillmentStatus ===
+        "partially_allocated" ||
+      fulfillmentStatus ===
+        "allocated" ||
+      fulfillmentStatus ===
+        "loading" ||
+      fulfillmentStatus ===
+        "loaded" ||
+      fulfillmentStatus ===
+        "sent" ||
+      fulfillmentStatus ===
+        "completed" ||
+      fulfillmentStatus ===
+        "cancelled"
+    ) {
+      normalizedFulfillmentStatus =
+        fulfillmentStatus;
+    }
+
+    return {
+      success:
+        rpcData.success ===
+        true,
+      operation:
+        getStringField(
+          rpcData,
+          "operation",
+          "order.approval_decision"
+        ),
+      order_id:
+        getStringField(
+          rpcData,
+          "order_id",
+          orderId
+        ),
+      stage:
+        input.stage,
+      decision:
+        input.decision,
+      approval_id:
+        getStringField(
+          rpcData,
+          "approval_id"
+        ),
+      next_approval_id:
+        getStringField(
+          rpcData,
+          "next_approval_id"
+        ) || undefined,
+      next_stage:
+        getStringField(
+          rpcData,
+          "next_stage"
+        ) === "sales"
+          ? "sales"
+          : undefined,
+      approval_status:
+        approvalStatus as OrderApprovalStatus,
+      fulfillment_status:
+        normalizedFulfillmentStatus,
+      reason:
+        typeof rpcData.reason ===
+        "string"
+          ? rpcData.reason
+          : null,
+    };
+  },
+
+  /**
+   * دریافت تمام سوابق Approval یک سفارش.
+   *
+   * این متد فقط خواندن است و هیچ تصمیمی را
+   * مستقیماً روی order_approvals اعمال نمی‌کند.
+   */
+  async getApprovalHistory(
+    orderId: string
+  ): Promise<
+    OrderApprovalHistoryItem[]
+  > {
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
+    const supabase =
+      createSupabaseClient();
+
+    const id =
+      validateId(
+        orderId,
+        "شناسه سفارش الزامی است."
+      );
+
+    const {
+      data,
+      error,
+    } =
+      await supabase
+        .from("order_approvals")
+        .select(
+          ORDER_APPROVAL_SELECT
+        )
+        .eq(
+          "order_id",
+          id
+        )
+        .eq(
+          "company_id",
+          companyId
+        )
+        .order(
+          "cycle_number",
+          {
+            ascending: true,
+          }
+        )
+        .order(
+          "created_at",
+          {
+            ascending: true,
+          }
+        );
+
+    if (error) {
+      logSupabaseError(
+        "GET APPROVAL HISTORY",
+        error
+      );
+
+      throw new Error(
+        getErrorMessage(
+          error,
+          "خطا در دریافت تاریخچه تأیید سفارش."
+        )
+      );
+    }
+
+    return (
+      (data ??
+        []) as OrderApprovalHistoryItem[]
+    );
+  },
+
+  /**
+   * دریافت Approval در انتظار برای یک مرحله مشخص.
+   *
+   * به دلیل Unique Index بک‌اند، برای هر سفارش
+   * و هر مرحله در هر لحظه حداکثر یک pending داریم.
+   */
+  async getPendingApproval(
+    orderId: string,
+    stage: OrderApprovalStage
+  ): Promise<
+    OrderApprovalHistoryItem | null
+  > {
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
+    const supabase =
+      createSupabaseClient();
+
+    const id =
+      validateId(
+        orderId,
+        "شناسه سفارش الزامی است."
+      );
+
+    const {
+      data,
+      error,
+    } =
+      await supabase
+        .from("order_approvals")
+        .select(
+          ORDER_APPROVAL_SELECT
+        )
+        .eq(
+          "order_id",
+          id
+        )
+        .eq(
+          "company_id",
+          companyId
+        )
+        .eq(
+          "approval_stage",
+          stage
+        )
+        .eq(
+          "status",
+          "pending"
+        )
+        .is(
+          "deleted_at",
+          null
+        )
+        .maybeSingle();
+
+    if (error) {
+      logSupabaseError(
+        "GET PENDING APPROVAL",
+        error
+      );
+
+      throw new Error(
+        getErrorMessage(
+          error,
+          "خطا در دریافت مرحله در انتظار تأیید."
+        )
+      );
+    }
+
+    return data
+      ? (data as OrderApprovalHistoryItem)
+      : null;
+  },
+
+  /**
+   * دریافت صف سفارش‌های در انتظار تأیید.
+   *
+   * Scope نهایی تصمیم‌گیری همچنان در RPCهای Backend
+   * enforce می‌شود؛ این متد فقط داده لازم برای UI صف
+   * Approval را بارگذاری می‌کند.
+   */
+  async getApprovalQueue(
+    stage: OrderApprovalStage
+  ): Promise<OrderApprovalQueueItem[]> {
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
+    const supabase =
+      createSupabaseClient();
+
+    const {
+      data: approvalRows,
+      error: approvalError,
+    } =
+      await supabase
+        .from("order_approvals")
+        .select(
+          ORDER_APPROVAL_SELECT
+        )
+        .eq(
+          "company_id",
+          companyId
+        )
+        .eq(
+          "approval_stage",
+          stage
+        )
+        .eq(
+          "status",
+          "pending"
+        )
+        .is(
+          "deleted_at",
+          null
+        )
+        .order(
+          "created_at",
+          {
+            ascending: true,
+          }
+        );
+
+    if (approvalError) {
+      logSupabaseError(
+        "GET APPROVAL QUEUE",
+        approvalError
+      );
+
+      throw new Error(
+        getErrorMessage(
+          approvalError,
+          "خطا در دریافت صف تأیید سفارش."
+        )
+      );
+    }
+
+    const approvals =
+      (approvalRows ??
+        []) as OrderApprovalHistoryItem[];
+
+    if (approvals.length === 0) {
+      return [];
+    }
+
+    const orderIds =
+      Array.from(
+        new Set(
+          approvals.map(
+            (approval) =>
+              approval.order_id
+          )
+        )
+      );
+
+    const {
+      data: orderRows,
+      error: orderError,
+    } =
+      await supabase
+        .from("orders")
+        .select("*")
+        .eq(
+          "company_id",
+          companyId
+        )
+        .in(
+          "id",
+          orderIds
+        )
+        .is(
+          "deleted_at",
+          null
+        );
+
+    if (orderError) {
+      logSupabaseError(
+        "GET APPROVAL QUEUE ORDERS",
+        orderError
+      );
+
+      throw new Error(
+        getErrorMessage(
+          orderError,
+          "خطا در دریافت سفارش‌های صف تأیید."
+        )
+      );
+    }
+
+    const orders =
+      await getOrdersWithRelations(
+        (orderRows ??
+          []) as Order[]
+      );
+
+    const ordersById =
+      new Map(
+        orders.map(
+          (order) => [
+            order.id,
+            order,
+          ]
+        )
+      );
+
+    return approvals
+      .map(
+        (approval) => {
+          const order =
+            ordersById.get(
+              approval.order_id
+            );
+
+          if (!order) {
+            return null;
+          }
+
+          return {
+            order,
+            approval,
+          };
+        }
+      )
+      .filter(
+        (
+          item
+        ): item is OrderApprovalQueueItem =>
+          item !== null
+      );
+  },
+
+  /**
+   * خلاصه وضعیت Workflow سفارش.
+   *
+   * وضعیت pending مرحله بعدی از تاریخچه Approval
+   * استخراج می‌شود تا UI مجبور نباشد منطق دیتابیس را تکرار کند.
+   */
+  async getWorkflowSummary(
+    orderId: string
+  ): Promise<OrderWorkflowSummary> {
+    const order =
+      await this.getById(
+        orderId
+      );
+
+    const pendingRegional =
+      await this.getPendingApproval(
+        order.id,
+        "regional"
+      );
+
+    if (pendingRegional) {
+      return {
+        approval_status:
+          order.approval_status,
+        fulfillment_status:
+          order.fulfillment_status,
+        delivery_status:
+          order.delivery_status,
+        pending_stage:
+          "regional",
+      };
+    }
+
+    const pendingSales =
+      await this.getPendingApproval(
+        order.id,
+        "sales"
+      );
+
+    if (pendingSales) {
+      return {
+        approval_status:
+          order.approval_status,
+        fulfillment_status:
+          order.fulfillment_status,
+        delivery_status:
+          order.delivery_status,
+        pending_stage:
+          "sales",
+      };
+    }
+
+    return {
+      approval_status:
+        order.approval_status,
+      fulfillment_status:
+        order.fulfillment_status,
+      delivery_status:
+        order.delivery_status,
+      pending_stage:
+        null,
+    };
   },
 };
