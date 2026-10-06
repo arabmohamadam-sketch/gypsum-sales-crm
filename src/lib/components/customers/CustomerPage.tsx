@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 
 import {
 
+  AlertTriangle,
+
   ArrowLeft,
 
   Bell,
@@ -58,10 +60,22 @@ import type {
 
 } from "@/src/lib/services/activities";
 
-import { customersService } from "@/src/lib/services/customers";
+import {
+
+  customersService,
+
+  type V2RegionalManager,
+
+} from "@/src/lib/services/customers";
 import { settingsService } from "@/src/lib/services/settings";
 
-import type { Customer } from "@/src/lib/types/customer";
+import type {
+
+  Customer,
+
+  CustomerV2Completeness,
+
+} from "@/src/lib/types/customer";
 
 import {
 
@@ -857,6 +871,22 @@ export default function CustomerPage({
 
     );
 
+  const [v2Completeness, setV2Completeness] =
+
+    useState<CustomerV2Completeness | null>(null);
+
+  const [regionalManagers, setRegionalManagers] =
+
+    useState<V2RegionalManager[]>([]);
+
+  const [v2DetailsLoading, setV2DetailsLoading] =
+
+    useState(true);
+
+  const [v2DetailsError, setV2DetailsError] =
+
+    useState<string | null>(null);
+
   const [orders, setOrders] =
 
     useState<
@@ -994,7 +1024,7 @@ export default function CustomerPage({
 
         const data =
 
-          await customersService.getById(
+          await customersService.getByIdV2(
 
             customerId
 
@@ -1056,6 +1086,64 @@ export default function CustomerPage({
 
     };
 
+  }, [customerId]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadV2Details() {
+      if (!customerId) {
+        setV2DetailsLoading(false);
+        return;
+      }
+
+      try {
+        setV2DetailsLoading(true);
+        setV2DetailsError(null);
+
+        const [completeness, managers] =
+          await Promise.all([
+            customersService.checkV2Completeness(
+              customerId
+            ),
+            customersService.getV2RegionalManagers(),
+          ]);
+
+        if (!mounted) {
+          return;
+        }
+
+        setV2Completeness(completeness);
+        setRegionalManagers(managers);
+      } catch (err) {
+        console.error(
+          "خطا در دریافت جزئیات V2 مشتری:",
+          err
+        );
+
+        if (!mounted) {
+          return;
+        }
+
+        setV2Completeness(null);
+        setRegionalManagers([]);
+        setV2DetailsError(
+          err instanceof Error
+            ? err.message
+            : "جزئیات V2 مشتری دریافت نشد."
+        );
+      } finally {
+        if (mounted) {
+          setV2DetailsLoading(false);
+        }
+      }
+    }
+
+    void loadV2Details();
+
+    return () => {
+      mounted = false;
+    };
   }, [customerId]);
 
   useEffect(() => {
@@ -1730,6 +1818,56 @@ export default function CustomerPage({
 
   }
 
+  const primaryAddress =
+    customer.v2_primary_address ?? null;
+
+  const v2ManagerName =
+    regionalManagers.find(
+      (manager) =>
+        manager.id ===
+        customer.regional_manager_id
+    )?.full_name ??
+    (customer.regional_manager_id
+      ? "مدیر منطقه ثبت شده"
+      : "—");
+
+  const v2ProvinceName =
+    primaryAddress?.v2_province_name?.trim() ||
+    "—";
+
+  const v2CityName =
+    primaryAddress?.v2_city_name?.trim() ||
+    getCityName(customer);
+
+  const v2Address =
+    primaryAddress?.address_line_1?.trim() ||
+    "—";
+
+  const v2AddressLine2 =
+    primaryAddress?.address_line_2?.trim() ||
+    "";
+
+  const v2PostalCode =
+    primaryAddress?.postal_code?.trim() ||
+    "—";
+
+  const nationalId =
+    customer.national_id?.trim() ||
+    "—";
+
+  const v2MissingFieldLabels: Record<
+    CustomerV2Completeness["missing_fields"][number],
+    string
+  > = {
+    name: "نام و نام خانوادگی",
+    phone: "شماره تماس",
+    regional_manager: "مدیر منطقه",
+    province: "استان",
+    city: "شهر",
+    address: "آدرس دقیق",
+    national_id: "کد ملی",
+  };
+
   const cityName =
 
     getCityName(customer);
@@ -1940,6 +2078,21 @@ export default function CustomerPage({
 
                     </span>
 
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-black ${
+                        v2DetailsLoading
+                          ? "bg-slate-100 text-slate-500 ring-1 ring-slate-200"
+                          : v2Completeness?.is_complete
+                            ? "bg-blue-50 text-blue-700 ring-1 ring-blue-100"
+                            : "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
+                      }`}
+                    >
+                      {v2DetailsLoading
+                        ? "در حال بررسی V2"
+                        : v2Completeness?.is_complete
+                          ? "V2 کامل"
+                          : "V2 نیازمند تکمیل"}
+                    </span>
                   </div>
 
                   <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
@@ -2315,6 +2468,113 @@ export default function CustomerPage({
         </section>
 
         <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <SectionHeader
+            icon={
+              <UserRound size={19} />
+            }
+            iconClass={
+              v2Completeness?.is_complete
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-amber-50 text-amber-700"
+            }
+            title="وضعیت مشخصات V2"
+            description="وضعیت کامل بودن اطلاعات لازم برای استفاده از مشتری در فرایند سفارش V2."
+            badge={
+              v2DetailsLoading
+                ? "در حال بررسی"
+                : v2Completeness?.is_complete
+                  ? "کامل"
+                  : "نیازمند تکمیل"
+            }
+            action={
+              <Link
+                href={`/customers/edit?id=${encodeURIComponent(customer.id)}`}
+                className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white transition hover:bg-slate-800"
+              >
+                <Pencil size={14} />
+                اصلاح اطلاعات
+              </Link>
+            }
+          />
+
+          {v2DetailsError ? (
+            <ErrorBlock
+              message={v2DetailsError}
+              title="خطا در بررسی مشخصات V2"
+            />
+          ) : v2DetailsLoading ? (
+            <LoadingBlock text="در حال بررسی کامل بودن مشخصات V2..." />
+          ) : (
+            <div className="space-y-5 p-5 sm:p-6">
+              <div
+                className={`rounded-2xl border p-5 ${
+                  v2Completeness?.is_complete
+                    ? "border-emerald-200 bg-emerald-50"
+                    : "border-amber-200 bg-amber-50"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+                      v2Completeness?.is_complete
+                        ? "bg-white text-emerald-600"
+                        : "bg-white text-amber-600"
+                    }`}
+                  >
+                    {v2Completeness?.is_complete ? "✓" : <AlertTriangle size={20} />}
+                  </div>
+                  <div>
+                    <p
+                      className={`font-black ${
+                        v2Completeness?.is_complete
+                          ? "text-emerald-800"
+                          : "text-amber-800"
+                      }`}
+                    >
+                      {v2Completeness?.is_complete
+                        ? "مشخصات مشتری کامل است و برای استفاده در سفارش V2 آماده است."
+                        : "مشخصات مشتری نیاز به اصلاح یا تکمیل دارد."}
+                    </p>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">
+                      {v2Completeness?.is_complete
+                        ? "هفت مورد کنترلی V2 تکمیل شده‌اند."
+                        : "موارد ناقص را از طریق دکمه «اصلاح اطلاعات» تکمیل کنید."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {!v2Completeness?.is_complete &&
+                v2Completeness?.missing_fields &&
+                v2Completeness.missing_fields.length > 0 && (
+                  <div>
+                    <p className="mb-3 text-sm font-black text-slate-800">
+                      موارد ناقص
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {v2Completeness.missing_fields.map((field) => (
+                        <span
+                          key={field}
+                          className="rounded-full bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700 ring-1 ring-red-100"
+                        >
+                          {v2MissingFieldLabels[field]}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Info label="کد ملی" value={nationalId} />
+                <Info label="مدیر منطقه" value={v2ManagerName} />
+                <Info label="استان" value={v2ProvinceName} />
+                <Info label="شهر V2" value={v2CityName} />
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
 
           <SectionHeader
 
@@ -2359,11 +2619,28 @@ export default function CustomerPage({
             />
 
             <Info
+              label="کد ملی"
+              value={nationalId}
+            />
 
-              label="شهر"
+            <Info
+              label="مدیر منطقه"
+              value={v2ManagerName}
+            />
 
+            <Info
+              label="استان"
+              value={v2ProvinceName}
+            />
+
+            <Info
+              label="شهر V2"
+              value={v2CityName}
+            />
+
+            <Info
+              label="شهر قدیمی V1"
               value={cityName}
-
             />
 
             <Info
@@ -2464,6 +2741,53 @@ export default function CustomerPage({
 
           </div>
 
+        </section>
+
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <SectionHeader
+            icon={
+              <MapPin size={19} />
+            }
+            iconClass="bg-cyan-50 text-cyan-700"
+            title="آدرس اصلی مشتری"
+            description="آدرس اصلی پرونده مشتری؛ این آدرس الزاماً همان آدرس تحویل در زمان صدور حواله نیست."
+            action={
+              <Link
+                href={`/customers/edit?id=${encodeURIComponent(customer.id)}`}
+                className="inline-flex items-center gap-2 rounded-xl bg-cyan-50 px-4 py-2.5 text-xs font-black text-cyan-700 ring-1 ring-cyan-100 transition hover:bg-cyan-100"
+              >
+                <Pencil size={14} />
+                ویرایش آدرس
+              </Link>
+            }
+          />
+
+          <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4">
+            <Info label="استان" value={v2ProvinceName} />
+            <Info label="شهر" value={v2CityName} />
+            <Info label="کد پستی" value={v2PostalCode} />
+            <Info
+              label="نوع آدرس"
+              value={
+                primaryAddress?.address_type === "office"
+                  ? "دفتر / آدرس اصلی"
+                  : primaryAddress?.address_type ?? "—"
+              }
+            />
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4 sm:col-span-2 lg:col-span-4">
+              <div className="mb-1.5 text-xs font-medium text-slate-400">
+                آدرس دقیق
+              </div>
+              <div className="whitespace-pre-wrap break-words font-bold leading-7 text-slate-800">
+                {v2Address}
+              </div>
+              {v2AddressLine2 && (
+                <div className="mt-3 border-t border-slate-200 pt-3 text-sm leading-7 text-slate-600">
+                  {v2AddressLine2}
+                </div>
+              )}
+            </div>
+          </div>
         </section>
 
         <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
