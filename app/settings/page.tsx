@@ -28,22 +28,12 @@ import {
   settingsService,
   type SettingsOverview,
 } from "@/src/lib/services/settings";
-import {
-  companyBrandingService,
-} from "@/src/lib/services/company-branding";
+import { companyBrandingService } from "@/src/lib/services/company-branding";
 import type { CurrentCompany } from "@/src/lib/services/current-company";
 
-function formatSettingValue(value: Record<string, unknown>): string {
-  if (Object.keys(value).length === 0) {
-    return "—";
-  }
-
-  return Object.entries(value)
-    .map(([key, item]) => `${key}: ${String(item)}`)
-    .join("، ");
-}
-
-function getErrorMessage(error: unknown): string {
+function getErrorMessage(
+  error: unknown
+): string {
   if (error instanceof Error) {
     return error.message;
   }
@@ -60,48 +50,220 @@ function getErrorMessage(error: unknown): string {
   return "خطا در دریافت یا ذخیره تنظیمات.";
 }
 
-const MAX_LOGO_SIZE = 2 * 1024 * 1024;
+function getRoleLabel(
+  roleSlug: string,
+  fallback: string
+): string {
+  const labels: Record<string, string> = {
+    company_admin: "مدیر کل شرکت",
+    regional_manager: "مدیر منطقه",
+    sales_manager: "مدیر فروش",
+    sales_rep: "کارشناس فروش",
+    employee: "کارمند",
+  };
+
+  return (
+    labels[roleSlug] ||
+    fallback ||
+    "نقش شرکت"
+  );
+}
+
+function getRoleDescription(
+  roleSlug: string,
+  fallback?: string | null
+): string {
+  const descriptions: Record<
+    string,
+    string
+  > = {
+    company_admin:
+      "مدیریت کامل تنظیمات و دسترسی‌های شرکت",
+    regional_manager:
+      "مدیریت عملیات و سفارش‌های حوزه منطقه",
+    sales_manager:
+      "مدیریت فروش و سفارش‌های حوزه فروش",
+    sales_rep:
+      "ثبت و پیگیری مشتریان و سفارش‌های اختصاص‌یافته",
+    employee:
+      "نقش پایه برای واگذاری دسترسی‌های عملیاتی",
+  };
+
+  return (
+    descriptions[roleSlug] ||
+    fallback ||
+    "مدیریت دسترسی‌های این نقش"
+  );
+}
+
+const SETTING_LABELS: Record<
+  string,
+  string
+> = {
+  "ai.scoring.weights":
+    "وزن‌های امتیازدهی هوشمند",
+  "integrations.sms.enabled":
+    "اتصال پیامک",
+  "integrations.whatsapp.enabled":
+    "اتصال واتساپ",
+  "mobile.offline_sync.enabled":
+    "همگام‌سازی آفلاین موبایل و PWA",
+  "notifications.push.enabled":
+    "اعلان‌های Push",
+};
+
+const SETTING_DESCRIPTION_LABELS: Record<
+  string,
+  string
+> = {
+  "ai.scoring.weights":
+    "تنظیم وزن معیارهای مورد استفاده برای امتیازدهی هوشمند مشتریان",
+  "integrations.sms.enabled":
+    "فعال یا غیرفعال بودن اتصال سرویس پیامک",
+  "integrations.whatsapp.enabled":
+    "فعال یا غیرفعال بودن اتصال واتساپ",
+  "mobile.offline_sync.enabled":
+    "فعال یا غیرفعال بودن همگام‌سازی آفلاین در موبایل و PWA",
+  "notifications.push.enabled":
+    "فعال یا غیرفعال بودن ارسال اعلان‌های Push",
+};
+
+const VALUE_KEY_LABELS: Record<
+  string,
+  string
+> = {
+  days_since_call:
+    "روز از آخرین تماس",
+  inactivity_days:
+    "روزهای عدم فعالیت",
+  lifetime_tonnage:
+    "تناژ کل سابقه فروش",
+  days_since_follow_up:
+    "روز از آخرین پیگیری",
+  average_monthly_tonnage:
+    "میانگین تناژ ماهانه",
+  enabled:
+    "وضعیت",
+};
+
+function getSettingLabel(
+  key: string
+): string {
+  return (
+    SETTING_LABELS[key] ||
+    key
+  );
+}
+
+function getSettingDescription(
+  key: string,
+  fallback?: string | null
+): string {
+  return (
+    SETTING_DESCRIPTION_LABELS[key] ||
+    fallback ||
+    "تنظیمات ثبت‌شده در سامانه"
+  );
+}
+
+function formatSettingValue(
+  key: string,
+  value: Record<string, unknown>
+): string {
+  const entries = Object.entries(value);
+
+  if (entries.length === 0) {
+    return "—";
+  }
+
+  return entries
+    .map(([itemKey, itemValue]) => {
+      const translatedKey =
+        VALUE_KEY_LABELS[itemKey] ||
+        itemKey;
+
+      let translatedValue =
+        String(itemValue);
+
+      if (
+        itemKey === "enabled" &&
+        typeof itemValue === "boolean"
+      ) {
+        translatedValue =
+          itemValue
+            ? "فعال"
+            : "غیرفعال";
+      }
+
+      return `${translatedKey}: ${translatedValue}`;
+    })
+    .join("، ");
+}
+
+const MAX_LOGO_SIZE =
+  2 * 1024 * 1024;
+
 const ALLOWED_LOGO_TYPES = new Set([
   "image/png",
   "image/jpeg",
   "image/webp",
 ]);
 
-
 type CompanyBrandingSectionProps = {
   authCompany: CurrentCompany | null;
-  canManageSettings: boolean;
+  canManageBranding: boolean;
   refreshCompany: () => Promise<void>;
   loadSettings: () => Promise<void>;
 };
 
 function CompanyBrandingSection({
   authCompany,
-  canManageSettings,
+  canManageBranding,
   refreshCompany,
   loadSettings,
 }: CompanyBrandingSectionProps) {
-  const [brandingError, setBrandingError] = useState<string | null>(null);
-  const [brandingSuccess, setBrandingSuccess] = useState<string | null>(null);
-  const [brandingSaving, setBrandingSaving] = useState(false);
-  const [displayName, setDisplayName] = useState(
-    authCompany?.branding.display_name?.trim() ||
-      authCompany?.name?.trim() ||
-      ""
-  );
-  const [selectedLogo, setSelectedLogo] = useState<File | null>(null);
-  const [logoPreviewUrl, setLogoPreviewUrl] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const previewObjectUrlRef = useRef<string | null>(null);
+  const [brandingError, setBrandingError] =
+    useState<string | null>(null);
+
+  const [brandingSuccess, setBrandingSuccess] =
+    useState<string | null>(null);
+
+  const [brandingSaving, setBrandingSaving] =
+    useState(false);
+
+  const [displayName, setDisplayName] =
+    useState(
+      authCompany?.branding.display_name?.trim() ||
+        authCompany?.name?.trim() ||
+        ""
+    );
+
+  const [selectedLogo, setSelectedLogo] =
+    useState<File | null>(null);
+
+  const [logoPreviewUrl, setLogoPreviewUrl] =
+    useState<string | null>(null);
+
+  const fileInputRef =
+    useRef<HTMLInputElement | null>(null);
+
+  const previewObjectUrlRef =
+    useRef<string | null>(null);
 
   const currentLogoUrl =
-    authCompany?.branding.logo_url?.trim() || "/logo.png";
-  const effectiveLogoPreviewUrl = logoPreviewUrl || currentLogoUrl;
+    authCompany?.branding.logo_url?.trim() ||
+    "/logo.png";
+
+  const effectiveLogoPreviewUrl =
+    logoPreviewUrl || currentLogoUrl;
 
   useEffect(() => {
     return () => {
       if (previewObjectUrlRef.current) {
-        URL.revokeObjectURL(previewObjectUrlRef.current);
+        URL.revokeObjectURL(
+          previewObjectUrlRef.current
+        );
+
         previewObjectUrlRef.current = null;
       }
     };
@@ -109,12 +271,17 @@ function CompanyBrandingSection({
 
   function clearPreviewObjectUrl() {
     if (previewObjectUrlRef.current) {
-      URL.revokeObjectURL(previewObjectUrlRef.current);
+      URL.revokeObjectURL(
+        previewObjectUrlRef.current
+      );
+
       previewObjectUrlRef.current = null;
     }
   }
 
-  function handleLogoSelected(file: File | null) {
+  function handleLogoSelected(
+    file: File | null
+  ) {
     setBrandingError(null);
     setBrandingSuccess(null);
     clearPreviewObjectUrl();
@@ -128,32 +295,48 @@ function CompanyBrandingSection({
     if (!ALLOWED_LOGO_TYPES.has(file.type)) {
       setSelectedLogo(null);
       setLogoPreviewUrl(null);
-      setBrandingError("فرمت لوگو باید PNG، JPG یا WEBP باشد.");
+
+      setBrandingError(
+        "فرمت لوگو باید PNG، JPG یا WEBP باشد."
+      );
+
       return;
     }
 
     if (file.size <= 0) {
       setSelectedLogo(null);
       setLogoPreviewUrl(null);
-      setBrandingError("فایل لوگو خالی است.");
+
+      setBrandingError(
+        "فایل لوگو خالی است."
+      );
+
       return;
     }
 
     if (file.size > MAX_LOGO_SIZE) {
       setSelectedLogo(null);
       setLogoPreviewUrl(null);
-      setBrandingError("حجم فایل لوگو نباید بیشتر از ۲ مگابایت باشد.");
+
+      setBrandingError(
+        "حجم فایل لوگو نباید بیشتر از ۲ مگابایت باشد."
+      );
+
       return;
     }
 
-    const objectUrl = URL.createObjectURL(file);
-    previewObjectUrlRef.current = objectUrl;
+    const objectUrl =
+      URL.createObjectURL(file);
+
+    previewObjectUrlRef.current =
+      objectUrl;
+
     setSelectedLogo(file);
     setLogoPreviewUrl(objectUrl);
   }
 
   async function handleBrandingSave() {
-    if (!canManageSettings) {
+    if (!canManageBranding) {
       return;
     }
 
@@ -162,43 +345,69 @@ function CompanyBrandingSection({
       setBrandingError(null);
       setBrandingSuccess(null);
 
-      const trimmedDisplayName = displayName.trim();
+      const trimmedDisplayName =
+        displayName.trim();
 
       if (!trimmedDisplayName) {
-        throw new Error("نام نمایشی شرکت نمی‌تواند خالی باشد.");
+        throw new Error(
+          "نام نمایشی شرکت نمی‌تواند خالی باشد."
+        );
       }
 
-      let uploadedLogoPath: string | undefined;
+      let uploadedLogoPath:
+        | string
+        | undefined;
 
       if (selectedLogo) {
         uploadedLogoPath =
-          await companyBrandingService.uploadLogo(selectedLogo);
+          await companyBrandingService.uploadLogo(
+            selectedLogo
+          );
       }
 
-      await companyBrandingService.updateBranding({
-        displayName: trimmedDisplayName,
-        ...(uploadedLogoPath
-          ? { logoPath: uploadedLogoPath }
-          : {}),
-      });
+      await companyBrandingService.updateBranding(
+        {
+          displayName:
+            trimmedDisplayName,
+          ...(uploadedLogoPath
+            ? {
+                logoPath:
+                  uploadedLogoPath,
+              }
+            : {}),
+        }
+      );
 
       await refreshCompany();
       await loadSettings();
 
       clearPreviewObjectUrl();
+
       setSelectedLogo(null);
       setLogoPreviewUrl(null);
-      setBrandingSuccess("هویت بصری شرکت با موفقیت ذخیره شد.");
+
+      setBrandingSuccess(
+        "هویت بصری شرکت با موفقیت ذخیره شد."
+      );
     } catch (err) {
-      console.error("Failed to save company branding:", err);
-      setBrandingError(getErrorMessage(err));
+      console.error(
+        "Failed to save company branding:",
+        err
+      );
+
+      setBrandingError(
+        getErrorMessage(err)
+      );
     } finally {
       setBrandingSaving(false);
     }
   }
 
   async function handleLogoRemove() {
-    if (!canManageSettings || !authCompany?.branding.logo_url) {
+    if (
+      !canManageBranding ||
+      !authCompany?.branding.logo_url
+    ) {
       return;
     }
 
@@ -208,16 +417,27 @@ function CompanyBrandingSection({
       setBrandingSuccess(null);
 
       await companyBrandingService.removeLogo();
+
       await refreshCompany();
       await loadSettings();
 
       clearPreviewObjectUrl();
+
       setSelectedLogo(null);
       setLogoPreviewUrl(null);
-      setBrandingSuccess("لوگوی اختصاصی شرکت حذف شد و لوگوی پیش‌فرض فعال شد.");
+
+      setBrandingSuccess(
+        "لوگوی اختصاصی شرکت حذف شد و لوگوی پیش‌فرض فعال شد."
+      );
     } catch (err) {
-      console.error("Failed to remove company branding logo:", err);
-      setBrandingError(getErrorMessage(err));
+      console.error(
+        "Failed to remove company branding logo:",
+        err
+      );
+
+      setBrandingError(
+        getErrorMessage(err)
+      );
     } finally {
       setBrandingSaving(false);
     }
@@ -243,7 +463,7 @@ function CompanyBrandingSection({
           </div>
         </div>
 
-        {!canManageSettings && (
+        {!canManageBranding && (
           <span className="rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-500">
             فقط مشاهده
           </span>
@@ -258,16 +478,21 @@ function CompanyBrandingSection({
               aria-label="پیش‌نمایش لوگوی شرکت"
               className="h-full w-full bg-contain bg-center bg-no-repeat"
               style={{
-                backgroundImage: `url("${effectiveLogoPreviewUrl.replace(/"/g, "%22")}")`,
+                backgroundImage: `url("${effectiveLogoPreviewUrl.replace(
+                  /"/g,
+                  "%22"
+                )}")`,
               }}
             />
           </div>
 
-          {canManageSettings && (
+          {canManageBranding && (
             <div className="mt-4 space-y-2">
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() =>
+                  fileInputRef.current?.click()
+                }
                 className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 text-xs font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={brandingSaving}
               >
@@ -281,13 +506,20 @@ function CompanyBrandingSection({
                 accept="image/png,image/jpeg,image/webp"
                 className="hidden"
                 onChange={(event) => {
-                  handleLogoSelected(event.target.files?.[0] ?? null);
-                  event.currentTarget.value = "";
+                  handleLogoSelected(
+                    event.target.files?.[0] ??
+                      null
+                  );
+
+                  event.currentTarget.value =
+                    "";
                 }}
               />
 
-              {authCompany?.branding.logo_url &&
-                authCompany.branding.logo_url !== "/logo.png" && (
+              {authCompany?.branding
+                .logo_url &&
+                authCompany.branding.logo_url !==
+                  "/logo.png" && (
                   <button
                     type="button"
                     onClick={() => {
@@ -318,11 +550,17 @@ function CompanyBrandingSection({
                 id="company-display-name"
                 value={displayName}
                 onChange={(event) => {
-                  setDisplayName(event.target.value);
+                  setDisplayName(
+                    event.target.value
+                  );
+
                   setBrandingError(null);
                   setBrandingSuccess(null);
                 }}
-                disabled={!canManageSettings || brandingSaving}
+                disabled={
+                  !canManageBranding ||
+                  brandingSaving
+                }
                 maxLength={160}
                 className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-800 outline-none transition placeholder:text-slate-300 focus:border-blue-400 focus:ring-4 focus:ring-blue-50 disabled:cursor-not-allowed disabled:bg-slate-50"
                 placeholder="نام نمایشی شرکت"
@@ -340,7 +578,9 @@ function CompanyBrandingSection({
               </p>
 
               <p className="mt-2 text-sm font-black text-slate-700">
-                {authCompany?.branding.logo_url === "/logo.png"
+                {authCompany?.branding
+                  .logo_url ===
+                "/logo.png"
                   ? "لوگوی پیش‌فرض سیستم"
                   : "لوگوی اختصاصی شرکت"}
               </p>
@@ -357,7 +597,8 @@ function CompanyBrandingSection({
             </div>
           </div>
 
-          {(brandingError || brandingSuccess) && (
+          {(brandingError ||
+            brandingSuccess) && (
             <div
               className={`mt-5 rounded-2xl border p-4 text-sm font-medium ${
                 brandingError
@@ -366,11 +607,12 @@ function CompanyBrandingSection({
               }`}
               role="alert"
             >
-              {brandingError || brandingSuccess}
+              {brandingError ||
+                brandingSuccess}
             </div>
           )}
 
-          {canManageSettings && (
+          {canManageBranding && (
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <button
                 type="button"
@@ -381,10 +623,14 @@ function CompanyBrandingSection({
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {brandingSaving ? (
-                  <Loader2 size={17} className="animate-spin" />
+                  <Loader2
+                    size={17}
+                    className="animate-spin"
+                  />
                 ) : (
                   <Save size={17} />
                 )}
+
                 ذخیره هویت بصری
               </button>
 
@@ -406,6 +652,7 @@ export default function SettingsPage() {
     loading: permissionsLoading,
     error: permissionsError,
     hasPermission,
+    hasAnyPermission,
   } = usePermissions();
 
   const {
@@ -413,38 +660,75 @@ export default function SettingsPage() {
     refreshCompany,
   } = useAuth();
 
-  const [overview, setOverview] = useState<SettingsOverview | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [overview, setOverview] =
+    useState<SettingsOverview | null>(
+      null
+    );
 
-  const canReadSettings = hasPermission("settings.read");
-  const canManageSettings = hasPermission("settings.write");
-  const canReadUsers = hasPermission("users.read");
-  const canManageUsers = hasPermission("users.write");
+  const [error, setError] =
+    useState<string | null>(null);
+
+  const canReadSettings =
+    hasPermission(
+      "company.settings.view"
+    );
+
+  const canManageBranding =
+    hasPermission(
+      "company.branding.manage"
+    );
+
+  const canReadUsers =
+    hasPermission("users.view");
+
+  const canManageUsers =
+    hasPermission("users.edit");
+
+  const canManageRoles =
+    hasAnyPermission([
+      "roles.edit",
+      "roles.assign_permission",
+      "roles.revoke_permission",
+    ]);
 
   const loading =
     permissionsLoading ||
-    (canReadSettings && overview === null && error === null);
+    (canReadSettings &&
+      overview === null &&
+      error === null);
 
-  const fetchSettings = useCallback(() => {
-    return settingsService.getOverview();
-  }, []);
+  const fetchSettings =
+    useCallback(() => {
+      return settingsService.getOverview();
+    }, []);
 
-  const loadSettings = useCallback(async () => {
-    try {
-      setError(null);
+  const loadSettings =
+    useCallback(async () => {
+      try {
+        setError(null);
 
-      const result = await settingsService.getOverview();
+        const result =
+          await settingsService.getOverview();
 
-      setOverview(result);
-    } catch (err) {
-      console.error("Failed to load settings:", err);
-      setOverview(null);
-      setError(getErrorMessage(err));
-    }
-  }, []);
+        setOverview(result);
+      } catch (err) {
+        console.error(
+          "Failed to load settings:",
+          err
+        );
+
+        setOverview(null);
+        setError(
+          getErrorMessage(err)
+        );
+      }
+    }, []);
 
   useEffect(() => {
-    if (permissionsLoading || !canReadSettings) {
+    if (
+      permissionsLoading ||
+      !canReadSettings
+    ) {
       return;
     }
 
@@ -464,19 +748,37 @@ export default function SettingsPage() {
           return;
         }
 
-        console.error("Failed to load settings:", err);
+        console.error(
+          "Failed to load settings:",
+          err
+        );
+
         setOverview(null);
-        setError(getErrorMessage(err));
+        setError(
+          getErrorMessage(err)
+        );
       });
 
     return () => {
       cancelled = true;
     };
-  }, [permissionsLoading, canReadSettings, fetchSettings]);
+  }, [
+    permissionsLoading,
+    canReadSettings,
+    fetchSettings,
+  ]);
 
   const roleNames = useMemo(
     () =>
-      overview?.roles.map((role) => role.name).join("، ") || "بدون نقش",
+      overview?.roles
+        .map((role) =>
+          getRoleLabel(
+            role.slug,
+            role.name
+          )
+        )
+        .join("، ") ||
+      "بدون نقش",
     [overview]
   );
 
@@ -488,7 +790,10 @@ export default function SettingsPage() {
       >
         <div className="text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-            <Loader2 size={22} className="animate-spin text-blue-600" />
+            <Loader2
+              size={22}
+              className="animate-spin text-blue-600"
+            />
           </div>
 
           <p className="mt-4 text-sm font-bold text-slate-600">
@@ -501,7 +806,10 @@ export default function SettingsPage() {
 
   if (!canReadSettings) {
     return (
-      <main dir="rtl" className="mx-auto max-w-[1100px]">
+      <main
+        dir="rtl"
+        className="mx-auto max-w-[1100px]"
+      >
         <section className="rounded-3xl border border-red-200 bg-white p-8 shadow-sm">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-50 text-red-600">
@@ -576,7 +884,6 @@ export default function SettingsPage() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Profile */}
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
@@ -601,7 +908,8 @@ export default function SettingsPage() {
               </p>
 
               <p className="mt-1 text-sm font-black text-slate-800">
-                {overview?.profile?.full_name ?? "—"}
+                {overview?.profile
+                  ?.full_name ?? "—"}
               </p>
             </div>
 
@@ -614,7 +922,8 @@ export default function SettingsPage() {
                 dir="ltr"
                 className="mt-1 text-left text-sm font-semibold text-slate-700"
               >
-                {overview?.profile?.email ?? "—"}
+                {overview?.profile
+                  ?.email ?? "—"}
               </p>
             </div>
 
@@ -624,7 +933,8 @@ export default function SettingsPage() {
               </p>
 
               <p className="mt-1 text-sm font-semibold text-slate-700">
-                {overview?.profile?.phone ?? "—"}
+                {overview?.profile
+                  ?.phone ?? "—"}
               </p>
             </div>
 
@@ -634,7 +944,8 @@ export default function SettingsPage() {
               </p>
 
               <p className="mt-1 text-sm font-semibold text-slate-700">
-                {overview?.profile?.job_title ?? "—"}
+                {overview?.profile
+                  ?.job_title ?? "—"}
               </p>
             </div>
 
@@ -644,15 +955,21 @@ export default function SettingsPage() {
               </p>
 
               <div className="mt-2 flex flex-wrap gap-2">
-                {overview?.roles.length ? (
-                  overview.roles.map((role) => (
-                    <span
-                      key={role.id}
-                      className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700"
-                    >
-                      {role.name}
-                    </span>
-                  ))
+                {overview?.roles
+                  .length ? (
+                  overview.roles.map(
+                    (role) => (
+                      <span
+                        key={role.id}
+                        className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700"
+                      >
+                        {getRoleLabel(
+                          role.slug,
+                          role.name
+                        )}
+                      </span>
+                    )
+                  )
                 ) : (
                   <span className="text-sm text-slate-400">
                     {roleNames}
@@ -663,7 +980,6 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Company */}
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
@@ -688,7 +1004,8 @@ export default function SettingsPage() {
               </p>
 
               <p className="mt-1 text-sm font-black text-slate-800">
-                {overview?.company?.name ?? "—"}
+                {overview?.company
+                  ?.name ?? "—"}
               </p>
             </div>
 
@@ -698,7 +1015,8 @@ export default function SettingsPage() {
               </p>
 
               <p className="mt-1 text-sm font-semibold text-slate-700">
-                {overview?.company?.legal_name ?? "—"}
+                {overview?.company
+                  ?.legal_name ?? "—"}
               </p>
             </div>
 
@@ -709,9 +1027,10 @@ export default function SettingsPage() {
 
               <p
                 dir="ltr"
-                className="mt-1 text-sm font-semibold text-slate-700"
+                className="mt-1 text-left text-sm font-semibold text-slate-700"
               >
-                {overview?.company?.timezone ?? "—"}
+                {overview?.company
+                  ?.timezone ?? "—"}
               </p>
             </div>
 
@@ -722,9 +1041,10 @@ export default function SettingsPage() {
 
               <p
                 dir="ltr"
-                className="mt-1 text-sm font-semibold text-slate-700"
+                className="mt-1 text-left text-sm font-semibold text-slate-700"
               >
-                {overview?.company?.locale ?? "—"}
+                {overview?.company
+                  ?.locale ?? "—"}
               </p>
             </div>
 
@@ -735,7 +1055,11 @@ export default function SettingsPage() {
 
               <div className="mt-2 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
                 <CheckCircle2 size={14} />
-                {overview?.company?.is_active ? "فعال" : "غیرفعال"}
+
+                {overview?.company
+                  ?.is_active
+                  ? "فعال"
+                  : "غیرفعال"}
               </div>
             </div>
           </div>
@@ -743,14 +1067,22 @@ export default function SettingsPage() {
       </div>
 
       <CompanyBrandingSection
-        key={authCompany?.id ?? "no-company"}
+        key={
+          authCompany?.id ??
+          "no-company"
+        }
         authCompany={authCompany}
-        canManageSettings={canManageSettings}
-        refreshCompany={refreshCompany}
-        loadSettings={loadSettings}
+        canManageBranding={
+          canManageBranding
+        }
+        refreshCompany={
+          refreshCompany
+        }
+        loadSettings={
+          loadSettings
+        }
       />
 
-      {/* Roles & access */}
       {canReadUsers && (
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -775,7 +1107,7 @@ export default function SettingsPage() {
                 </Link>
               )}
 
-              {canManageSettings && (
+              {canManageRoles && (
                 <Link
                   href="/settings/roles"
                   className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800"
@@ -785,40 +1117,48 @@ export default function SettingsPage() {
                 </Link>
               )}
 
-              {!canManageUsers && !canManageSettings && (
-                <span className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-500">
-                  فقط مشاهده
-                </span>
-              )}
+              {!canManageUsers &&
+                !canManageRoles && (
+                  <span className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-500">
+                    فقط مشاهده
+                  </span>
+                )}
             </div>
           </div>
 
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {overview?.roles.map((role) => (
-              <div
-                key={role.id}
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-              >
-                <p className="text-sm font-black text-slate-800">
-                  {role.name}
-                </p>
-
-                <p
-                  dir="ltr"
-                  className="mt-1 text-[11px] text-slate-400"
+            {overview?.roles.map(
+              (role) => (
+                <div
+                  key={role.id}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
                 >
-                  {role.slug}
-                </p>
-
-                {role.description && (
-                  <p className="mt-3 text-xs leading-6 text-slate-500">
-                    {role.description}
+                  <p className="text-sm font-black text-slate-800">
+                    {getRoleLabel(
+                      role.slug,
+                      role.name
+                    )}
                   </p>
-                )}
-              </div>
-            ))}
 
-            {!overview?.roles.length && (
+                  <p className="mt-2 text-xs leading-6 text-slate-500">
+                    {getRoleDescription(
+                      role.slug,
+                      role.description
+                    )}
+                  </p>
+
+                  <p
+                    dir="ltr"
+                    className="mt-2 text-[10px] text-slate-400"
+                  >
+                    {role.slug}
+                  </p>
+                </div>
+              )
+            )}
+
+            {!overview?.roles
+              .length && (
               <div className="rounded-2xl border border-dashed border-slate-200 p-5 text-sm text-slate-400">
                 هیچ نقشی برای این کاربر ثبت نشده است.
               </div>
@@ -827,7 +1167,6 @@ export default function SettingsPage() {
         </section>
       )}
 
-      {/* Company settings */}
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
@@ -840,7 +1179,9 @@ export default function SettingsPage() {
             </p>
           </div>
 
-          {!canManageSettings && (
+          {!hasPermission(
+            "company.settings.manage"
+          ) && (
             <span className="rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-bold text-slate-500">
               فقط مشاهده
             </span>
@@ -848,36 +1189,48 @@ export default function SettingsPage() {
         </div>
 
         <div className="mt-5 space-y-3">
-          {overview?.settings.map((setting) => (
-            <div
-              key={setting.id}
-              className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center md:justify-between"
-            >
-              <div className="min-w-0">
-                <p
-                  dir="ltr"
-                  className="text-sm font-black text-slate-800"
-                >
-                  {setting.key}
-                </p>
-
-                {setting.description && (
-                  <p className="mt-1 text-xs leading-6 text-slate-400">
-                    {setting.description}
-                  </p>
-                )}
-              </div>
-
+          {overview?.settings.map(
+            (setting) => (
               <div
-                dir="ltr"
-                className="max-w-full text-left text-xs font-medium text-slate-600 md:max-w-[65%]"
+                key={setting.id}
+                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
               >
-                {formatSettingValue(setting.value)}
-              </div>
-            </div>
-          ))}
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-black text-slate-800">
+                      {getSettingLabel(
+                        setting.key
+                      )}
+                    </p>
 
-          {!overview?.settings.length && (
+                    <p className="mt-1 text-xs leading-6 text-slate-400">
+                      {getSettingDescription(
+                        setting.key,
+                        setting.description
+                      )}
+                    </p>
+
+                    <p
+                      dir="ltr"
+                      className="mt-1 text-[10px] text-slate-300"
+                    >
+                      {setting.key}
+                    </p>
+                  </div>
+
+                  <div className="max-w-full text-sm font-bold text-slate-700 md:max-w-[55%]">
+                    {formatSettingValue(
+                      setting.key,
+                      setting.value
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          )}
+
+          {!overview?.settings
+            .length && (
             <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-400">
               تنظیمات شرکتی ثبت نشده است.
             </div>
