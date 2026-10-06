@@ -1,10 +1,10 @@
 import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
-import { createSupabaseClient } from "@/src/lib/supabase";
 import { sharedLocationService } from "@/src/lib/services/shared-location";
 import {
   userManagementService,
   type ManagedUser,
 } from "@/src/lib/services/user-management";
+import { createSupabaseClient } from "@/src/lib/supabase";
 import type {
   Customer,
   CustomerV2Completeness,
@@ -53,8 +53,15 @@ export interface CustomerV2CreateInput {
   customer_type: string;
   national_id: string;
   regional_manager_id: string;
-  plan_scope: "regional" | "out_of_region";
+
+  /**
+   * Sales-plan ownership is optional in V2.
+   * Customer commercial ownership is defined independently
+   * by regional_manager_id.
+   */
+  plan_scope?: "regional" | "out_of_region" | null;
   plan_region_id?: string | null;
+
   is_vip?: boolean;
   is_active?: boolean;
   metadata?: Record<string, unknown>;
@@ -69,8 +76,13 @@ export interface CustomerV2UpdateInput {
   customer_type?: string;
   national_id?: string | null;
   regional_manager_id?: string | null;
+
+  /**
+   * Sales-plan ownership is optional in V2.
+   */
   plan_scope?: "regional" | "out_of_region" | null;
   plan_region_id?: string | null;
+
   ownership_reason?: string;
   is_vip?: boolean;
   is_active?: boolean;
@@ -102,9 +114,7 @@ function logSupabaseError(
   });
 }
 
-function normalizeDigits(
-  value: string | null | undefined
-): string {
+function normalizeDigits(value: string | null | undefined): string {
   if (!value) {
     return "";
   }
@@ -115,15 +125,13 @@ function normalizeDigits(
   return value
     .trim()
     .replace(/[۰-۹٠-٩]/g, (digit) => {
-      const persianIndex =
-        persianDigits.indexOf(digit);
+      const persianIndex = persianDigits.indexOf(digit);
 
       if (persianIndex >= 0) {
         return String(persianIndex);
       }
 
-      const arabicIndex =
-        arabicDigits.indexOf(digit);
+      const arabicIndex = arabicDigits.indexOf(digit);
 
       if (arabicIndex >= 0) {
         return String(arabicIndex);
@@ -133,35 +141,24 @@ function normalizeDigits(
     });
 }
 
-function normalizePhone(
-  value: string | null | undefined
-): string {
+function normalizePhone(value: string | null | undefined): string {
   if (!value) {
     return "";
   }
 
-  let normalized =
-    normalizeDigits(value);
+  let normalized = normalizeDigits(value);
 
-  normalized = normalized.replace(
-    /[^\d+]/g,
-    ""
-  );
+  normalized = normalized.replace(/[^\d+]/g, "");
 
   if (normalized.startsWith("+98")) {
-    normalized =
-      `0${normalized.slice(3)}`;
-  } else if (
-    normalized.startsWith("0098")
-  ) {
-    normalized =
-      `0${normalized.slice(4)}`;
+    normalized = `0${normalized.slice(3)}`;
+  } else if (normalized.startsWith("0098")) {
+    normalized = `0${normalized.slice(4)}`;
   } else if (
     normalized.startsWith("98") &&
     normalized.length >= 10
   ) {
-    normalized =
-      `0${normalized.slice(2)}`;
+    normalized = `0${normalized.slice(2)}`;
   }
 
   return normalized;
@@ -170,15 +167,11 @@ function normalizePhone(
 function cleanPhoneValue(
   value: string | null | undefined
 ): string | null {
-  if (
-    value === null ||
-    value === undefined
-  ) {
+  if (value === null || value === undefined) {
     return null;
   }
 
-  const trimmed =
-    value.trim();
+  const trimmed = value.trim();
 
   return trimmed || null;
 }
@@ -186,24 +179,17 @@ function cleanPhoneValue(
 function normalizeNationalId(
   value: string | null | undefined
 ): string {
-  return normalizeDigits(value).replace(
-    /\D/g,
-    ""
-  );
+  return normalizeDigits(value).replace(/\D/g, "");
 }
 
 function validateNationalId(
   value: string | null | undefined
 ): string | null {
-  if (
-    value === null ||
-    value === undefined
-  ) {
+  if (value === null || value === undefined) {
     return null;
   }
 
-  const normalized =
-    normalizeNationalId(value);
+  const normalized = normalizeNationalId(value);
 
   if (!normalized) {
     return null;
@@ -218,9 +204,7 @@ function validateNationalId(
   return normalized;
 }
 
-function cleanText(
-  value: string | null | undefined
-): string {
+function cleanText(value: string | null | undefined): string {
   return (
     value
       ?.trim()
@@ -234,36 +218,26 @@ function cleanText(
 function cleanNullableText(
   value: string | null | undefined
 ): string | null {
-  const normalized =
-    cleanText(value);
+  const normalized = cleanText(value);
 
   return normalized || null;
 }
 
 async function validatePhoneDuplicates(
   phone: string | null | undefined,
-  secondaryPhone:
-    | string
-    | null
-    | undefined,
+  secondaryPhone: string | null | undefined,
   excludeCustomerId?: string
 ): Promise<void> {
-  const companyId =
-    await getRequiredCurrentCompanyId();
+  const companyId = await getRequiredCurrentCompanyId();
 
-  const normalizedPhone =
-    normalizePhone(phone);
-
+  const normalizedPhone = normalizePhone(phone);
   const normalizedSecondaryPhone =
-    normalizePhone(
-      secondaryPhone
-    );
+    normalizePhone(secondaryPhone);
 
   if (
     normalizedPhone &&
     normalizedSecondaryPhone &&
-    normalizedPhone ===
-      normalizedSecondaryPhone
+    normalizedPhone === normalizedSecondaryPhone
   ) {
     throw new CustomerValidationError(
       "شماره تماس دوم نمی‌تواند با شماره تماس اصلی یکسان باشد."
@@ -279,25 +253,13 @@ async function validatePhoneDuplicates(
     return;
   }
 
-  const supabase =
-    createSupabaseClient();
+  const supabase = createSupabaseClient();
 
-  const {
-    data,
-    error,
-  } = await supabase
+  const { data, error } = await supabase
     .from("customers")
-    .select(
-      "id, name, phone, secondary_phone"
-    )
-    .eq(
-      "company_id",
-      companyId
-    )
-    .is(
-      "deleted_at",
-      null
-    );
+    .select("id, name, phone, secondary_phone")
+    .eq("company_id", companyId)
+    .is("deleted_at", null);
 
   if (error) {
     logSupabaseError(
@@ -307,49 +269,38 @@ async function validatePhoneDuplicates(
     throw error;
   }
 
-  const duplicateCustomers =
-    (data ?? []).filter(
-      (customer) => {
-        if (
-          excludeCustomerId &&
-          String(customer.id) ===
-            excludeCustomerId
-        ) {
-          return false;
-        }
-
-        const existingPhone =
-          normalizePhone(
-            customer.phone
-          );
-
-        const existingSecondaryPhone =
-          normalizePhone(
-            customer.secondary_phone
-          );
-
-        return numbersToCheck.some(
-          (number) =>
-            number ===
-              existingPhone ||
-            number ===
-              existingSecondaryPhone
-        );
+  const duplicateCustomers = (data ?? []).filter(
+    (customer) => {
+      if (
+        excludeCustomerId &&
+        String(customer.id) === excludeCustomerId
+      ) {
+        return false;
       }
-    );
 
-  if (
-    duplicateCustomers.length === 0
-  ) {
+      const existingPhone = normalizePhone(
+        customer.phone
+      );
+      const existingSecondaryPhone = normalizePhone(
+        customer.secondary_phone
+      );
+
+      return numbersToCheck.some(
+        (number) =>
+          number === existingPhone ||
+          number === existingSecondaryPhone
+      );
+    }
+  );
+
+  if (duplicateCustomers.length === 0) {
     return;
   }
 
-  const duplicateCustomer =
-    duplicateCustomers[0];
+  const duplicateCustomer = duplicateCustomers[0];
 
   const duplicateName =
-    typeof duplicateCustomer.name ===
-    "string"
+    typeof duplicateCustomer.name === "string"
       ? duplicateCustomer.name.trim()
       : "";
 
@@ -368,32 +319,15 @@ async function validateNationalIdDuplicate(
   nationalId: string,
   excludeCustomerId?: string
 ): Promise<void> {
-  const companyId =
-    await getRequiredCurrentCompanyId();
+  const companyId = await getRequiredCurrentCompanyId();
+  const supabase = createSupabaseClient();
 
-  const supabase =
-    createSupabaseClient();
-
-  const {
-    data,
-    error,
-  } = await supabase
+  const { data, error } = await supabase
     .from("customers")
-    .select(
-      "id, name"
-    )
-    .eq(
-      "company_id",
-      companyId
-    )
-    .eq(
-      "national_id",
-      nationalId
-    )
-    .is(
-      "deleted_at",
-      null
-    );
+    .select("id, name")
+    .eq("company_id", companyId)
+    .eq("national_id", nationalId)
+    .is("deleted_at", null);
 
   if (error) {
     logSupabaseError(
@@ -403,23 +337,18 @@ async function validateNationalIdDuplicate(
     throw error;
   }
 
-  const duplicates =
-    (data ?? []).filter(
-      (customer) =>
-        !excludeCustomerId ||
-        String(customer.id) !==
-          excludeCustomerId
-    );
+  const duplicates = (data ?? []).filter(
+    (customer) =>
+      !excludeCustomerId ||
+      String(customer.id) !== excludeCustomerId
+  );
 
-  if (
-    duplicates.length === 0
-  ) {
+  if (duplicates.length === 0) {
     return;
   }
 
   const customerName =
-    typeof duplicates[0]?.name ===
-    "string"
+    typeof duplicates[0]?.name === "string"
       ? duplicates[0].name.trim()
       : "";
 
@@ -437,8 +366,7 @@ async function validateNationalIdDuplicate(
 function mapPrimaryAddressRow(
   row: Record<string, unknown>
 ): CustomerV2PrimaryAddress {
-  const addressType =
-    row.address_type;
+  const addressType = row.address_type;
 
   const normalizedAddressType =
     addressType === "billing" ||
@@ -450,116 +378,80 @@ function mapPrimaryAddressRow(
       : "office";
 
   return {
-    id: String(
-      row.id ?? ""
-    ),
-
-    company_id: String(
-      row.company_id ?? ""
-    ),
-
-    customer_id: String(
-      row.customer_id ?? ""
-    ),
+    id: String(row.id ?? ""),
+    company_id: String(row.company_id ?? ""),
+    customer_id: String(row.customer_id ?? ""),
 
     v2_province_code:
-      typeof row.v2_province_code ===
-      "string"
+      typeof row.v2_province_code === "string"
         ? row.v2_province_code
         : null,
 
     v2_province_name:
-      typeof row.v2_province_name ===
-      "string"
+      typeof row.v2_province_name === "string"
         ? row.v2_province_name
         : null,
 
     v2_city_code:
-      typeof row.v2_city_code ===
-      "string"
+      typeof row.v2_city_code === "string"
         ? row.v2_city_code
         : null,
 
     v2_city_name:
-      typeof row.v2_city_name ===
-      "string"
+      typeof row.v2_city_name === "string"
         ? row.v2_city_name
         : null,
 
-    address_line_1: String(
-      row.address_line_1 ?? ""
-    ),
+    address_line_1: String(row.address_line_1 ?? ""),
 
     address_line_2:
-      typeof row.address_line_2 ===
-      "string"
+      typeof row.address_line_2 === "string"
         ? row.address_line_2
         : null,
 
     postal_code:
-      typeof row.postal_code ===
-      "string"
+      typeof row.postal_code === "string"
         ? row.postal_code
         : null,
 
     latitude:
       row.latitude === null ||
-      row.latitude ===
-        undefined
+      row.latitude === undefined
         ? null
-        : Number(
-            row.latitude
-          ),
+        : Number(row.latitude),
 
     longitude:
       row.longitude === null ||
-      row.longitude ===
-        undefined
+      row.longitude === undefined
         ? null
-        : Number(
-            row.longitude
-          ),
+        : Number(row.longitude),
 
-    address_type:
-      normalizedAddressType,
+    address_type: normalizedAddressType,
 
     label:
-      typeof row.label ===
-      "string"
+      typeof row.label === "string"
         ? row.label
         : null,
 
-    is_primary:
-      row.is_primary === true,
+    is_primary: row.is_primary === true,
 
     client_uuid:
-      typeof row.client_uuid ===
-      "string"
+      typeof row.client_uuid === "string"
         ? row.client_uuid
         : null,
 
-    sync_version:
-      Number(
-        row.sync_version ?? 1
-      ),
+    sync_version: Number(row.sync_version ?? 1),
 
     last_synced_at:
-      typeof row.last_synced_at ===
-      "string"
+      typeof row.last_synced_at === "string"
         ? row.last_synced_at
         : null,
 
-    created_at: String(
-      row.created_at ?? ""
-    ),
-
-    updated_at: String(
-      row.updated_at ?? ""
-    ),
+    created_at: String(row.created_at ?? ""),
+    updated_at: String(row.updated_at ?? ""),
 
     deleted_at:
-      typeof row.deleted_at ===
-      "string"
+      typeof row.deleted_at === "string"
         ? row.deleted_at
         : null,
   };
@@ -568,16 +460,10 @@ function mapPrimaryAddressRow(
 async function getPrimaryAddressInternal(
   customerId: string
 ): Promise<CustomerV2PrimaryAddress | null> {
-  const companyId =
-    await getRequiredCurrentCompanyId();
+  const companyId = await getRequiredCurrentCompanyId();
+  const supabase = createSupabaseClient();
 
-  const supabase =
-    createSupabaseClient();
-
-  const {
-    data,
-    error,
-  } = await supabase
+  const { data, error } = await supabase
     .from("customer_addresses")
     .select(
       `
@@ -604,22 +490,10 @@ async function getPrimaryAddressInternal(
         deleted_at
       `
     )
-    .eq(
-      "customer_id",
-      customerId
-    )
-    .eq(
-      "company_id",
-      companyId
-    )
-    .eq(
-      "is_primary",
-      true
-    )
-    .is(
-      "deleted_at",
-      null
-    )
+    .eq("customer_id", customerId)
+    .eq("company_id", companyId)
+    .eq("is_primary", true)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (error) {
@@ -635,40 +509,28 @@ async function getPrimaryAddressInternal(
   }
 
   return mapPrimaryAddressRow(
-    data as Record<
-      string,
-      unknown
-    >
+    data as Record<string, unknown>
   );
 }
 
 function validatePrimaryAddressInput(
   input: CustomerV2PrimaryAddressInput
 ): CustomerV2PrimaryAddressInput {
-  const provinceCode =
-    cleanText(
-      input.province_code
-    );
-
-  const provinceName =
-    cleanText(
-      input.province_name
-    );
-
-  const cityCode =
-    cleanText(
-      input.city_code
-    );
-
-  const cityName =
-    cleanText(
-      input.city_name
-    );
-
-  const addressLine1 =
-    cleanText(
-      input.address_line_1
-    );
+  const provinceCode = cleanText(
+    input.province_code
+  );
+  const provinceName = cleanText(
+    input.province_name
+  );
+  const cityCode = cleanText(
+    input.city_code
+  );
+  const cityName = cleanText(
+    input.city_name
+  );
+  const addressLine1 = cleanText(
+    input.address_line_1
+  );
 
   if (!provinceCode) {
     throw new CustomerValidationError(
@@ -712,9 +574,7 @@ function validatePrimaryAddressInput(
   }
 
   if (
-    cleanText(
-      province.name_fa
-    ) !==
+    cleanText(province.name_fa) !==
     provinceName
   ) {
     throw new CustomerValidationError(
@@ -730,10 +590,8 @@ function validatePrimaryAddressInput(
 
   if (
     baseCity &&
-    cleanText(
-      baseCity.name_fa
-    ) !==
-    cityName
+    cleanText(baseCity.name_fa) !==
+      cityName
   ) {
     throw new CustomerValidationError(
       "نام شهر با شهر انتخاب‌شده مطابقت ندارد."
@@ -742,33 +600,28 @@ function validatePrimaryAddressInput(
 
   return {
     ...input,
-    province_code:
-      province.code,
-    province_name:
-      province.name_fa,
-    city_code:
-      cityCode,
-    city_name:
-      cityName,
-    address_line_1:
-      addressLine1,
+    province_code: province.code,
+    province_name: province.name_fa,
+    city_code: cityCode,
+    city_name: cityName,
+    address_line_1: addressLine1,
+
     address_line_2:
       cleanNullableText(
         input.address_line_2
       ),
+
     postal_code:
       cleanNullableText(
         input.postal_code
       ),
-    latitude:
-      input.latitude ??
-      null,
-    longitude:
-      input.longitude ??
-      null,
+
+    latitude: input.latitude ?? null,
+    longitude: input.longitude ?? null,
+
     address_type:
-      input.address_type ??
-      "office",
+      input.address_type ?? "office",
+
     label:
       cleanNullableText(
         input.label
@@ -780,16 +633,11 @@ async function savePrimaryAddressInternal(
   customerId: string,
   input: CustomerV2PrimaryAddressInput
 ): Promise<CustomerV2PrimaryAddress> {
-  const companyId =
-    await getRequiredCurrentCompanyId();
-
-  const supabase =
-    createSupabaseClient();
+  const companyId = await getRequiredCurrentCompanyId();
+  const supabase = createSupabaseClient();
 
   const validated =
-    validatePrimaryAddressInput(
-      input
-    );
+    validatePrimaryAddressInput(input);
 
   const existing =
     await getPrimaryAddressInternal(
@@ -797,11 +645,8 @@ async function savePrimaryAddressInternal(
     );
 
   const payload = {
-    company_id:
-      companyId,
-
-    customer_id:
-      customerId,
+    company_id: companyId,
+    customer_id: customerId,
 
     v2_province_code:
       validated.province_code,
@@ -819,55 +664,36 @@ async function savePrimaryAddressInternal(
       validated.address_line_1,
 
     address_line_2:
-      validated.address_line_2 ??
-      null,
+      validated.address_line_2 ?? null,
 
     postal_code:
-      validated.postal_code ??
-      null,
+      validated.postal_code ?? null,
 
     latitude:
-      validated.latitude ??
-      null,
+      validated.latitude ?? null,
 
     longitude:
-      validated.longitude ??
-      null,
+      validated.longitude ?? null,
 
     address_type:
-      validated.address_type ??
-      "office",
+      validated.address_type ?? "office",
 
     label:
-      validated.label ??
-      null,
+      validated.label ?? null,
 
-    is_primary:
-      true,
+    is_primary: true,
 
     updated_at:
       new Date().toISOString(),
   };
 
   if (existing) {
-    const {
-      data,
-      error,
-    } = await supabase
+    const { data, error } = await supabase
       .from("customer_addresses")
       .update(payload)
-      .eq(
-        "id",
-        existing.id
-      )
-      .eq(
-        "company_id",
-        companyId
-      )
-      .is(
-        "deleted_at",
-        null
-      )
+      .eq("id", existing.id)
+      .eq("company_id", companyId)
+      .is("deleted_at", null)
       .select(
         `
           id,
@@ -904,17 +730,11 @@ async function savePrimaryAddressInternal(
     }
 
     return mapPrimaryAddressRow(
-      data as Record<
-        string,
-        unknown
-      >
+      data as Record<string, unknown>
     );
   }
 
-  const {
-    data,
-    error,
-  } = await supabase
+  const { data, error } = await supabase
     .from("customer_addresses")
     .insert({
       ...payload,
@@ -957,10 +777,7 @@ async function savePrimaryAddressInternal(
   }
 
   return mapPrimaryAddressRow(
-    data as Record<
-      string,
-      unknown
-    >
+    data as Record<string, unknown>
   );
 }
 
@@ -970,9 +787,7 @@ function isValidNationalIdForCheck(
   const normalized =
     normalizeNationalId(value);
 
-  return /^\d{10}$/.test(
-    normalized
-  );
+  return /^\d{10}$/.test(normalized);
 }
 
 function buildCompleteness(
@@ -981,28 +796,15 @@ function buildCompleteness(
     | CustomerV2PrimaryAddress
     | null
 ): CustomerV2Completeness {
-  const missingFields:
-    CustomerV2Completeness["missing_fields"] =
+  const missingFields: CustomerV2Completeness["missing_fields"] =
     [];
 
-  if (
-    !cleanText(
-      customer.name
-    )
-  ) {
-    missingFields.push(
-      "name"
-    );
+  if (!cleanText(customer.name)) {
+    missingFields.push("name");
   }
 
-  if (
-    !normalizePhone(
-      customer.phone
-    )
-  ) {
-    missingFields.push(
-      "phone"
-    );
+  if (!normalizePhone(customer.phone)) {
+    missingFields.push("phone");
   }
 
   if (
@@ -1063,8 +865,7 @@ function buildCompleteness(
 
   return {
     is_complete:
-      missingFields.length ===
-      0,
+      missingFields.length === 0,
 
     missing_fields:
       missingFields,
@@ -1089,25 +890,14 @@ async function loadCustomerBase(
   const customerId =
     id.trim();
 
-  const {
-    data,
-    error,
-  } = await supabase
-    .from("customers")
-    .select("*")
-    .eq(
-      "id",
-      customerId
-    )
-    .eq(
-      "company_id",
-      companyId
-    )
-    .is(
-      "deleted_at",
-      null
-    )
-    .maybeSingle();
+  const { data, error } =
+    await supabase
+      .from("customers")
+      .select("*")
+      .eq("id", customerId)
+      .eq("company_id", companyId)
+      .is("deleted_at", null)
+      .maybeSingle();
 
   if (error) {
     logSupabaseError(
@@ -1126,12 +916,51 @@ async function loadCustomerBase(
   return data as Customer;
 }
 
+function validateOptionalPlanFields(
+  planScope:
+    | "regional"
+    | "out_of_region"
+    | null
+    | undefined,
+  planRegionId: string | null | undefined
+): void {
+  const normalizedPlanRegionId =
+    cleanNullableText(
+      planRegionId
+    );
+
+  if (
+    planScope === "regional" &&
+    !normalizedPlanRegionId
+  ) {
+    throw new CustomerValidationError(
+      "برای مشتری منطقه‌ای، منطقه برنامه فروش الزامی است."
+    );
+  }
+
+  if (
+    planScope === "out_of_region" &&
+    normalizedPlanRegionId
+  ) {
+    throw new CustomerValidationError(
+      "مشتری خارج از منطقه نباید منطقه برنامه فروش داشته باشد."
+    );
+  }
+
+  if (
+    !planScope &&
+    normalizedPlanRegionId
+  ) {
+    throw new CustomerValidationError(
+      "برای تعیین منطقه برنامه فروش، ابتدا حوزه برنامه فروش را مشخص کنید."
+    );
+  }
+}
+
 export const customersService = {
-  /*
-   * ========================================================================
+  /* ========================================================================
    * V1 API
-   * ========================================================================
-   */
+   * ======================================================================== */
 
   async getAll(): Promise<Customer[]> {
     const companyId =
@@ -1140,23 +969,15 @@ export const customersService = {
     const supabase =
       createSupabaseClient();
 
-    const {
-      data,
-      error,
-    } = await supabase
-      .from("customers")
-      .select("*")
-      .eq(
-        "company_id",
-        companyId
-      )
-      .is(
-        "deleted_at",
-        null
-      )
-      .order("name", {
-        ascending: true,
-      });
+    const { data, error } =
+      await supabase
+        .from("customers")
+        .select("*")
+        .eq("company_id", companyId)
+        .is("deleted_at", null)
+        .order("name", {
+          ascending: true,
+        });
 
     if (error) {
       logSupabaseError(
@@ -1188,8 +1009,8 @@ export const customersService = {
         )
       );
 
-    let cities:
-      CustomerCity[] = [];
+    let cities: CustomerCity[] =
+      [];
 
     if (
       cityIds.length > 0
@@ -1202,10 +1023,7 @@ export const customersService = {
         .select(
           "id, company_id, name, code"
         )
-        .in(
-          "id",
-          cityIds
-        )
+        .in("id", cityIds)
         .eq(
           "company_id",
           companyId
@@ -1273,10 +1091,7 @@ export const customersService = {
   async getById(
     id: string
   ): Promise<Customer> {
-    if (
-      !id ||
-      !id.trim()
-    ) {
+    if (!id || !id.trim()) {
       throw new Error(
         "شناسه مشتری مشخص نیست."
       );
@@ -1468,10 +1283,7 @@ export const customersService = {
     const supabase =
       createSupabaseClient();
 
-    if (
-      !id ||
-      !id.trim()
-    ) {
+    if (!id || !id.trim()) {
       throw new Error(
         "شناسه مشتری مشخص نیست."
       );
@@ -1486,8 +1298,7 @@ export const customersService = {
       );
 
     const nextPhone =
-      values.phone !==
-      undefined
+      values.phone !== undefined
         ? cleanPhoneValue(
             values.phone
           )
@@ -1508,10 +1319,7 @@ export const customersService = {
     );
 
     const updateData:
-      Record<
-        string,
-        unknown
-      > = {
+      Record<string, unknown> = {
         updated_at:
           new Date().toISOString(),
       };
@@ -1529,8 +1337,7 @@ export const customersService = {
         );
       }
 
-      updateData.name =
-        name;
+      updateData.name = name;
     }
 
     if (
@@ -1588,8 +1395,7 @@ export const customersService = {
       undefined
     ) {
       if (
-        values.city_id !==
-          null &&
+        values.city_id !== null &&
         !String(
           values.city_id
         ).trim()
@@ -1718,10 +1524,7 @@ export const customersService = {
     );
 
     const insertData:
-      Record<
-        string,
-        unknown
-      > = {
+      Record<string, unknown> = {
         company_id:
           companyId,
 
@@ -1812,10 +1615,7 @@ export const customersService = {
     const supabase =
       createSupabaseClient();
 
-    if (
-      !id ||
-      !id.trim()
-    ) {
+    if (!id || !id.trim()) {
       throw new Error(
         "شناسه مشتری مشخص نیست."
       );
@@ -1870,19 +1670,14 @@ export const customersService = {
     }
   },
 
-  /*
-   * ========================================================================
+  /* ========================================================================
    * V2 API
-   * ========================================================================
-   */
+   * ======================================================================== */
 
   async getByIdV2(
     id: string
   ): Promise<Customer> {
-    if (
-      !id ||
-      !id.trim()
-    ) {
+    if (!id || !id.trim()) {
       throw new Error(
         "شناسه مشتری مشخص نیست."
       );
@@ -1919,10 +1714,6 @@ export const customersService = {
       );
     }
 
-    /*
-     * Verify customer ownership before
-     * accessing its address.
-     */
     await loadCustomerBase(
       customerId
     );
@@ -2000,7 +1791,10 @@ export const customersService = {
         })
       )
       .sort(
-        (first, second) =>
+        (
+          first,
+          second
+        ) =>
           first.full_name.localeCompare(
             second.full_name,
             "fa"
@@ -2053,7 +1847,8 @@ export const customersService = {
       );
 
     const planScope =
-      values.plan_scope;
+      values.plan_scope ??
+      null;
 
     const planRegionId =
       cleanNullableText(
@@ -2090,31 +1885,10 @@ export const customersService = {
       );
     }
 
-    if (!planScope) {
-      throw new CustomerValidationError(
-        "حوزه برنامه فروش مشتری الزامی است."
-      );
-    }
-
-    if (
-      planScope ===
-        "regional" &&
-      !planRegionId
-    ) {
-      throw new CustomerValidationError(
-        "برای مشتری منطقه‌ای، منطقه برنامه فروش الزامی است."
-      );
-    }
-
-    if (
-      planScope ===
-        "out_of_region" &&
+    validateOptionalPlanFields(
+      planScope,
       planRegionId
-    ) {
-      throw new CustomerValidationError(
-        "مشتری خارج از منطقه نباید منطقه برنامه فروش داشته باشد."
-      );
-    }
+    );
 
     await validatePhoneDuplicates(
       phone,
@@ -2131,10 +1905,7 @@ export const customersService = {
       );
 
     const insertData:
-      Record<
-        string,
-        unknown
-      > = {
+      Record<string, unknown> = {
         company_id:
           companyId,
 
@@ -2145,8 +1916,7 @@ export const customersService = {
          * Legacy V1 city_id stays NULL until
          * an explicit legacy mapping exists.
          */
-        city_id:
-          null,
+        city_id: null,
 
         name,
 
@@ -2177,16 +1947,14 @@ export const customersService = {
       };
 
     if (
-      secondaryPhone !==
-      null
+      secondaryPhone !== null
     ) {
       insertData.secondary_phone =
         secondaryPhone;
     }
 
     if (
-      whatsappNumber !==
-      null
+      whatsappNumber !== null
     ) {
       insertData.whatsapp_number =
         whatsappNumber;
@@ -2290,10 +2058,7 @@ export const customersService = {
     const supabase =
       createSupabaseClient();
 
-    if (
-      !id ||
-      !id.trim()
-    ) {
+    if (!id || !id.trim()) {
       throw new Error(
         "شناسه مشتری مشخص نیست."
       );
@@ -2308,8 +2073,7 @@ export const customersService = {
       );
 
     const nextPhone =
-      values.phone !==
-      undefined
+      values.phone !== undefined
         ? cleanPhoneValue(
             values.phone
           )
@@ -2354,11 +2118,8 @@ export const customersService = {
     }
 
     const nextName =
-      values.name !==
-      undefined
-        ? cleanText(
-            values.name
-          )
+      values.name !== undefined
+        ? cleanText(values.name)
         : current.name;
 
     if (!nextName) {
@@ -2379,7 +2140,7 @@ export const customersService = {
       values.plan_scope !==
       undefined
         ? values.plan_scope
-        : current.plan_scope;
+        : current.plan_scope ?? null;
 
     const nextPlanRegion =
       values.plan_region_id !==
@@ -2387,50 +2148,23 @@ export const customersService = {
         ? cleanNullableText(
             values.plan_region_id
           )
-        : current.plan_region_id;
+        : current.plan_region_id ?? null;
+
+    validateOptionalPlanFields(
+      nextPlanScope,
+      nextPlanRegion
+    );
 
     const ownershipChanged =
       nextManager !==
         current.regional_manager_id ||
       nextPlanScope !==
-        current.plan_scope ||
+        (current.plan_scope ?? null) ||
       nextPlanRegion !==
-        current.plan_region_id;
-
-    if (
-      nextManager &&
-      !nextPlanScope
-    ) {
-      throw new CustomerValidationError(
-        "حوزه برنامه فروش مشتری الزامی است."
-      );
-    }
-
-    if (
-      nextPlanScope ===
-        "regional" &&
-      !nextPlanRegion
-    ) {
-      throw new CustomerValidationError(
-        "برای مشتری منطقه‌ای، منطقه برنامه فروش الزامی است."
-      );
-    }
-
-    if (
-      nextPlanScope ===
-        "out_of_region" &&
-      nextPlanRegion
-    ) {
-      throw new CustomerValidationError(
-        "مشتری خارج از منطقه نباید منطقه برنامه فروش داشته باشد."
-      );
-    }
+        (current.plan_region_id ?? null);
 
     const updateData:
-      Record<
-        string,
-        unknown
-      > = {
+      Record<string, unknown> = {
         updated_at:
           new Date().toISOString(),
       };
@@ -2549,6 +2283,11 @@ export const customersService = {
           p_regional_manager_id:
             nextManager,
 
+          /*
+           * Plan fields are optional in V2.
+           * They may therefore be NULL while
+           * the regional manager remains required.
+           */
           p_plan_scope:
             nextPlanScope,
 
