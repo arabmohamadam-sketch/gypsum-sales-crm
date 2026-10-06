@@ -4,19 +4,25 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   useEffect,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
 } from "react";
-
 import {
   AlertTriangle,
   CheckCircle2,
+  Loader2,
+  MapPin,
+  UserRound,
   X,
 } from "lucide-react";
 
-import { customersService } from "@/src/lib/services/customers";
-import { useCities } from "@/src/lib/hooks/useCities";
+import {
+  customersService,
+  type V2RegionalManager,
+} from "@/src/lib/services/customers";
+import { sharedLocationService } from "@/src/lib/services/shared-location";
 
 const customerTypes = [
   {
@@ -37,13 +43,34 @@ const customerTypes = [
   },
 ];
 
+interface ProvinceOption {
+  code: string;
+  name_fa: string;
+}
+
+interface CityOption {
+  province_code: string;
+  city_code: string;
+  name_fa: string;
+  source?: string | null;
+  company_id?: string | null;
+}
+
 interface FormData {
   name: string;
+  national_id: string;
   phone: string;
   secondary_phone: string;
   whatsapp_number: string;
+  regional_manager_id: string;
   customer_type: string;
-  city_id: string;
+  province_code: string;
+  province_name: string;
+  city_code: string;
+  city_name: string;
+  address_line_1: string;
+  address_line_2: string;
+  postal_code: string;
   is_vip: boolean;
   is_active: boolean;
 }
@@ -63,16 +90,11 @@ function InputField({
     <div>
       <label className="mb-2 block text-sm font-bold text-slate-700">
         {label}
-
         {required && (
-          <span className="mr-1 text-red-500">
-            *
-          </span>
+          <span className="mr-1 text-red-500">*</span>
         )}
       </label>
-
       {children}
-
       {hint && (
         <p className="mt-2 text-xs leading-5 text-slate-400">
           {hint}
@@ -96,12 +118,10 @@ function SectionHeader({
       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-xl text-blue-600">
         {icon}
       </div>
-
       <div>
         <h2 className="text-lg font-black text-slate-900">
           {title}
         </h2>
-
         <p className="mt-1 text-sm leading-6 text-slate-500">
           {description}
         </p>
@@ -136,9 +156,7 @@ function ToggleCard({
       <div className="flex min-w-0 items-center gap-4">
         <div
           className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-xl transition ${
-            checked
-              ? "bg-white shadow-sm"
-              : "bg-slate-100"
+            checked ? "bg-white shadow-sm" : "bg-slate-100"
           }`}
         >
           {icon}
@@ -148,7 +166,6 @@ function ToggleCard({
           <div className="font-black text-slate-900">
             {title}
           </div>
-
           <div className="mt-1 text-sm leading-6 text-slate-500">
             {description}
           </div>
@@ -167,17 +184,13 @@ function ToggleCard({
 
         <div
           className={`h-7 w-12 rounded-full transition ${
-            checked
-              ? "bg-blue-600"
-              : "bg-slate-200"
+            checked ? "bg-blue-600" : "bg-slate-200"
           }`}
         />
 
         <div
           className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-all ${
-            checked
-              ? "right-1"
-              : "right-6"
+            checked ? "right-1" : "right-6"
           }`}
         />
       </div>
@@ -226,92 +239,174 @@ function ErrorToast({
   );
 }
 
-function CityErrorToast({
-  message,
-  onClose,
-}: {
-  message: string;
-  onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-x-4 top-4 z-[100] mx-auto max-w-lg sm:left-auto sm:right-6 sm:inset-x-auto">
-      <div className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-2xl shadow-amber-200/40">
-        <div className="h-1 bg-amber-500" />
+function normalizeDigits(value: string): string {
+  const persianDigits = "۰۱۲۳۴۵۶۷۸۹";
+  const arabicDigits = "٠١٢٣٤٥٦٧٨٩";
 
-        <div className="flex items-start gap-3 p-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-            <AlertTriangle size={20} />
-          </div>
+  return value.replace(/[۰-۹٠-٩]/g, (digit) => {
+    const persianIndex = persianDigits.indexOf(digit);
 
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-black text-amber-800">
-              خطا در ایجاد شهر
-            </p>
+    if (persianIndex >= 0) {
+      return String(persianIndex);
+    }
 
-            <p className="mt-1 text-sm leading-6 text-amber-600">
-              {message}
-            </p>
-          </div>
+    const arabicIndex = arabicDigits.indexOf(digit);
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-            aria-label="بستن پیام خطا"
-          >
-            <X size={17} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+    if (arabicIndex >= 0) {
+      return String(arabicIndex);
+    }
+
+    return digit;
+  });
+}
+
+function normalizeNationalId(value: string): string {
+  return normalizeDigits(value).replace(/\D/g, "");
+}
+
+function normalizePhone(value: string): string {
+  return normalizeDigits(value);
 }
 
 export default function NewCustomerPage() {
   const router = useRouter();
 
-  const {
-    data: cities,
-    regions,
-    loading: citiesLoading,
-    error: citiesError,
-    createCity,
-  } = useCities();
+  const provinces: ProvinceOption[] =
+    sharedLocationService.getProvinces();
+
+  const [cities, setCities] = useState<CityOption[]>([]);
+  const [regionalManagers, setRegionalManagers] = useState<
+    V2RegionalManager[]
+  >([]);
 
   const [form, setForm] = useState<FormData>({
     name: "",
+    national_id: "",
     phone: "",
     secondary_phone: "",
     whatsapp_number: "",
+    regional_manager_id: "",
     customer_type: "",
-    city_id: "",
+    province_code: "",
+    province_name: "",
+    city_code: "",
+    city_name: "",
+    address_line_1: "",
+    address_line_2: "",
+    postal_code: "",
     is_vip: false,
     is_active: true,
   });
 
-  const [saving, setSaving] =
-    useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loadingManagers, setLoadingManagers] = useState(true);
+  const [citiesLoading, setCitiesLoading] = useState(false);
 
-  const [error, setError] =
-    useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [dataLoadingError, setDataLoadingError] = useState<
+    string | null
+  >(null);
 
-  const [showNewCity, setShowNewCity] =
-    useState(false);
+  const [showNewCity, setShowNewCity] = useState(false);
+  const [newCityName, setNewCityName] = useState("");
+  const [newCityCode, setNewCityCode] = useState("");
+  const [creatingCity, setCreatingCity] = useState(false);
+  const [cityCreateError, setCityCreateError] = useState<
+    string | null
+  >(null);
 
-  const [newCityName, setNewCityName] =
-    useState("");
+  const addressRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const [newCityCode, setNewCityCode] =
-    useState("");
+  useEffect(() => {
+    let cancelled = false;
 
-  const [newCityRegionId, setNewCityRegionId] =
-    useState("");
+    async function loadManagers() {
+      try {
+        setLoadingManagers(true);
+        setDataLoadingError(null);
 
-  const [creatingCity, setCreatingCity] =
-    useState(false);
+        const managers =
+          await customersService.getV2RegionalManagers();
 
-  const [cityCreateError, setCityCreateError] =
-    useState<string | null>(null);
+        if (!cancelled) {
+          setRegionalManagers(managers);
+        }
+      } catch (err) {
+        console.error(
+          "LOAD REGIONAL MANAGERS ERROR:",
+          err
+        );
+
+        if (!cancelled) {
+          setDataLoadingError(
+            err instanceof Error
+              ? err.message
+              : "خطا در دریافت مدیران منطقه."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingManagers(false);
+        }
+      }
+    }
+
+    void loadManagers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!form.province_code) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    async function loadCities() {
+      try {
+        setCitiesLoading(true);
+        setDataLoadingError(null);
+
+        const provinceCities =
+          await sharedLocationService.getCities(
+            form.province_code
+          );
+
+        if (!cancelled) {
+          setCities(provinceCities as CityOption[]);
+        }
+      } catch (err) {
+        console.error(
+          "LOAD V2 CITIES ERROR:",
+          err
+        );
+
+        if (!cancelled) {
+          setCities([]);
+          setDataLoadingError(
+            err instanceof Error
+              ? err.message
+              : "خطا در دریافت شهرهای استان."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setCitiesLoading(false);
+        }
+      }
+    }
+
+    void loadCities();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.province_code]);
 
   useEffect(() => {
     if (!error && !cityCreateError) {
@@ -328,9 +423,7 @@ export default function NewCustomerPage() {
     };
   }, [error, cityCreateError]);
 
-  function updateField<
-    K extends keyof FormData
-  >(
+  function updateField<K extends keyof FormData>(
     field: K,
     value: FormData[K]
   ) {
@@ -342,12 +435,56 @@ export default function NewCustomerPage() {
     setError(null);
   }
 
-  async function handleCreateCity() {
-    const name =
-      newCityName.trim();
+  function handleProvinceChange(
+    provinceCode: string
+  ) {
+    const province =
+      provinces.find(
+        (item) => item.code === provinceCode
+      ) ?? null;
 
-    const regionId =
-      newCityRegionId.trim();
+    setCities([]);
+    setDataLoadingError(null);
+    setCityCreateError(null);
+
+    setForm((previous) => ({
+      ...previous,
+      province_code: provinceCode,
+      province_name: province?.name_fa ?? "",
+      city_code: "",
+      city_name: "",
+    }));
+  }
+
+  function handleCityChange(cityCode: string) {
+    const city =
+      cities.find(
+        (item) => item.city_code === cityCode
+      ) ?? null;
+
+    setForm((previous) => ({
+      ...previous,
+      city_code: cityCode,
+      city_name: city?.name_fa ?? "",
+    }));
+
+    if (cityCode) {
+      window.setTimeout(() => {
+        addressRef.current?.focus();
+      }, 80);
+    }
+  }
+
+  async function handleCreateCity() {
+    const name = newCityName.trim();
+    const provinceCode = form.province_code.trim();
+
+    if (!provinceCode) {
+      setCityCreateError(
+        "ابتدا استان را انتخاب کنید."
+      );
+      return;
+    }
 
     if (!name) {
       setCityCreateError(
@@ -356,37 +493,82 @@ export default function NewCustomerPage() {
       return;
     }
 
-    if (!regionId) {
+    const duplicateCity = cities.some(
+      (city) =>
+        city.name_fa.trim() === name ||
+        city.city_code.trim() === name
+    );
+
+    if (duplicateCity) {
       setCityCreateError(
-        "منطقه شهر را انتخاب کنید."
+        "این شهر قبلاً در فهرست شهرهای استان وجود دارد."
       );
       return;
     }
 
+    const generatedCityCode =
+      newCityCode.trim() ||
+      `custom-${provinceCode}-${Date.now().toString(36)}`;
+
     try {
       setCreatingCity(true);
       setCityCreateError(null);
+      setError(null);
 
-      const city =
-        await createCity({
-          name,
-          code:
-            newCityCode.trim() || null,
-          region_id: regionId,
+      const createCustomCity =
+        sharedLocationService.createCustomCity as unknown as (
+          input: {
+            province_code: string;
+            city_code: string;
+            name_fa: string;
+          }
+        ) => Promise<CityOption>;
+
+      const createdCity =
+        await createCustomCity({
+          province_code: provinceCode,
+          city_code: generatedCityCode,
+          name_fa: name,
         });
 
-      updateField(
-        "city_id",
-        city.id
-      );
+      setCities((previous) => {
+        const alreadyExists = previous.some(
+          (city) =>
+            city.city_code ===
+            createdCity.city_code
+        );
+
+        if (alreadyExists) {
+          return previous;
+        }
+
+        return [...previous, createdCity].sort(
+          (first, second) =>
+            first.name_fa.localeCompare(
+              second.name_fa,
+              "fa"
+            )
+        );
+      });
+
+      setForm((previous) => ({
+        ...previous,
+        city_code:
+          createdCity.city_code,
+        city_name:
+          createdCity.name_fa,
+      }));
 
       setNewCityName("");
       setNewCityCode("");
-      setNewCityRegionId("");
       setShowNewCity(false);
+
+      window.setTimeout(() => {
+        addressRef.current?.focus();
+      }, 80);
     } catch (err) {
       console.error(
-        "CREATE CITY ERROR:",
+        "CREATE V2 CITY ERROR:",
         err
       );
 
@@ -407,21 +589,69 @@ export default function NewCustomerPage() {
 
     setError(null);
 
-    const name =
-      form.name.trim();
-
-    const phone =
-      form.phone.trim();
-
+    const name = form.name.trim();
+    const nationalId =
+      normalizeNationalId(form.national_id);
+    const phone = normalizePhone(
+      form.phone.trim()
+    );
     const secondaryPhone =
       form.secondary_phone.trim();
-
     const whatsapp =
       form.whatsapp_number.trim();
 
     if (!name) {
       setError(
-        "نام مشتری الزامی است."
+        "نام و نام خانوادگی مشتری الزامی است."
+      );
+      return;
+    }
+
+    if (!nationalId) {
+      setError(
+        "کد ملی مشتری الزامی است."
+      );
+      return;
+    }
+
+    if (!/^\d{10}$/.test(nationalId)) {
+      setError(
+        "کد ملی باید دقیقاً ۱۰ رقم باشد."
+      );
+      return;
+    }
+
+    if (!phone) {
+      setError(
+        "شماره تماس مشتری الزامی است."
+      );
+      return;
+    }
+
+    if (!form.regional_manager_id) {
+      setError(
+        "مدیر منطقه مشتری را انتخاب کنید."
+      );
+      return;
+    }
+
+    if (!form.province_code) {
+      setError(
+        "استان مشتری را انتخاب کنید."
+      );
+      return;
+    }
+
+    if (!form.city_code) {
+      setError(
+        "شهر مشتری را انتخاب کنید."
+      );
+      return;
+    }
+
+    if (!form.address_line_1.trim()) {
+      setError(
+        "آدرس دقیق مشتری الزامی است."
       );
       return;
     }
@@ -433,40 +663,53 @@ export default function NewCustomerPage() {
       return;
     }
 
-    if (!form.city_id) {
-      setError(
-        "شهر مشتری را انتخاب کنید."
-      );
-      return;
-    }
-
     try {
       setSaving(true);
 
       const customer =
-        await customersService.create({
+        await customersService.createV2({
           name,
-          phone:
-            phone || undefined,
+          national_id: nationalId,
+          phone,
           secondary_phone:
-            secondaryPhone ||
-            undefined,
+            secondaryPhone || undefined,
           whatsapp_number:
             whatsapp || undefined,
+          regional_manager_id:
+            form.regional_manager_id,
           customer_type:
             form.customer_type,
-          city_id:
-            form.city_id,
-          is_vip:
-            form.is_vip,
-          is_active:
-            form.is_active,
+          is_vip: form.is_vip,
+          is_active: form.is_active,
+          primary_address: {
+            province_code:
+              form.province_code,
+            province_name:
+              form.province_name,
+            city_code:
+              form.city_code,
+            city_name:
+              form.city_name,
+            address_line_1:
+              form.address_line_1.trim(),
+            address_line_2:
+              form.address_line_2.trim() ||
+              null,
+            postal_code:
+              normalizeDigits(
+                form.postal_code.trim()
+              ) || null,
+            address_type: "office",
+            label: "آدرس اصلی مشتری",
+          },
         });
 
       setError(null);
 
       router.push(
-        `/customers/view?id=${encodeURIComponent(customer.id)}`
+        `/customers/view?id=${encodeURIComponent(
+          customer.id
+        )}`
       );
     } catch (err) {
       setError(
@@ -479,6 +722,43 @@ export default function NewCustomerPage() {
     }
   }
 
+  const selectedManager =
+    regionalManagers.find(
+      (manager) =>
+        manager.id ===
+        form.regional_manager_id
+    ) ?? null;
+
+  const selectedProvince =
+    provinces.find(
+      (province) =>
+        province.code ===
+        form.province_code
+    ) ?? null;
+
+  const selectedCity =
+    cities.find(
+      (city) =>
+        city.city_code ===
+        form.city_code
+    ) ?? null;
+
+  const v2FormComplete =
+    Boolean(
+      form.name.trim() &&
+        /^\d{10}$/.test(
+          normalizeNationalId(
+            form.national_id
+          )
+        ) &&
+        form.phone.trim() &&
+        form.regional_manager_id &&
+        form.province_code &&
+        form.city_code &&
+        form.address_line_1.trim() &&
+        form.customer_type
+    );
+
   return (
     <main
       dir="rtl"
@@ -487,29 +767,11 @@ export default function NewCustomerPage() {
       {error && (
         <ErrorToast
           message={error}
-          onClose={() =>
-            setError(null)
-          }
+          onClose={() => setError(null)}
         />
       )}
 
-      {!error && cityCreateError && (
-        <CityErrorToast
-          message={cityCreateError}
-          onClose={() =>
-            setCityCreateError(null)
-          }
-        />
-      )}
-
-      {!error && citiesError && (
-        <CityErrorToast
-          message={citiesError}
-          onClose={() => {}}
-        />
-      )}
-
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl">
         <div className="mb-6">
           <Link
             href="/customers"
@@ -522,16 +784,14 @@ export default function NewCustomerPage() {
 
         <section className="relative mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-blue-700 via-blue-500 to-cyan-400" />
-
           <div className="absolute -left-20 -top-24 h-64 w-64 rounded-full bg-blue-100/50 blur-3xl" />
-
           <div className="absolute -bottom-24 right-0 h-64 w-64 rounded-full bg-cyan-100/40 blur-3xl" />
 
           <div className="relative p-6 md:p-8">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-4">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-2xl text-white shadow-lg shadow-blue-100">
-                  👤
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-100">
+                  <UserRound size={26} />
                 </div>
 
                 <div>
@@ -541,74 +801,58 @@ export default function NewCustomerPage() {
                     </h1>
 
                     <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
-                      CRM
+                      V2
                     </span>
                   </div>
 
-                  <p className="mt-2 text-sm leading-6 text-slate-500 md:text-base">
-                    اطلاعات مشتری جدید را ثبت کنید تا در CRM قابل مدیریت و پیگیری باشد.
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 md:text-base">
+                    برای استفاده از مشتری در ثبت سفارش و
+                    ادامه فرایند حواله، مشخصات اصلی مشتری را
+                    کامل و دقیق ثبت کنید.
                   </p>
                 </div>
               </div>
 
-              <div className="hidden rounded-2xl bg-slate-50 px-4 py-3 sm:block">
+              <div className="rounded-2xl bg-slate-50 px-4 py-3">
                 <p className="text-xs font-medium text-slate-400">
-                  وضعیت ثبت
+                  وضعیت فرم
                 </p>
 
-                <p className="mt-1 text-sm font-black text-slate-700">
-                  آماده ثبت اطلاعات
+                <p
+                  className={`mt-1 text-sm font-black ${
+                    v2FormComplete
+                      ? "text-emerald-600"
+                      : "text-slate-700"
+                  }`}
+                >
+                  {v2FormComplete
+                    ? "آماده ثبت"
+                    : "نیازمند تکمیل"}
                 </p>
               </div>
             </div>
           </div>
         </section>
 
-        {(error || citiesError) && (
-          <div className="mb-6 space-y-3">
-            {error && (
-              <div className="overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
-                <div className="h-1 bg-red-500" />
+        {dataLoadingError && (
+          <div className="mb-6 overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
+            <div className="h-1 bg-amber-500" />
 
-                <div className="flex items-start gap-3 p-5">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 font-black text-red-600">
-                    !
-                  </div>
-
-                  <div>
-                    <p className="font-black text-red-800">
-                      ثبت مشتری انجام نشد
-                    </p>
-
-                    <p className="mt-1 text-sm leading-6 text-red-600">
-                      {error}
-                    </p>
-                  </div>
-                </div>
+            <div className="flex items-start gap-3 p-5">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 font-black text-amber-600">
+                !
               </div>
-            )}
 
-            {citiesError && (
-              <div className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
-                <div className="h-1 bg-amber-500" />
+              <div>
+                <p className="font-black text-amber-800">
+                  دریافت اطلاعات کمکی با مشکل مواجه شد
+                </p>
 
-                <div className="flex items-start gap-3 p-5">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                    !
-                  </div>
-
-                  <div>
-                    <p className="font-black text-amber-800">
-                      خطا در دریافت شهرها
-                    </p>
-
-                    <p className="mt-1 text-sm leading-6 text-amber-600">
-                      {citiesError}
-                    </p>
-                  </div>
-                </div>
+                <p className="mt-1 text-sm leading-6 text-amber-600">
+                  {dataLoadingError}
+                </p>
               </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -619,15 +863,15 @@ export default function NewCustomerPage() {
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
             <SectionHeader
               icon="📋"
-              title="اطلاعات اصلی"
-              description="مشخصات پایه مشتری را وارد کنید."
+              title="مشخصات اصلی مشتری"
+              description="اطلاعات شناسایی و نوع مشتری را ثبت کنید."
             />
 
-            <div className="grid gap-5 md:grid-cols-3">
+            <div className="grid gap-5 md:grid-cols-2">
               <InputField
-                label="نام مشتری"
+                label="نام و نام خانوادگی / نام مشتری"
                 required
-                hint="نام شخص، فروشگاه یا مجموعه"
+                hint="این نام در سفارش، حواله و گزارش‌های CRM استفاده می‌شود."
               >
                 <input
                   type="text"
@@ -638,9 +882,33 @@ export default function NewCustomerPage() {
                       event.target.value
                     )
                   }
-                  placeholder="مثلاً فروشگاه آذرنیا"
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
+                  placeholder="مثلاً محمد رضایی"
                   autoFocus
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
+                />
+              </InputField>
+
+              <InputField
+                label="کد ملی"
+                required
+                hint="کد ملی باید دقیقاً ۱۰ رقم باشد."
+              >
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={10}
+                  value={form.national_id}
+                  onChange={(event) =>
+                    updateField(
+                      "national_id",
+                      normalizeNationalId(
+                        event.target.value
+                      ).slice(0, 10)
+                    )
+                  }
+                  placeholder="مثلاً 0012345678"
+                  dir="ltr"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-left text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
                 />
               </InputField>
 
@@ -649,9 +917,7 @@ export default function NewCustomerPage() {
                 required
               >
                 <select
-                  value={
-                    form.customer_type
-                  }
+                  value={form.customer_type}
                   onChange={(event) =>
                     updateField(
                       "customer_type",
@@ -664,13 +930,86 @@ export default function NewCustomerPage() {
                     انتخاب نوع مشتری
                   </option>
 
-                  {customerTypes.map(
-                    (item) => (
+                  {customerTypes.map((item) => (
+                    <option
+                      key={item.value}
+                      value={item.value}
+                    >
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </InputField>
+
+              <InputField
+                label="مدیر منطقه"
+                required
+                hint="در V2 مدیر منطقه جایگزین نام بازاریاب در این فرایند شده است."
+              >
+                <select
+                  value={form.regional_manager_id}
+                  onChange={(event) =>
+                    updateField(
+                      "regional_manager_id",
+                      event.target.value
+                    )
+                  }
+                  disabled={loadingManagers}
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <option value="">
+                    {loadingManagers
+                      ? "در حال دریافت مدیران منطقه..."
+                      : "انتخاب مدیر منطقه"}
+                  </option>
+
+                  {regionalManagers.map(
+                    (manager) => (
                       <option
-                        key={item.value}
-                        value={item.value}
+                        key={manager.id}
+                        value={manager.id}
                       >
-                        {item.label}
+                        {manager.full_name}
+                      </option>
+                    )
+                  )}
+                </select>
+              </InputField>
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
+            <SectionHeader
+              icon="📍"
+              title="موقعیت و آدرس مشتری"
+              description="استان، شهر و آدرس دقیق مشتری را برای تکمیل پرونده ثبت کنید."
+            />
+
+            <div className="grid gap-5 md:grid-cols-2">
+              <InputField
+                label="استان"
+                required
+              >
+                <select
+                  value={form.province_code}
+                  onChange={(event) =>
+                    handleProvinceChange(
+                      event.target.value
+                    )
+                  }
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
+                >
+                  <option value="">
+                    انتخاب استان
+                  </option>
+
+                  {provinces.map(
+                    (province) => (
+                      <option
+                        key={province.code}
+                        value={province.code}
+                      >
+                        {province.name_fa}
                       </option>
                     )
                   )}
@@ -680,46 +1019,58 @@ export default function NewCustomerPage() {
               <InputField
                 label="شهر"
                 required
+                hint={
+                  selectedProvince
+                    ? `شهرهای ${selectedProvince.name_fa} نمایش داده می‌شوند.`
+                    : "ابتدا استان را انتخاب کنید."
+                }
               >
                 <div className="space-y-3">
                   <select
-                    value={form.city_id}
+                    value={form.city_code}
                     onChange={(event) =>
-                      updateField(
-                        "city_id",
+                      handleCityChange(
                         event.target.value
                       )
                     }
-                    disabled={citiesLoading}
+                    disabled={
+                      !form.province_code ||
+                      citiesLoading
+                    }
                     className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <option value="">
                       {citiesLoading
                         ? "در حال دریافت شهرها..."
-                        : "انتخاب شهر"}
+                        : form.province_code
+                          ? "انتخاب شهر"
+                          : "ابتدا استان را انتخاب کنید"}
                     </option>
 
-                    {cities.map(
-                      (city) => (
-                        <option
-                          key={city.id}
-                          value={city.id}
-                        >
-                          {city.name_fa ??
-                            city.name}
-                        </option>
-                      )
-                    )}
+                    {cities.map((city) => (
+                      <option
+                        key={city.city_code}
+                        value={city.city_code}
+                      >
+                        {city.name_fa}
+                      </option>
+                    ))}
                   </select>
 
                   <button
                     type="button"
                     onClick={() => {
+                      if (!form.province_code) {
+                        setCityCreateError(
+                          "ابتدا استان را انتخاب کنید."
+                        );
+                        return;
+                      }
+
                       setShowNewCity(
                         (current) =>
                           !current
                       );
-
                       setCityCreateError(
                         null
                       );
@@ -729,79 +1080,55 @@ export default function NewCustomerPage() {
                     <span className="text-base">
                       +
                     </span>
-
                     افزودن شهر جدید
                   </button>
 
                   {showNewCity && (
                     <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
-                      <p className="text-sm font-black text-blue-900">
-                        افزودن شهر جدید
-                      </p>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm">
+                          <MapPin
+                            size={18}
+                          />
+                        </div>
 
-                      <div className="mt-3 space-y-3">
+                        <div>
+                          <p className="text-sm font-black text-blue-900">
+                            افزودن شهر جدید
+                          </p>
+
+                          <p className="mt-1 text-xs leading-5 text-blue-700">
+                            شهر جدید فقط برای استان
+                            انتخاب‌شده ثبت می‌شود و
+                            در مراجعه‌های بعدی قابل
+                            استفاده خواهد بود.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 space-y-3">
                         <input
                           type="text"
-                          value={
-                            newCityName
-                          }
+                          value={newCityName}
                           onChange={(event) =>
                             setNewCityName(
                               event.target.value
                             )
                           }
-                          placeholder="نام شهر، مثلاً قم"
+                          placeholder="نام شهر، مثلاً سیمرغ"
                           className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                         />
 
-                        <select
-                          value={
-                            newCityRegionId
-                          }
-                          onChange={(event) =>
-                            setNewCityRegionId(
-                              event.target.value
-                            )
-                          }
-                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
-                        >
-                          <option value="">
-                            انتخاب منطقه
-                          </option>
-
-                          {regions.map(
-                            (region) => (
-                              <option
-                                key={
-                                  region.id
-                                }
-                                value={
-                                  region.id
-                                }
-                              >
-                                {region.name ===
-                                "Region 1"
-                                  ? "منطقه ۱"
-                                  : region.name ===
-                                      "Region 2"
-                                    ? "منطقه ۲"
-                                    : region.name}
-                              </option>
-                            )
-                          )}
-                        </select>
-
                         <input
                           type="text"
-                          value={
-                            newCityCode
-                          }
+                          value={newCityCode}
                           onChange={(event) =>
                             setNewCityCode(
                               event.target.value
                             )
                           }
                           placeholder="کد شهر — اختیاری"
+                          dir="ltr"
                           className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
                         />
 
@@ -811,25 +1138,118 @@ export default function NewCustomerPage() {
                           </p>
                         )}
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void handleCreateCity()
-                          }
-                          disabled={
-                            creatingCity ||
-                            regions.length === 0
-                          }
-                          className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {creatingCity
-                            ? "در حال ثبت شهر..."
-                            : "ثبت شهر و انتخاب"}
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void handleCreateCity()
+                            }
+                            disabled={
+                              creatingCity
+                            }
+                            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {creatingCity ? (
+                              <>
+                                <Loader2
+                                  size={15}
+                                  className="animate-spin"
+                                />
+                                در حال ثبت شهر...
+                              </>
+                            ) : (
+                              "ثبت شهر و انتخاب"
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowNewCity(
+                                false
+                              );
+                              setCityCreateError(
+                                null
+                              );
+                            }}
+                            className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+                          >
+                            انصراف
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
                 </div>
+              </InputField>
+
+              <div className="md:col-span-2">
+                <InputField
+                  label="آدرس دقیق"
+                  required
+                  hint="خیابان، کوچه، پلاک، واحد و هر توضیح لازم برای پیدا کردن محل تحویل را دقیق بنویسید."
+                >
+                  <textarea
+                    ref={addressRef}
+                    value={
+                      form.address_line_1
+                    }
+                    onChange={(event) =>
+                      updateField(
+                        "address_line_1",
+                        event.target.value
+                      )
+                    }
+                    rows={5}
+                    placeholder="مثلاً سمنان، بلوار امام رضا، خیابان ...، پلاک ...، واحد ..."
+                    className="w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium leading-7 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
+                  />
+                </InputField>
+              </div>
+
+              <InputField
+                label="توضیحات تکمیلی آدرس"
+                hint="اختیاری؛ مانند نام پاساژ، طبقه، نشانی دوم یا توضیح دسترسی."
+              >
+                <textarea
+                  value={
+                    form.address_line_2
+                  }
+                  onChange={(event) =>
+                    updateField(
+                      "address_line_2",
+                      event.target.value
+                    )
+                  }
+                  rows={4}
+                  placeholder="مثلاً روبه‌روی ...، ورودی از سمت ..."
+                  className="w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium leading-7 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
+                />
+              </InputField>
+
+              <InputField
+                label="کد پستی"
+                hint="اختیاری"
+              >
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={10}
+                  value={form.postal_code}
+                  onChange={(event) =>
+                    updateField(
+                      "postal_code",
+                      normalizeDigits(
+                        event.target.value
+                      )
+                        .replace(/\D/g, "")
+                        .slice(0, 10)
+                    )
+                  }
+                  placeholder="۱۰ رقم"
+                  dir="ltr"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-left text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
+                />
               </InputField>
             </div>
           </section>
@@ -838,12 +1258,13 @@ export default function NewCustomerPage() {
             <SectionHeader
               icon="📞"
               title="اطلاعات تماس"
-              description="شماره تماس اصلی، شماره دوم و واتساپ مشتری را ثبت کنید."
+              description="شماره تماس اصلی برای ثبت سفارش و پیگیری مشتری الزامی است."
             />
 
             <div className="grid gap-5 md:grid-cols-3">
               <InputField
                 label="شماره تماس اصلی"
+                required
                 hint="شماره اصلی مشتری"
               >
                 <input
@@ -864,7 +1285,7 @@ export default function NewCustomerPage() {
 
               <InputField
                 label="شماره تماس دوم"
-                hint="در صورت داشتن شماره دوم مشتری"
+                hint="اختیاری"
               >
                 <input
                   type="tel"
@@ -886,7 +1307,7 @@ export default function NewCustomerPage() {
 
               <InputField
                 label="شماره واتساپ"
-                hint="در صورت متفاوت بودن با شماره تماس"
+                hint="اختیاری"
               >
                 <input
                   type="tel"
@@ -912,7 +1333,7 @@ export default function NewCustomerPage() {
             <SectionHeader
               icon="⚙️"
               title="وضعیت مشتری"
-              description="سطح اهمیت و وضعیت فعال بودن مشتری را تعیین کنید."
+              description="سطح اهمیت و فعال بودن پرونده مشتری را تعیین کنید."
             />
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -955,16 +1376,16 @@ export default function NewCustomerPage() {
                   </p>
 
                   <h2 className="mt-1 text-xl font-black text-white">
-                    کارت مشتری
+                    کارت مشتری V2
                   </h2>
                 </div>
 
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-xl text-white">
-                  👤
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-white">
+                  <UserRound size={21} />
                 </div>
               </div>
 
-              <div className="mt-6 grid gap-4 sm:grid-cols-3">
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-2xl bg-white/5 p-4">
                   <p className="text-xs text-slate-400">
                     نام
@@ -978,64 +1399,131 @@ export default function NewCustomerPage() {
 
                 <div className="rounded-2xl bg-white/5 p-4">
                   <p className="text-xs text-slate-400">
-                    نوع مشتری
+                    کد ملی
                   </p>
 
-                  <p className="mt-2 font-bold text-white">
-                    {customerTypes.find(
-                      (item) =>
-                        item.value ===
-                        form.customer_type
-                    )?.label ??
+                  <p
+                    dir="ltr"
+                    className="mt-2 truncate text-left font-bold text-white"
+                  >
+                    {form.national_id ||
+                      "وارد نشده"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl bg-white/5 p-4">
+                  <p className="text-xs text-slate-400">
+                    مدیر منطقه
+                  </p>
+
+                  <p className="mt-2 truncate font-bold text-white">
+                    {selectedManager?.full_name ??
                       "انتخاب نشده"}
                   </p>
                 </div>
 
                 <div className="rounded-2xl bg-white/5 p-4">
                   <p className="text-xs text-slate-400">
-                    شهر
+                    محل
                   </p>
 
                   <p className="mt-2 truncate font-bold text-white">
-                    {cities.find(
-                      (city) =>
-                        city.id ===
-                        form.city_id
-                    )?.name_fa ??
-                      cities.find(
-                        (city) =>
-                          city.id ===
-                          form.city_id
-                      )?.name ??
-                      "انتخاب نشده"}
+                    {selectedProvince?.name_fa &&
+                    selectedCity?.name_fa
+                      ? `${selectedProvince.name_fa}، ${selectedCity.name_fa}`
+                      : "انتخاب نشده"}
                   </p>
                 </div>
               </div>
 
               <div className="mt-4 rounded-2xl bg-white/5 p-4">
                 <p className="text-xs text-slate-400">
-                  وضعیت
+                  آدرس
                 </p>
 
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {form.is_active && (
+                <p className="mt-2 text-sm leading-7 text-slate-200">
+                  {form.address_line_1 ||
+                    "آدرس هنوز وارد نشده"}
+                </p>
+              </div>
+
+              <div className="mt-4 rounded-2xl bg-white/5 p-4">
+                <p className="text-xs text-slate-400">
+                  وضعیت تکمیل اطلاعات V2
+                </p>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {form.name.trim() && (
                     <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300">
-                      فعال
+                      نام
                     </span>
                   )}
 
-                  {!form.is_active && (
-                    <span className="rounded-full bg-slate-500/20 px-3 py-1 text-xs font-bold text-slate-300">
-                      غیرفعال
+                  {form.national_id &&
+                    /^\d{10}$/.test(
+                      normalizeNationalId(
+                        form.national_id
+                      )
+                    ) && (
+                      <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300">
+                        کد ملی
+                      </span>
+                    )}
+
+                  {form.phone.trim() && (
+                    <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300">
+                      تماس
                     </span>
                   )}
 
-                  {form.is_vip && (
+                  {form.regional_manager_id && (
+                    <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300">
+                      مدیر منطقه
+                    </span>
+                  )}
+
+                  {form.province_code && (
+                    <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300">
+                      استان
+                    </span>
+                  )}
+
+                  {form.city_code && (
+                    <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300">
+                      شهر
+                    </span>
+                  )}
+
+                  {form.address_line_1.trim() && (
+                    <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300">
+                      آدرس
+                    </span>
+                  )}
+
+                  {!v2FormComplete && (
                     <span className="rounded-full bg-amber-500/20 px-3 py-1 text-xs font-bold text-amber-300">
-                      VIP
+                      اطلاعات هنوز کامل نیست
+                    </span>
+                  )}
+
+                  {v2FormComplete && (
+                    <span className="rounded-full bg-blue-500/20 px-3 py-1 text-xs font-bold text-blue-300">
+                      آماده ثبت V2
                     </span>
                   )}
                 </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs font-bold text-slate-400">
+                  نکته مهم
+                </p>
+
+                <p className="mt-2 text-sm leading-7 text-slate-300">
+                  آدرس ثبت‌شده در این مرحله، آدرس اصلی پرونده
+                  مشتری است. هنگام صدور حواله می‌توان آدرس تحویل
+                  و شخص تحویل‌گیرنده را جداگانه ویرایش کرد.
+                </p>
               </div>
             </div>
           </section>
@@ -1053,6 +1541,7 @@ export default function NewCustomerPage() {
                 type="submit"
                 disabled={
                   saving ||
+                  loadingManagers ||
                   citiesLoading
                 }
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-7 py-3.5 text-sm font-black text-white shadow-lg shadow-blue-100 transition hover:bg-blue-700 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
@@ -1064,10 +1553,8 @@ export default function NewCustomerPage() {
                   </>
                 ) : (
                   <>
-                    <CheckCircle2
-                      size={17}
-                    />
-                    ذخیره مشتری
+                    <CheckCircle2 size={17} />
+                    ثبت مشتری V2
                   </>
                 )}
               </button>
