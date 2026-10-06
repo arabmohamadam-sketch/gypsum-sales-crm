@@ -489,6 +489,11 @@ function NewOrderForm() {
     setSuccess,
   ] = useState("");
 
+  const [
+    showIncompleteCustomerModal,
+    setShowIncompleteCustomerModal,
+  ] = useState(false);
+
   /* ========================================================
      LOAD CUSTOMERS
      ======================================================== */
@@ -1030,6 +1035,16 @@ function NewOrderForm() {
       return;
     }
 
+    const customerCompleteness =
+      await customersService.checkV2Completeness(
+        selectedCustomer.id
+      );
+
+    if (!customerCompleteness.is_complete) {
+      setShowIncompleteCustomerModal(true);
+      return;
+    }
+
     if (
       !jalaliYear ||
       !jalaliMonth ||
@@ -1270,7 +1285,7 @@ function NewOrderForm() {
         };
 
       const order =
-        await ordersService.create(
+        await ordersService.createV2(
           input
         );
 
@@ -1316,7 +1331,8 @@ function NewOrderForm() {
     );
 
   return (
-    <main
+    <>
+      <main
       dir="rtl"
       className="mx-auto max-w-[1300px] space-y-6 pb-14"
     >
@@ -2824,7 +2840,77 @@ function NewOrderForm() {
           </div>
         </div>
       </form>
-    </main>
+      </main>
+
+      {showIncompleteCustomerModal &&
+        selectedCustomer && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="incomplete-customer-title"
+          >
+            <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-amber-100 bg-white shadow-2xl">
+              <div className="h-1.5 bg-gradient-to-l from-amber-500 via-orange-500 to-red-500" />
+
+              <div className="flex items-start gap-4 p-6">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-xl text-amber-600">
+                  !
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <h2
+                    id="incomplete-customer-title"
+                    className="text-lg font-black text-slate-900"
+                  >
+                    مشخصات مشتری نیاز به اصلاح و یا تکمیل دارد
+                  </h2>
+
+                  <p className="mt-2 text-sm leading-7 text-slate-600">
+                    اطلاعات مشتری «{selectedCustomer.name}»
+                    برای ثبت سفارش V2 کامل نیست. ابتدا مشخصات
+                    مشتری را تکمیل یا اصلاح کنید و سپس دوباره
+                    سفارش را ثبت کنید.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowIncompleteCustomerModal(false);
+                    router.push(
+                      `/customers/edit?id=${encodeURIComponent(
+                        selectedCustomer.id
+                      )}`
+                    );
+                  }}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700"
+                  aria-label="بستن و تکمیل مشخصات مشتری"
+                >
+                  <X size={17} />
+                </button>
+              </div>
+
+              <div className="border-t border-slate-100 bg-slate-50 p-5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowIncompleteCustomerModal(false);
+                    router.push(
+                      `/customers/edit?id=${encodeURIComponent(
+                        selectedCustomer.id
+                      )}`
+                    );
+                  }}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-6 py-3.5 text-sm font-black text-white transition hover:bg-blue-600"
+                >
+                  تکمیل و اصلاح مشخصات مشتری
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+    </>
   );
 }
 

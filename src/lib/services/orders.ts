@@ -1,4 +1,5 @@
 import { getRequiredCurrentCompanyId } from "@/src/lib/services/current-company";
+import { customersService } from "@/src/lib/services/customers";
 import { createSupabaseClient } from "@/src/lib/supabase";
 
 import type {
@@ -1306,6 +1307,36 @@ export const ordersService = {
       (data ??
         []) as ProductRecord[]
     );
+  },
+
+  /**
+   * V2 order creation boundary.
+   *
+   * V1 `create()` remains unchanged for backwards compatibility.
+   * All V2 order-entry applications should use this method so the
+   * customer-completeness rule is enforced before an order is created.
+   */
+  async createV2(
+    input: CreateOrderInput
+  ): Promise<OrderWithRelations> {
+    const customerId =
+      validateId(
+        input.customer_id,
+        "انتخاب مشتری الزامی است."
+      );
+
+    const completeness =
+      await customersService.checkV2Completeness(
+        customerId
+      );
+
+    if (!completeness.is_complete) {
+      throw new Error(
+        "مشخصات مشتری نیاز به اصلاح و یا تکمیل دارد"
+      );
+    }
+
+    return this.create(input);
   },
 
   async create(
