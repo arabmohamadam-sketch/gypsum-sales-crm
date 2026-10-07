@@ -14,10 +14,12 @@ import {
   CheckCircle2,
   ClipboardList,
   FileText,
+  History,
   Package,
   RefreshCw,
   RotateCcw,
   Send,
+  ShieldCheck,
   Trash2,
   Truck,
   UserRound,
@@ -36,6 +38,7 @@ import {
 } from "@/src/lib/utils/jalali";
 
 import { useOrders } from "@/src/lib/hooks/useOrders";
+import { usePermissions } from "@/src/lib/hooks/usePermissions";
 
 import { waybillsService } from "@/src/lib/services/waybills";
 
@@ -50,15 +53,24 @@ import {
   type UpdateOrderInput,
 } from "@/src/lib/services/orders";
 
-import type {
-  OrderApprovalStage,
-  OrderItem,
-} from "@/src/lib/types/order";
+import type { OrderItem } from "@/src/lib/types/order";
 
 type OrderStatus =
   | "draft"
   | "confirmed"
   | "cancelled";
+
+type WorkflowAwareOrder = OrderWithRelations & {
+  workflow_version?: "v1" | "v2";
+};
+
+function getOrderWorkflowVersion(
+  order: WorkflowAwareOrder | null
+): "v1" | "v2" {
+  return order?.workflow_version === "v2"
+    ? "v2"
+    : "v1";
+}
 
 function formatNumber(value: number): string {
   if (!Number.isFinite(value)) {
@@ -68,6 +80,106 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat("fa-IR", {
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+function getApprovalStatusLabel(
+  status: string | null | undefined
+): string {
+  switch (status) {
+    case "pending":
+      return "در انتظار تأیید";
+    case "approved":
+      return "تأیید شده";
+    case "rejected":
+      return "رد شده";
+    case "returned":
+      return "برگشت داده شده";
+    case "cancelled":
+      return "لغو شده";
+    default:
+      return "شروع نشده";
+  }
+}
+
+function getApprovalStatusClass(
+  status: string | null | undefined
+): string {
+  switch (status) {
+    case "pending":
+      return "bg-amber-50 text-amber-700 ring-1 ring-amber-100";
+    case "approved":
+      return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100";
+    case "rejected":
+      return "bg-red-50 text-red-700 ring-1 ring-red-100";
+    case "returned":
+      return "bg-orange-50 text-orange-700 ring-1 ring-orange-100";
+    case "cancelled":
+      return "bg-slate-100 text-slate-600 ring-1 ring-slate-200";
+    default:
+      return "bg-slate-100 text-slate-600 ring-1 ring-slate-200";
+  }
+}
+
+function getApprovalStageLabel(
+  stage: "regional" | "sales"
+): string {
+  return stage === "regional" ? "مدیر منطقه" : "مدیر فروش";
+}
+
+function buildWorkflowSummary(
+  order: Pick<
+    OrderWithRelations,
+    | "approval_status"
+    | "fulfillment_status"
+    | "delivery_status"
+  >,
+  approvalHistory: OrderApprovalHistoryItem[]
+): OrderWorkflowSummary {
+  const latestPendingApproval = approvalHistory
+    .filter(
+      (item) =>
+        !item.deleted_at &&
+        item.status === "pending"
+    )
+    .sort((first, second) => {
+      const firstTime = Date.parse(
+        first.created_at
+      );
+      const secondTime = Date.parse(
+        second.created_at
+      );
+
+      if (secondTime !== firstTime) {
+        return secondTime - firstTime;
+      }
+
+      return (
+        Number(second.cycle_number ?? 0) -
+        Number(first.cycle_number ?? 0)
+      );
+    })[0];
+
+  return {
+    approval_status: order.approval_status,
+    fulfillment_status: order.fulfillment_status,
+    delivery_status: order.delivery_status,
+    pending_stage:
+      latestPendingApproval?.approval_stage ??
+      null,
+  };
+}
+
+function getApprovalDecisionTitle(
+  decision: OrderApprovalDecision
+): string {
+  switch (decision) {
+    case "approve":
+      return "تأیید سفارش";
+    case "return":
+      return "برگشت سفارش برای اصلاح";
+    case "reject":
+      return "رد سفارش";
+  }
 }
 
 function getStatusLabel(status: string): string {
@@ -205,118 +317,37 @@ function getLoadingStatusLabel(
   }
 }
 
-function getApprovalStatusLabel(status: string | null | undefined): string {
-  switch (status) {
-    case "pending":
-      return "در انتظار تأیید";
-    case "approved":
-      return "تأیید نهایی شده";
-    case "rejected":
-      return "رد شده";
-    case "returned":
-      return "برگشت برای اصلاح";
-    case "cancelled":
-      return "لغو شده";
-    default:
-      return "شروع نشده";
-  }
-}
-
-function getApprovalStatusClass(status: string | null | undefined): string {
-  switch (status) {
-    case "pending":
-      return "bg-amber-50 text-amber-700 ring-1 ring-amber-100";
-    case "approved":
-      return "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100";
-    case "rejected":
-      return "bg-red-50 text-red-700 ring-1 ring-red-100";
-    case "returned":
-      return "bg-orange-50 text-orange-700 ring-1 ring-orange-100";
-    case "cancelled":
-      return "bg-slate-100 text-slate-600 ring-1 ring-slate-200";
-    default:
-      return "bg-slate-100 text-slate-600 ring-1 ring-slate-200";
-  }
-}
-
-function getFulfillmentStatusLabel(status: string | null | undefined): string {
-  switch (status) {
-    case "not_ready":
-      return "آماده اجرا نیست";
-    case "ready":
-      return "آماده اجرا";
-    case "partially_allocated":
-      return "بخشی تخصیص یافته";
-    case "allocated":
-      return "تخصیص کامل یافته";
-    case "loading":
-      return "در حال بارگیری";
-    case "loaded":
-      return "بارگیری شده";
-    case "sent":
-      return "ارسال شده";
-    case "completed":
-      return "تکمیل شده";
-    case "cancelled":
-      return "لغو شده";
-    default:
-      return "ثبت نشده";
-  }
-}
-
-function getApprovalStageLabel(stage: OrderApprovalStage): string {
-  return stage === "regional" ? "مدیر منطقه" : "مدیر فروش";
-}
-
-function getApprovalDecisionTitle(
-  stage: OrderApprovalStage,
-  decision: OrderApprovalDecision
-): string {
-  const stageLabel = getApprovalStageLabel(stage);
-  switch (decision) {
-    case "approve":
-      return `تأیید سفارش توسط ${stageLabel}`;
-    case "reject":
-      return `رد سفارش توسط ${stageLabel}`;
-    case "return":
-      return `برگشت سفارش توسط ${stageLabel}`;
-  }
-}
-
-function getApprovalHistoryActionLabel(approval: OrderApprovalHistoryItem): string {
-  switch (approval.status) {
-    case "approved":
-      return "تأیید";
-    case "rejected":
-      return "رد";
-    case "returned":
-      return "برگشت برای اصلاح";
-    case "pending":
-      return "در انتظار اقدام";
-    default:
-      return getApprovalStatusLabel(approval.status);
-  }
-}
-
-function LoadingBlock({ text }: { text: string }) {
+function LoadingBlock({
+  text,
+}: {
+  text: string;
+}) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
-      <RefreshCw size={22} className="mx-auto animate-spin text-blue-600" />
-      <p className="mt-3 text-sm font-bold text-slate-600">{text}</p>
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-7">
+      <div className="flex items-center justify-center gap-3 text-sm font-bold text-slate-600">
+        <RefreshCw size={17} className="animate-spin text-violet-600" />
+        {text}
+      </div>
     </div>
   );
 }
 
-function ErrorBlock({ message }: { message: string }) {
+function ErrorBlock({
+  message,
+  title = "خطا",
+}: {
+  message: string;
+  title?: string;
+}) {
   return (
-    <div className="rounded-2xl border border-red-200 bg-red-50 p-5">
+    <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-right">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-red-600 shadow-sm">
           <XCircle size={18} />
         </div>
-        <div>
-          <p className="font-black text-red-800">خطا در دریافت اطلاعات</p>
-          <p className="mt-1 text-sm leading-6 text-red-700">{message}</p>
+        <div className="min-w-0">
+          <p className="text-sm font-black text-red-800">{title}</p>
+          <p className="mt-1 text-sm leading-6 text-red-600">{message}</p>
         </div>
       </div>
     </div>
@@ -532,8 +563,21 @@ export default function OrderDetailsPage() {
       (item) =>
         item.id === orderId
     ) as
-      | OrderWithRelations
+      | WorkflowAwareOrder
       | undefined) ?? null;
+
+  const orderWorkflowVersion =
+    getOrderWorkflowVersion(order);
+  const isV2Order =
+    orderWorkflowVersion === "v2";
+
+  const orderExists = order !== null;
+  const orderApprovalStatus =
+    order?.approval_status ?? null;
+  const orderFulfillmentStatus =
+    order?.fulfillment_status ?? null;
+  const orderDeliveryStatus =
+    order?.delivery_status ?? null;
 
   const currentJalaliDate =
     order
@@ -567,29 +611,37 @@ export default function OrderDetailsPage() {
   const [formError, setFormError] =
     useState("");
 
+  const {
+    hasPermission,
+    loading: permissionsLoading,
+  } = usePermissions();
+
   const [approvalHistory, setApprovalHistory] =
     useState<OrderApprovalHistoryItem[]>([]);
 
-  const [workflow, setWorkflow] =
+  const [workflowSummary, setWorkflowSummary] =
     useState<OrderWorkflowSummary | null>(null);
 
   const [approvalLoading, setApprovalLoading] =
     useState(Boolean(orderId));
 
+  const [approvalBusy, setApprovalBusy] =
+    useState(false);
+
   const [approvalError, setApprovalError] =
     useState<string | null>(null);
 
-  const [approvalDecision, setApprovalDecision] =
-    useState<OrderApprovalDecision | null>(null);
+  const [approvalDialog, setApprovalDialog] =
+    useState<{
+      stage: "regional" | "sales";
+      decision: OrderApprovalDecision;
+    } | null>(null);
 
   const [approvalReason, setApprovalReason] =
     useState("");
 
   const [approvalNotes, setApprovalNotes] =
     useState("");
-
-  const [approvalBusy, setApprovalBusy] =
-    useState(false);
 
   const [
     jalaliYear,
@@ -668,8 +720,8 @@ export default function OrderDetailsPage() {
   const canIssueWaybill =
     Boolean(
       order &&
-        order.fulfillment_status ===
-          "ready" &&
+        order.status ===
+          "confirmed" &&
         orderItems.length > 0 &&
         waybills.length === 0
     );
@@ -714,6 +766,80 @@ export default function OrderDetailsPage() {
     ]);
 
   useEffect(() => {
+    let mounted = true;
+
+    async function loadApprovalWorkflow() {
+      if (!orderId || !isV2Order || !orderExists) {
+        if (mounted) {
+          setApprovalHistory([]);
+          setWorkflowSummary(null);
+          setApprovalError(null);
+          setApprovalLoading(false);
+        }
+        return;
+      }
+
+      try {
+        setApprovalLoading(true);
+        setApprovalError(null);
+
+        const history =
+          await ordersService.getApprovalHistory(
+            orderId
+          );
+
+        if (!mounted) return;
+
+        setApprovalHistory(history);
+
+        if (orderExists) {
+          setWorkflowSummary(
+            buildWorkflowSummary(
+              {
+                approval_status:
+                  orderApprovalStatus,
+                fulfillment_status:
+                  orderFulfillmentStatus,
+                delivery_status:
+                  orderDeliveryStatus,
+              },
+              history
+            )
+          );
+        } else {
+          setWorkflowSummary(null);
+        }
+      } catch (err) {
+        console.error("ORDER APPROVAL WORKFLOW LOAD:", err);
+        if (!mounted) return;
+        setApprovalHistory([]);
+        setWorkflowSummary(null);
+        setApprovalError(
+          err instanceof Error
+            ? err.message
+            : "خطا در دریافت وضعیت تأیید سفارش."
+        );
+      } finally {
+        if (mounted) setApprovalLoading(false);
+      }
+    }
+
+    void loadApprovalWorkflow();
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    orderId,
+    isV2Order,
+    order?.updated_at,
+    orderExists,
+    orderApprovalStatus,
+    orderFulfillmentStatus,
+    orderDeliveryStatus,
+  ]);
+
+  useEffect(() => {
     let cancelled = false;
 
     if (!orderId) {
@@ -755,71 +881,88 @@ export default function OrderDetailsPage() {
     };
   }, [orderId, fetchOrderWaybills]);
 
-  const loadApprovalData = useCallback(async () => {
-    if (!orderId) {
-      return;
-    }
-
-    setApprovalLoading(true);
+  function openApprovalDialog(
+    stage: "regional" | "sales",
+    decision: OrderApprovalDecision
+  ) {
     setApprovalError(null);
+    setApprovalReason("");
+    setApprovalNotes("");
+    setApprovalDialog({ stage, decision });
+  }
 
-    try {
-      const [history, summary] = await Promise.all([
-        ordersService.getApprovalHistory(orderId),
-        ordersService.getWorkflowSummary(orderId),
-      ]);
+  function closeApprovalDialog() {
+    if (approvalBusy) return;
+    setApprovalDialog(null);
+    setApprovalReason("");
+    setApprovalNotes("");
+  }
 
-      setApprovalHistory(history);
-      setWorkflow(summary);
-    } catch (err) {
-      console.error("ORDER APPROVAL LOAD:", err);
-      setApprovalHistory([]);
-      setWorkflow(null);
-      setApprovalError(
-        err instanceof Error
-          ? err.message
-          : "خطا در دریافت وضعیت تأیید سفارش."
+  async function loadApprovalWorkflowForPage(
+    targetOrderId: string
+  ) {
+    const history =
+      await ordersService.getApprovalHistory(
+        targetOrderId
       );
-    } finally {
-      setApprovalLoading(false);
+
+    setApprovalHistory(history);
+
+    if (order?.id === targetOrderId) {
+      setWorkflowSummary(
+        buildWorkflowSummary(
+          order,
+          history
+        )
+      );
+    } else {
+      setWorkflowSummary(null);
     }
-  }, [orderId]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadApprovalData();
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [loadApprovalData, order?.updated_at]);
+  }
 
   async function handleSubmitForApproval() {
-    if (!order) {
+    if (!order) return;
+
+    if (!isV2Order) {
+      setApprovalError("این سفارش متعلق به Workflow V1 است و در چرخه تأیید V2 قرار ندارد.");
       return;
     }
 
-    setApprovalBusy(true);
-    setApprovalError(null);
-    setMessage("");
-    setFormError("");
+    if (!hasPermission("orders.submit")) {
+      setApprovalError("شما مجوز ارسال سفارش برای بررسی را ندارید.");
+      return;
+    }
+
+    if (order.status !== "draft") {
+      setApprovalError("فقط سفارش پیش‌نویس را می‌توان برای بررسی ارسال کرد.");
+      return;
+    }
+
+    if (workflowSummary?.pending_stage) {
+      setApprovalError("این سفارش در حال حاضر در صف تأیید قرار دارد.");
+      return;
+    }
 
     try {
+      setApprovalBusy(true);
+      setApprovalError(null);
+      setMessage("");
+
       await ordersService.submitForApproval({
         order_id: order.id,
       });
 
-      setMessage(
-        "سفارش با موفقیت برای بررسی مدیر منطقه ارسال شد."
-      );
-
-      await Promise.all([refresh(), loadApprovalData()]);
+      setMessage("سفارش با موفقیت برای بررسی مدیر منطقه ارسال شد.");
+      await Promise.all([
+        refresh(),
+        loadApprovalWorkflowForPage(order.id),
+      ]);
     } catch (err) {
+      console.error("ORDER SUBMIT FOR APPROVAL:", err);
       setApprovalError(
         err instanceof Error
           ? err.message
-          : "خطا در ارسال سفارش برای بررسی مدیر منطقه."
+          : "خطا در ارسال سفارش برای بررسی."
       );
     } finally {
       setApprovalBusy(false);
@@ -827,29 +970,48 @@ export default function OrderDetailsPage() {
   }
 
   async function handleApprovalDecision() {
-    if (!order || !workflow?.pending_stage || !approvalDecision) {
+    if (!order || !approvalDialog) return;
+
+    if (!isV2Order) {
+      setApprovalError("این سفارش متعلق به Workflow V1 است و امکان تصمیم‌گیری V2 برای آن وجود ندارد.");
       return;
     }
 
-    if (
-      (approvalDecision === "reject" || approvalDecision === "return") &&
-      !approvalReason.trim()
-    ) {
-      setApprovalError(
-        "برای رد یا برگشت سفارش، ثبت دلیل الزامی است."
-      );
+    const { stage, decision } = approvalDialog;
+
+    const requiresReason = decision === "reject" || decision === "return";
+
+    if (requiresReason && !approvalReason.trim()) {
+      setApprovalError("برای رد یا برگشت سفارش، ثبت دلیل الزامی است.");
       return;
     }
 
-    const stage = workflow.pending_stage;
-    const decision = approvalDecision;
+    const permissionByDecision: Record<
+      "regional" | "sales",
+      Record<OrderApprovalDecision, string>
+    > = {
+      regional: {
+        approve: "orders.regional_approve",
+        reject: "orders.regional_reject",
+        return: "orders.regional_return",
+      },
+      sales: {
+        approve: "orders.sales_approve",
+        reject: "orders.sales_reject",        return: "orders.sales_return",
+      },
+    };
 
-    setApprovalBusy(true);
-    setApprovalError(null);
-    setMessage("");
-    setFormError("");
+    const requiredPermission = permissionByDecision[stage][decision];
+    if (!hasPermission(requiredPermission)) {
+      setApprovalError("شما مجوز انجام این عملیات را ندارید.");
+      return;
+    }
 
     try {
+      setApprovalBusy(true);
+      setApprovalError(null);
+      setMessage("");
+
       await ordersService.decideApproval({
         order_id: order.id,
         stage,
@@ -860,18 +1022,22 @@ export default function OrderDetailsPage() {
 
       const successMessage =
         decision === "approve"
-          ? `سفارش توسط ${getApprovalStageLabel(stage)} با موفقیت تأیید شد.`
-          : decision === "reject"
-            ? `سفارش توسط ${getApprovalStageLabel(stage)} رد شد.`
-            : `سفارش برای اصلاح توسط ${getApprovalStageLabel(stage)} برگشت داده شد.`;
+          ? stage === "regional"
+            ? "تأیید مدیر منطقه ثبت شد و سفارش برای مدیر فروش ارسال شد."
+            : "تأیید نهایی مدیر فروش ثبت شد و سفارش آماده اجرا شد."
+          : decision === "return"
+            ? "سفارش برای اصلاح برگشت داده شد."
+            : "سفارش رد شد.";
 
-      setApprovalDecision(null);
-      setApprovalReason("");
-      setApprovalNotes("");
       setMessage(successMessage);
+      closeApprovalDialog();
 
-      await Promise.all([refresh(), loadApprovalData()]);
+      await Promise.all([
+        refresh(),
+        loadApprovalWorkflowForPage(order.id),
+      ]);
     } catch (err) {
+      console.error("ORDER APPROVAL DECISION:", err);
       setApprovalError(
         err instanceof Error
           ? err.message
@@ -887,9 +1053,9 @@ export default function OrderDetailsPage() {
       return;
     }
 
-    if (order.fulfillment_status !== "ready") {
+    if (order.status !== "confirmed") {
       setFormError(
-        "فقط سفارش‌هایی که تأیید نهایی شده و آماده اجرا هستند امکان صدور حواله دارند."
+        "فقط سفارش‌های تأییدشده امکان صدور حواله دارند."
       );
       return;
     }
@@ -1187,11 +1353,10 @@ export default function OrderDetailsPage() {
   }
 
   return (
-    <>
-      <main
-        dir="rtl"
-        className="mx-auto max-w-[1300px] space-y-6 pb-14"
-      >
+    <main
+      dir="rtl"
+      className="mx-auto max-w-[1300px] space-y-6 pb-14"
+    >
       <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-slate-900 via-violet-600 to-blue-600" />
 
@@ -1347,178 +1512,133 @@ export default function OrderDetailsPage() {
         </section>
       )}
 
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 bg-slate-50/70 px-6 py-5 md:px-7">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs font-bold text-blue-600">گردش تأیید V2</p>
-              <h2 className="mt-1 text-xl font-black text-slate-900">تأیید و آماده‌سازی سفارش</h2>
-              <p className="mt-1 text-sm leading-6 text-slate-500">سفارش ابتدا توسط مدیر منطقه و سپس توسط مدیر فروش بررسی می‌شود.</p>
+      {isV2Order && (
+        <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 bg-gradient-to-l from-slate-50 to-white px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-700">
+                  <ShieldCheck size={21} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-violet-600">V2 Workflow</p>
+                <h2 className="mt-1 text-xl font-black text-slate-900">چرخه تأیید سفارش</h2>
+                <p className="mt-1 text-sm leading-6 text-slate-500">سفارش پس از تأیید مدیر منطقه به مدیر فروش می‌رسد و فقط پس از تأیید نهایی آماده اجرا خواهد شد.</p>
+              </div>
             </div>
-
-            <div className="flex flex-wrap gap-2">
-              <span className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-bold ${getApprovalStatusClass(workflow?.approval_status)}`}>
-                تأیید: {getApprovalStatusLabel(workflow?.approval_status)}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`inline-flex rounded-full px-3 py-1.5 text-xs font-black ${getApprovalStatusClass(workflowSummary?.approval_status)}`}>
+                تأیید: {getApprovalStatusLabel(workflowSummary?.approval_status)}
               </span>
-              <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 ring-1 ring-blue-100">
-                اجرا: {getFulfillmentStatusLabel(workflow?.fulfillment_status)}
+              <span className={`inline-flex rounded-full px-3 py-1.5 text-xs font-black ${workflowSummary?.fulfillment_status === "ready" ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100" : "bg-slate-100 text-slate-600 ring-1 ring-slate-200"}`}>
+                اجرا: {workflowSummary?.fulfillment_status === "ready" ? "آماده اجرا" : "آماده نیست"}
               </span>
-              {workflow?.pending_stage && (
-                <span className="inline-flex items-center rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700 ring-1 ring-violet-100">
-                  در انتظار: {getApprovalStageLabel(workflow.pending_stage)}
-                </span>
-              )}
             </div>
           </div>
         </div>
 
-        <div className="p-6 md:p-7">
-          {approvalError && <ErrorBlock message={approvalError} />}
-
+        <div className="p-5 sm:p-6">
           {approvalLoading ? (
             <LoadingBlock text="در حال دریافت وضعیت تأیید سفارش..." />
-          ) : workflow?.pending_stage ? (
-            <div className="rounded-2xl border border-violet-100 bg-violet-50/50 p-5">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-sm font-black text-violet-900">
-                    اقدام مورد انتظار: {getApprovalStageLabel(workflow.pending_stage)}
-                  </p>
-                  <p className="mt-1 text-sm leading-6 text-violet-700">
-                    تصمیم باید از طریق مسیر رسمی Approval ثبت شود.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setApprovalDecision("approve")}
-                    disabled={approvalBusy}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <CheckCircle2 size={16} />
-                    تأیید
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setApprovalDecision("return")}
-                    disabled={approvalBusy}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-5 py-3 text-sm font-black text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <RotateCcw size={16} />
-                    برگشت برای اصلاح
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setApprovalDecision("reject")}
-                    disabled={approvalBusy}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-5 py-3 text-sm font-black text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <XCircle size={16} />
-                    رد سفارش
-                  </button>
-                </div>
-              </div>
-            </div>
           ) : (
-            <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-5">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-sm font-black text-blue-900">
-                    {workflow?.approval_status === "approved"
-                      ? "این سفارش تأیید نهایی شده است."
-                      : workflow?.approval_status === "returned"
-                        ? "این سفارش برای اصلاح برگشته و آماده ارسال مجدد است."
-                        : workflow?.approval_status === "rejected"
-                          ? "این سفارش رد شده است."
-                          : "این سفارش هنوز وارد چرخه Approval نشده است."}
-                  </p>
-                  {workflow?.approval_status !== "approved" &&
-                    workflow?.approval_status !== "rejected" &&
-                    order.status !== "cancelled" && (
-                      <p className="mt-1 text-sm leading-6 text-blue-700">
-                        درخواست پس از ارسال ابتدا در صف مدیر منطقه قرار می‌گیرد.
-                      </p>
+            <>
+              {approvalError && <ErrorBlock message={approvalError} title="خطا در چرخه تأیید" />}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="text-sm font-black text-slate-800">مرحله فعلی</p>
+                    <p className="mt-1 text-sm leading-6 text-slate-500">
+                      {workflowSummary?.pending_stage
+                        ? `در انتظار تصمیم ${getApprovalStageLabel(workflowSummary.pending_stage)}`
+                        : workflowSummary?.approval_status === "approved"
+                          ? "تأیید نهایی انجام شده و سفارش آماده اجرا است."
+                          : workflowSummary?.approval_status === "rejected"
+                            ? "سفارش در چرخه فعلی رد شده است."
+                            : workflowSummary?.approval_status === "returned"
+                              ? "سفارش برای اصلاح برگشت داده شده است."
+                              : "هنوز سفارش برای چرخه تأیید ارسال نشده است."}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!workflowSummary?.pending_stage && order.status === "draft" && hasPermission("orders.submit") && (
+                      <button type="button" onClick={() => void handleSubmitForApproval()} disabled={approvalBusy || permissionsLoading} className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 text-xs font-black text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50">
+                        {approvalBusy ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Send size={15} />}
+                        ارسال برای تأیید مدیر منطقه
+                      </button>
                     )}
+
+                    {workflowSummary?.pending_stage === "regional" &&
+                      hasPermission("orders.regional_approve") && (
+                      <button type="button" onClick={() => openApprovalDialog("regional", "approve")} disabled={approvalBusy || permissionsLoading} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
+                        <CheckCircle2 size={15} /> تأیید مدیر منطقه
+                      </button>
+                    )}
+                    {workflowSummary?.pending_stage === "regional" &&
+                      hasPermission("orders.regional_return") && (
+                      <button type="button" onClick={() => openApprovalDialog("regional", "return")} disabled={approvalBusy || permissionsLoading} className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-50 px-4 py-3 text-xs font-black text-amber-700 ring-1 ring-amber-200 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50">
+                        <RotateCcw size={15} /> برگشت برای اصلاح
+                      </button>
+                    )}
+                    {workflowSummary?.pending_stage === "regional" &&
+                      hasPermission("orders.regional_reject") && (
+                      <button type="button" onClick={() => openApprovalDialog("regional", "reject")} disabled={approvalBusy || permissionsLoading} className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-xs font-black text-red-700 ring-1 ring-red-200 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50">
+                        <XCircle size={15} /> رد سفارش
+                      </button>
+                    )}
+                    {workflowSummary?.pending_stage === "sales" &&
+                      hasPermission("orders.sales_approve") && (
+                      <button type="button" onClick={() => openApprovalDialog("sales", "approve")} disabled={approvalBusy || permissionsLoading} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
+                        <CheckCircle2 size={15} /> تأیید نهایی مدیر فروش
+                      </button>
+                    )}
+                    {workflowSummary?.pending_stage === "sales" &&
+                      hasPermission("orders.sales_return") && (
+                      <button type="button" onClick={() => openApprovalDialog("sales", "return")} disabled={approvalBusy || permissionsLoading} className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-50 px-4 py-3 text-xs font-black text-amber-700 ring-1 ring-amber-200 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50">
+                        <RotateCcw size={15} /> برگشت برای اصلاح
+                      </button>
+                    )}
+                    {workflowSummary?.pending_stage === "sales" &&
+                      hasPermission("orders.sales_reject") && (
+                      <button type="button" onClick={() => openApprovalDialog("sales", "reject")} disabled={approvalBusy || permissionsLoading} className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-xs font-black text-red-700 ring-1 ring-red-200 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50">
+                        <XCircle size={15} /> رد سفارش
+                      </button>
+                    )}
+                  </div>
                 </div>
-
-                {workflow?.approval_status !== "approved" &&
-                  workflow?.approval_status !== "rejected" &&
-                  order.status !== "cancelled" && (
-                    <button
-                      type="button"
-                      onClick={() => void handleSubmitForApproval()}
-                      disabled={approvalBusy}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {approvalBusy ? (
-                        <RefreshCw size={16} className="animate-spin" />
-                      ) : (
-                        <Send size={16} />
-                      )}
-                      {workflow?.approval_status === "returned"
-                        ? "ارسال مجدد برای بررسی"
-                        : "ارسال برای بررسی مدیر منطقه"}
-                    </button>
-                  )}
               </div>
-            </div>
-          )}
 
-          {approvalHistory.length > 0 && (
-            <div className="mt-6">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-black text-slate-900">تاریخچه Approval</p>
-                  <p className="mt-1 text-xs text-slate-400">سوابق تمام مراحل بررسی و تصمیم‌ها</p>
+              <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-4 py-4">
+                  <div className="flex items-center gap-2"><History size={17} className="text-slate-500" /><p className="text-sm font-black text-slate-800">تاریخچه تأییدها</p></div>
+                  <span className="text-xs font-bold text-slate-400">{formatNumber(approvalHistory.length)} مورد</span>
                 </div>
-                <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
-                  {formatNumber(approvalHistory.length)} رکورد
-                </span>
+                {approvalHistory.length === 0 ? (
+                  <div className="p-7 text-center text-sm text-slate-500">هنوز هیچ تصمیمی در چرخه تأیید ثبت نشده است.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-right text-sm">
+                      <thead className="border-b border-slate-100 bg-white"><tr><th className="whitespace-nowrap px-4 py-3 font-black text-slate-500">مرحله</th><th className="whitespace-nowrap px-4 py-3 font-black text-slate-500">دوره</th><th className="whitespace-nowrap px-4 py-3 font-black text-slate-500">وضعیت</th><th className="whitespace-nowrap px-4 py-3 font-black text-slate-500">زمان</th><th className="px-4 py-3 font-black text-slate-500">دلیل / یادداشت</th></tr></thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {approvalHistory.map((item) => (
+                          <tr key={item.id} className="hover:bg-slate-50/70">
+                            <td className="whitespace-nowrap px-4 py-4 font-bold text-slate-700">{getApprovalStageLabel(item.approval_stage)}</td>
+                            <td className="whitespace-nowrap px-4 py-4 text-slate-600">{formatNumber(item.cycle_number)}</td>
+                            <td className="px-4 py-4"><span className={`inline-flex rounded-full px-2.5 py-1.5 text-xs font-bold ${getApprovalStatusClass(item.status)}`}>{getApprovalStatusLabel(item.status)}</span></td>
+                            <td className="whitespace-nowrap px-4 py-4 text-slate-600">{formatJalaliDate(item.acted_at ?? item.created_at)}</td>
+                            <td className="max-w-md px-4 py-4 text-slate-600"><div className="space-y-1">{item.rejection_reason && <p>رد: {item.rejection_reason}</p>}{item.return_reason && <p>برگشت: {item.return_reason}</p>}{item.notes && <p>یادداشت: {item.notes}</p>}{!item.rejection_reason && !item.return_reason && !item.notes && <span className="text-slate-400">—</span>}</div></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-
-              <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                <table className="min-w-full text-right text-sm">
-                  <thead className="border-b border-slate-100 bg-slate-50">
-                    <tr>
-                      <th className="whitespace-nowrap px-4 py-3 font-black text-slate-600">مرحله</th>
-                      <th className="whitespace-nowrap px-4 py-3 font-black text-slate-600">چرخه</th>
-                      <th className="whitespace-nowrap px-4 py-3 font-black text-slate-600">نتیجه</th>
-                      <th className="whitespace-nowrap px-4 py-3 font-black text-slate-600">اقدام‌کننده</th>
-                      <th className="whitespace-nowrap px-4 py-3 font-black text-slate-600">دلیل / یادداشت</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {approvalHistory.map((approval) => (
-                      <tr key={approval.id} className="hover:bg-slate-50/70">
-                        <td className="px-4 py-3">
-                          <span className="rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700">
-                            {getApprovalStageLabel(approval.approval_stage)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 font-black text-slate-700">
-                          {formatNumber(approval.cycle_number)}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${getApprovalStatusClass(approval.status)}`}>
-                            {getApprovalHistoryActionLabel(approval)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-slate-500">
-                          {approval.acted_by ?? "در انتظار اقدام"}
-                        </td>
-                        <td className="max-w-md px-4 py-3 text-slate-600">
-                          {approval.rejection_reason ?? approval.return_reason ?? approval.notes ?? "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
+            </>
+            )}
+          </div>
+        </section>
+      )}
 
       <section className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
@@ -1816,8 +1936,8 @@ export default function OrderDetailsPage() {
               پس از صدور حواله، وضعیت ارسال و بارگیری آن در این بخش نمایش داده می‌شود.
             </p>
 
-            {order.fulfillment_status ===
-              "ready" &&
+            {order.status ===
+              "confirmed" &&
               orderItems.length > 0 && (
                 <button
                   type="button"
@@ -1876,8 +1996,7 @@ export default function OrderDetailsPage() {
 
                             <span
                               className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-bold ${getWaybillStatusClass(
-                                waybill.status
-                              )}`}
+                                waybill.status                              )}`}
                             >
                               {getWaybillStatusLabel(
                                 waybill.status
@@ -2112,9 +2231,13 @@ export default function OrderDetailsPage() {
                 پیش‌نویس
               </option>
 
-              <option value="confirmed">
-                تأیید شده
-              </option>
+              {(!isV2Order ||
+                order.status === "confirmed" ||
+                order.approval_status === "approved") && (
+                <option value="confirmed">
+                  تأیید شده
+                </option>
+              )}
 
               <option value="cancelled">
                 لغو شده
@@ -2325,54 +2448,53 @@ export default function OrderDetailsPage() {
           />
         </div>
       </section>
-      </main>
+      {isV2Order && approvalDialog && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="approval-dialog-title"
+        >
+          <div className="w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+            <div className="border-b border-slate-100 bg-gradient-to-l from-slate-50 to-white px-5 py-5 sm:px-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold text-violet-600">V2 Workflow</p>
+                  <h3 id="approval-dialog-title" className="mt-1 text-xl font-black text-slate-900">
+                    {getApprovalDecisionTitle(approvalDialog.decision)}
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-slate-500">
+                    مرحله {getApprovalStageLabel(approvalDialog.stage)}
+                  </p>
+                </div>
 
-      {approvalDecision && workflow?.pending_stage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="approval-decision-title"
-            className="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl"
-          >
-            <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
-              <div>
-                <p className="text-xs font-bold text-blue-600">عملیات Approval V2</p>
-                <h2 id="approval-decision-title" className="mt-1 text-lg font-black text-slate-900">
-                  {getApprovalDecisionTitle(workflow.pending_stage, approvalDecision)}
-                </h2>
+                <button
+                  type="button"
+                  onClick={closeApprovalDialog}
+                  disabled={approvalBusy}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="بستن"
+                >
+                  <XCircle size={19} />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!approvalBusy) {
-                    setApprovalDecision(null);
-                    setApprovalReason("");
-                    setApprovalNotes("");
-                  }
-                }}
-                disabled={approvalBusy}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="بستن"
-              >
-                <XCircle size={17} />
-              </button>
             </div>
 
-            <div className="space-y-4 p-5">
-              <div className={`rounded-2xl p-4 ${approvalDecision === "approve" ? "border border-emerald-100 bg-emerald-50" : "border border-amber-100 bg-amber-50"}`}>
-                <p className="text-sm leading-7 text-slate-700">
-                  {approvalDecision === "approve"
-                    ? "با تأیید این مرحله، سفارش به مرحله بعدی گردش تأیید منتقل می‌شود."
-                    : approvalDecision === "return"
-                      ? "سفارش برای اصلاح برمی‌گردد و در صورت اصلاح می‌تواند در چرخه بعدی دوباره ارسال شود."
-                      : "با رد سفارش، این چرخه Approval خاتمه پیدا می‌کند."}
-                </p>
-              </div>
+            <div className="space-y-5 p-5 sm:p-6">
+              {approvalError && (
+                <ErrorBlock
+                  message={approvalError}
+                  title="خطا در ثبت تصمیم"
+                />
+              )}
 
-              {(approvalDecision === "reject" || approvalDecision === "return") && (
+              {(approvalDialog.decision === "return" ||
+                approvalDialog.decision === "reject") && (
                 <div>
-                  <label htmlFor="approval-reason" className="mb-2 block text-sm font-bold text-slate-700">
+                  <label
+                    htmlFor="approval-reason"
+                    className="mb-2 block text-sm font-black text-slate-700"
+                  >
                     دلیل <span className="text-red-500">*</span>
                   </label>
                   <textarea
@@ -2380,61 +2502,69 @@ export default function OrderDetailsPage() {
                     value={approvalReason}
                     onChange={(event) => setApprovalReason(event.target.value)}
                     rows={4}
-                    placeholder="دلیل رد یا برگشت سفارش..."
-                    className="w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
+                    disabled={approvalBusy}
+                    placeholder="دلیل برگشت یا رد سفارش را وارد کنید..."
+                    className="w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-50 disabled:cursor-not-allowed disabled:opacity-60"
                   />
                 </div>
               )}
 
               <div>
-                <label htmlFor="approval-notes" className="mb-2 block text-sm font-bold text-slate-700">
-                  یادداشت <span className="text-xs font-normal text-slate-400">(اختیاری)</span>
+                <label
+                  htmlFor="approval-notes"
+                  className="mb-2 block text-sm font-black text-slate-700"
+                >
+                  یادداشت <span className="font-normal text-slate-400">(اختیاری)</span>
                 </label>
                 <textarea
                   id="approval-notes"
                   value={approvalNotes}
                   onChange={(event) => setApprovalNotes(event.target.value)}
                   rows={3}
+                  disabled={approvalBusy}
                   placeholder="یادداشت تکمیلی..."
-                  className="w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50"
+                  className="w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-50 disabled:cursor-not-allowed disabled:opacity-60"
                 />
               </div>
-            </div>
 
-            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 bg-slate-50 p-5 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setApprovalDecision(null);
-                  setApprovalReason("");
-                  setApprovalNotes("");
-                }}
-                disabled={approvalBusy}
-                className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                انصراف
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleApprovalDecision()}
-                disabled={approvalBusy}
-                className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-black text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${approvalDecision === "approve" ? "bg-emerald-600 hover:bg-emerald-700" : approvalDecision === "return" ? "bg-amber-500 hover:bg-amber-600" : "bg-red-600 hover:bg-red-700"}`}
-              >
-                {approvalBusy ? (
-                  <RefreshCw size={16} className="animate-spin" />
-                ) : approvalDecision === "approve" ? (
-                  <CheckCircle2 size={16} />
-                ) : approvalDecision === "return" ? (
-                  <RotateCcw size={16} />
-                ) : (
-                  <XCircle size={16} />
-                )}
-                تأیید عملیات
-              </button>
+              <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={closeApprovalDialog}
+                  disabled={approvalBusy}
+                  className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  انصراف
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void handleApprovalDecision()}
+                  disabled={approvalBusy || permissionsLoading}
+                  className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-black text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                    approvalDialog.decision === "approve"
+                      ? "bg-emerald-600 hover:bg-emerald-700"
+                      : approvalDialog.decision === "return"
+                        ? "bg-amber-600 hover:bg-amber-700"
+                        : "bg-red-600 hover:bg-red-700"
+                  }`}
+                >
+                  {approvalBusy ? (
+                    <RefreshCw size={16} className="animate-spin" />
+                  ) : approvalDialog.decision === "approve" ? (
+                    <CheckCircle2 size={16} />
+                  ) : approvalDialog.decision === "return" ? (
+                    <RotateCcw size={16} />
+                  ) : (
+                    <XCircle size={16} />
+                  )}
+                  ثبت تصمیم
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
-    </>
+    </main>
   );
 }

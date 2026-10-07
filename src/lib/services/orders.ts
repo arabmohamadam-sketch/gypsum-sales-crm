@@ -22,6 +22,10 @@ export type OrderApprovalDecision =
   | "reject"
   | "return";
 
+export type OrderWorkflowVersion =
+  | "v1"
+  | "v2";
+
 export interface CreateOrderInput {
   company_id?: string;
   customer_id: string;
@@ -66,6 +70,20 @@ export interface OrderApprovalHistoryItem extends OrderApproval {
 export interface OrderApprovalQueueItem {
   order: OrderWithRelations;
   approval: OrderApprovalHistoryItem;
+}
+
+export type RegionalActionKind =
+  | "pending_approval"
+  | "draft"
+  | "sales_returned"
+  | "sales_rejected";
+
+export interface RegionalActionQueueItem {
+  order: OrderWithRelations;
+  kind: RegionalActionKind;
+  approval: OrderApprovalHistoryItem | null;
+  reason: string | null;
+  created_at: string;
 }
 
 export interface SubmitOrderForApprovalResponse {
@@ -979,8 +997,7 @@ export const ordersService = {
       .from("orders")
       .select("*")
       .eq(
-        "company_id",
-        companyId
+        "company_id",        companyId
       )
       .is(
         "deleted_at",
@@ -1336,11 +1353,18 @@ export const ordersService = {
       );
     }
 
-    return this.create(input);
+    return this.create(
+      {
+        ...input,
+        status: "draft",
+      },
+      "v2"
+    );
   },
 
   async create(
-    input: CreateOrderInput
+    input: CreateOrderInput,
+    workflowVersion: OrderWorkflowVersion = "v1"
   ): Promise<OrderWithRelations> {
     const companyId =
       await getRequiredCurrentCompanyId();
@@ -1413,6 +1437,8 @@ export const ordersService = {
         .insert({
           company_id:
             companyId,
+          workflow_version:
+            workflowVersion,
           customer_id:
             customerId,
           sales_user_id:
@@ -1553,6 +1579,49 @@ export const ordersService = {
         id,
         "شناسه سفارش الزامی است."
       );
+
+    const {
+      data: currentOrder,
+      error: currentOrderError,
+    } = await supabase
+      .from("orders")
+      .select(
+        "id, status, approval_status, workflow_version"
+      )
+      .eq("id", orderId)
+      .eq("company_id", companyId)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (currentOrderError) {
+      logSupabaseError(
+        "GET ORDER BEFORE UPDATE",
+        currentOrderError
+      );
+
+      throw new Error(
+        getErrorMessage(
+          currentOrderError,
+          "خطا در بررسی وضعیت فعلی سفارش."
+        )
+      );
+    }
+
+    if (!currentOrder) {
+      throw new Error(
+        "سفارش موردنظر پیدا نشد یا قبلاً حذف شده است."
+      );
+    }
+
+    if (
+      currentOrder.workflow_version === "v2" &&
+      input.status === "confirmed" &&
+      currentOrder.approval_status !== "approved"
+    ) {
+      throw new Error(
+        "وضعیت سفارش فقط پس از تأیید نهایی مدیر فروش می‌تواند «تأیید شده» شود."
+      );
+    }
 
     const updateData:
       Record<string, unknown> = {};
@@ -1927,8 +1996,7 @@ export const ordersService = {
     return data as OrderItem;
   },
 
-  async deleteItem(
-    itemId: string
+  async deleteItem(    itemId: string
   ): Promise<void> {
     const companyId =
       await getRequiredCurrentCompanyId();
@@ -2683,6 +2751,10 @@ export const ordersService = {
           "company_id",
           companyId
         )
+        .eq(
+          "workflow_version",
+          "v2"
+        )
         .in(
           "id",
           orderIds
@@ -2745,6 +2817,264 @@ export const ordersService = {
           item
         ): item is OrderApprovalQueueItem =>
           item !== null
+      );
+  },
+
+  /**
+   * صف اقدام مدیر منطقه.
+   *
+   * موارد نمایش‌داده‌شده: 
+   * 1) سفارش‌های منتظر تأیید منطقه
+   * 2) سفارش‌های پیش‌نویس متعلق به مشتریان همان مدیر منطقه
+   * 3) سفارش‌های برگشتی/ردشده در مرحله مدیر فروش که نیاز به اصلاح دارند
+   *
+   * منطق scope بر اساس V2 `customers.regional_manager_id` انجام می‌شود
+   * تا صف منطقه از مدیر فروش و سایر مناطق مستقل بماند.
+   */
+  async getRegionalActionQueue(): Promise<
+    RegionalActionQueueItem[]
+  > {
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
+    const supabase =
+      createSupabaseClient();
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError) {
+      logSupabaseError(
+        "GET REGIONAL ACTION QUEUE USER",
+        userError
+      );
+
+      throw new Error(
+        getErrorMessage(
+          userError,
+          "خطا در تشخیص کاربر مدیر منطقه."
+        )
+      );
+    }
+
+    if (!user) {
+      throw new Error(
+        "نشست کاربر فعال نیست. لطفاً دوباره وارد شوید."
+      );
+    }
+
+    const {
+      data: customerRows,
+      error: customerError,
+    } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("regional_manager_id", user.id)
+      .is("deleted_at", null);
+
+    if (customerError) {
+      logSupabaseError(
+        "GET REGIONAL ACTION QUEUE CUSTOMERS",
+        customerError
+      );
+
+      throw new Error(
+        getErrorMessage(
+          customerError,
+          "خطا در دریافت مشتریان تحت مدیریت منطقه."
+        )
+      );
+    }
+
+    const customerIds = Array.from(
+      new Set(
+        (customerRows ?? [])
+          .map((row) => row.id)
+          .filter(
+            (id): id is string =>
+              typeof id === "string" && id.trim().length > 0
+          )
+      )
+    );
+
+    const pendingApprovals =
+      await this.getApprovalQueue("regional");
+
+    const result: RegionalActionQueueItem[] =
+      pendingApprovals.map((item) => ({
+        order: item.order,
+        kind: "pending_approval",
+        approval: item.approval,
+        reason: item.approval.return_reason ?? item.approval.rejection_reason ?? null,
+        created_at: item.approval.created_at,
+      }));
+
+    if (customerIds.length === 0) {
+      return result.sort(
+        (first, second) =>
+          Date.parse(second.created_at) -
+          Date.parse(first.created_at)
+      );
+    }
+
+    const {
+      data: draftRows,
+      error: draftError,
+    } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("company_id", companyId)
+      .eq("workflow_version", "v2")
+      .in("customer_id", customerIds)
+      .eq("status", "draft")
+      .is("approval_status", null)
+      .is("deleted_at", null)
+      .order("updated_at", { ascending: false });
+
+    if (draftError) {
+      logSupabaseError(
+        "GET REGIONAL DRAFT ORDERS",
+        draftError
+      );
+
+      throw new Error(
+        getErrorMessage(
+          draftError,
+          "خطا در دریافت سفارش‌های پیش‌نویس منطقه."
+        )
+      );
+    }
+
+    const draftOrders =
+      await getOrdersWithRelations(
+        (draftRows ?? []) as Order[]
+      );
+
+    for (const order of draftOrders) {
+      result.push({
+        order,
+        kind: "draft",
+        approval: null,
+        reason: null,
+        created_at: order.updated_at || order.created_at,
+      });
+    }
+
+    const {
+      data: correctionRows,
+      error: correctionError,
+    } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("company_id", companyId)
+      .eq("workflow_version", "v2")
+      .in("customer_id", customerIds)
+      .in("approval_status", ["returned", "rejected"])
+      .is("deleted_at", null)
+      .order("updated_at", { ascending: false });
+
+    if (correctionError) {
+      logSupabaseError(
+        "GET REGIONAL SALES CORRECTIONS",
+        correctionError
+      );
+
+      throw new Error(
+        getErrorMessage(
+          correctionError,
+          "خطا در دریافت سفارش‌های برگشتی مدیر فروش."
+        )
+      );
+    }
+
+    const correctionOrders =
+      await getOrdersWithRelations(
+        (correctionRows ?? []) as Order[]
+      );
+
+    const correctionOrderIds = correctionOrders.map(      (order) => order.id
+    );
+
+    if (correctionOrderIds.length > 0) {
+      const {
+        data: historyRows,
+        error: historyError,
+      } = await supabase
+        .from("order_status_history")
+        .select(
+          "id, order_id, new_status, reason, changed_at"
+        )
+        .eq("company_id", companyId)
+        .in("order_id", correctionOrderIds)
+        .in("new_status", [
+          "sales_returned",
+          "sales_rejected",
+        ])
+        .order("changed_at", { ascending: false });
+
+      if (historyError) {
+        logSupabaseError(
+          "GET REGIONAL SALES CORRECTION HISTORY",
+          historyError
+        );
+
+        throw new Error(
+          getErrorMessage(
+            historyError,
+            "خطا در دریافت دلیل برگشت سفارش از مدیر فروش."
+          )
+        );
+      }
+
+      const latestHistoryByOrder =
+        new Map<
+          string,
+          {
+            new_status: string;
+            reason: string | null;
+            changed_at: string;
+          }
+        >();
+
+      for (const row of historyRows ?? []) {
+        if (!latestHistoryByOrder.has(row.order_id)) {
+          latestHistoryByOrder.set(row.order_id, {
+            new_status: row.new_status,
+            reason: row.reason ?? null,
+            changed_at: row.changed_at,
+          });
+        }
+      }
+
+      for (const order of correctionOrders) {
+        const history =
+          latestHistoryByOrder.get(order.id);
+
+        if (!history) {
+          continue;
+        }
+
+        result.push({
+          order,
+          kind:
+            history.new_status === "sales_rejected"
+              ? "sales_rejected"
+              : "sales_returned",
+          approval: null,
+          reason: history.reason,
+          created_at: history.changed_at,
+        });
+      }
+    }
+
+    return result
+      .sort(
+        (first, second) =>
+          Date.parse(second.created_at) -
+          Date.parse(first.created_at)
       );
   },
 
