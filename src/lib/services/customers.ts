@@ -2052,9 +2052,6 @@ export const customersService = {
     id: string,
     values: CustomerV2UpdateInput
   ): Promise<Customer> {
-    const companyId =
-      await getRequiredCurrentCompanyId();
-
     const supabase =
       createSupabaseClient();
 
@@ -2163,100 +2160,7 @@ export const customersService = {
       nextPlanRegion !==
         (current.plan_region_id ?? null);
 
-    const updateData:
-      Record<string, unknown> = {
-        updated_at:
-          new Date().toISOString(),
-      };
-
-    if (
-      values.name !==
-      undefined
-    ) {
-      updateData.name =
-        nextName;
-    }
-
-    if (
-      values.phone !==
-      undefined
-    ) {
-      updateData.phone =
-        nextPhone;
-    }
-
-    if (
-      values.secondary_phone !==
-      undefined
-    ) {
-      updateData.secondary_phone =
-        nextSecondaryPhone;
-    }
-
-    if (
-      values.whatsapp_number !==
-      undefined
-    ) {
-      updateData.whatsapp_number =
-        cleanPhoneValue(
-          values.whatsapp_number
-        );
-    }
-
-    if (
-      values.customer_type !==
-      undefined
-    ) {
-      const customerType =
-        cleanText(
-          values.customer_type
-        );
-
-      if (!customerType) {
-        throw new CustomerValidationError(
-          "نوع مشتری الزامی است."
-        );
-      }
-
-      updateData.customer_type =
-        customerType;
-    }
-
-    if (
-      values.national_id !==
-      undefined
-    ) {
-      updateData.national_id =
-        nextNationalId;
-    }
-
-    if (
-      values.is_vip !==
-      undefined
-    ) {
-      updateData.is_vip =
-        values.is_vip;
-    }
-
-    if (
-      values.is_active !==
-      undefined
-    ) {
-      updateData.is_active =
-        values.is_active;
-    }
-
-    if (
-      values.metadata !==
-      undefined
-    ) {
-      updateData.metadata =
-        values.metadata;
-    }
-
-    if (
-      ownershipChanged
-    ) {
+    if (ownershipChanged) {
       if (!nextManager) {
         throw new CustomerValidationError(
           "مدیر منطقه مشتری نمی‌تواند خالی باشد."
@@ -2272,8 +2176,7 @@ export const customersService = {
       }
 
       const {
-        error:
-          ownershipError,
+        error: ownershipError,
       } = await supabase.rpc(
         "v2_assign_customer_plan_owner",
         {
@@ -2283,11 +2186,6 @@ export const customersService = {
           p_regional_manager_id:
             nextManager,
 
-          /*
-           * Plan fields are optional in V2.
-           * They may therefore be NULL while
-           * the regional manager remains required.
-           */
           p_plan_scope:
             nextPlanScope,
 
@@ -2308,36 +2206,94 @@ export const customersService = {
       }
     }
 
-    if (
-      Object.keys(
-        updateData
-      ).length > 1
-    ) {
-      const {
-        error,
-      } = await supabase
-        .from("customers")
-        .update(updateData)
-        .eq(
-          "id",
-          customerId
-        )
-        .eq(
-          "company_id",
-          companyId
-        )
-        .is(
-          "deleted_at",
-          null
-        );
+    const nextWhatsappNumber =
+      values.whatsapp_number !==
+      undefined
+        ? cleanPhoneValue(
+            values.whatsapp_number
+          )
+        : current.whatsapp_number;
 
-      if (error) {
-        logSupabaseError(
-          "خطا در بروزرسانی مشتری V2:",
-          error
-        );
-        throw error;
+    const nextCustomerType =
+      values.customer_type !==
+      undefined
+        ? cleanText(
+            values.customer_type
+          )
+        : current.customer_type;
+
+    if (
+      values.customer_type !==
+      undefined &&
+      !nextCustomerType
+    ) {
+      throw new CustomerValidationError(
+        "نوع مشتری الزامی است."
+      );
+    }
+
+    const nextIsVip =
+      values.is_vip !== undefined
+        ? values.is_vip
+        : current.is_vip;
+
+    const nextIsActive =
+      values.is_active !== undefined
+        ? values.is_active
+        : current.is_active;
+
+    const nextMetadata =
+      values.metadata !== undefined
+        ? values.metadata
+        : current.metadata;
+
+    const {
+      data: updatedCoreRow,
+      error: coreUpdateError,
+    } = await supabase.rpc(
+      "v2_update_customer_core",
+      {
+        p_customer_id: customerId,
+        p_name: nextName,
+        p_phone: nextPhone,
+        p_secondary_phone:
+          nextSecondaryPhone,
+        p_whatsapp_number:
+          nextWhatsappNumber,
+        p_customer_type:
+          nextCustomerType,
+        p_national_id:
+          nextNationalId,
+        p_is_vip: nextIsVip,
+        p_is_active: nextIsActive,
+        p_metadata: nextMetadata,
       }
+    );
+
+    if (coreUpdateError) {
+      logSupabaseError(
+        "خطا در بروزرسانی هسته مشتری V2:",
+        coreUpdateError
+      );
+      throw coreUpdateError;
+    }
+
+    if (!updatedCoreRow) {
+      throw new Error(
+        "بروزرسانی مشتری انجام نشد و رکورد به سرویس بازگردانده نشد."
+      );
+    }
+
+    const persistedCore =
+      updatedCoreRow as Customer;
+
+    if (
+      persistedCore.national_id !==
+      nextNationalId
+    ) {
+      throw new Error(
+        "کد ملی در پایگاه داده ذخیره نشد. ذخیره تغییرات متوقف شد؛ لطفاً دوباره تلاش کنید."
+      );
     }
 
     if (
