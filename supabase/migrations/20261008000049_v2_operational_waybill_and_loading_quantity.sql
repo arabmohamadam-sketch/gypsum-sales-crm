@@ -203,7 +203,7 @@ FROM public.loading l
 JOIN public.waybills w ON w.id=l.waybill_id AND w.company_id=l.company_id AND w.deleted_at IS NULL AND w.shipment_id IS NOT NULL
 JOIN public.waybill_items wi ON wi.waybill_id=w.id AND wi.company_id=w.company_id AND wi.deleted_at IS NULL
 WHERE l.deleted_at IS NULL
-ON CONFLICT (company_id, loading_id, waybill_item_id) DO NOTHING;
+ON CONFLICT (company_id, loading_id, waybill_item_id) WHERE deleted_at IS NULL DO NOTHING;
 
 ALTER TABLE public.loading_items ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS loading_items_select_scoped ON public.loading_items;
