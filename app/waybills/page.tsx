@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import {
   ArrowLeft,
@@ -33,9 +34,11 @@ import {
 import type {
   Waybill,
   WaybillStatus,
+  V2ShipmentForWaybill,
 } from "@/src/lib/types/waybill";
 
 import { formatJalaliDate } from "@/src/lib/utils/jalali";
+import { usePermissions } from "@/src/lib/hooks/usePermissions";
 
 type FilterStatus =
   | "all"
@@ -356,8 +359,21 @@ function EmptyState({
 }
 
 export default function WaybillsPage() {
+  const router = useRouter();
+
   const [waybills, setWaybills] =
     useState<Waybill[]>([]);
+
+  const [readyShipments, setReadyShipments] =
+    useState<V2ShipmentForWaybill[]>([]);
+
+  const [creatingFromShipment, setCreatingFromShipment] =
+    useState<string | null>(null);
+
+  const {
+    hasPermission,
+    loading: permissionsLoading,
+  } = usePermissions();
 
   const [ordersById, setOrdersById] =
     useState<OrderMap>({});
@@ -380,6 +396,80 @@ export default function WaybillsPage() {
   const [statusFilter, setStatusFilter] =
     useState<FilterStatus>("all");
 
+  async function loadReadyShipments() {
+    if (!hasPermission("waybills.create")) {
+      setReadyShipments([]);
+      return;
+    }
+
+    try {
+      const result =
+        await waybillsService.getAssignedShipments();
+
+      setReadyShipments(result);
+    } catch (err) {
+      console.error(
+        "READY SHIPMENTS LOAD ERROR:",
+        err
+      );
+      setReadyShipments([]);
+    }
+  }
+
+  async function createWaybillFromShipment(
+    shipment: V2ShipmentForWaybill
+  ) {
+    if (!hasPermission("waybills.create")) {
+      return;
+    }
+
+    if (
+      creatingFromShipment ===
+      shipment.id
+    ) {
+      return;
+    }
+
+    setCreatingFromShipment(
+      shipment.id
+    );
+    setError("");
+
+    try {
+      const now =
+        new Date();
+
+      const waybillDate =
+        now.toISOString().slice(0, 10);
+
+      const result =
+        await waybillsService.createV2FromShipment(
+          {
+            shipment_id:
+              shipment.id,
+            waybill_date:
+              waybillDate,
+            notes:
+              shipment.notes ?? null,
+          }
+        );
+
+      router.push(
+        `/waybills/view?id=${encodeURIComponent(result.id)}`
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "خطا در ایجاد پیش‌نویس حواله."
+      );
+    } finally {
+      setCreatingFromShipment(
+        null
+      );
+    }
+  }
+
   async function loadWaybills(
     showRefreshState = false
   ) {
@@ -396,6 +486,7 @@ export default function WaybillsPage() {
         await waybillsService.getAll();
 
       setWaybills(result);
+      await loadReadyShipments();
 
       const orderIds =
         Array.from(
@@ -498,6 +589,7 @@ export default function WaybillsPage() {
 
         setWaybills(result);
         setError("");
+        void loadReadyShipments();
 
         const orderIds =
           Array.from(
@@ -821,6 +913,87 @@ export default function WaybillsPage() {
           </div>
         </div>
       </section>
+
+      {hasPermission("waybills.create") &&
+      readyShipments.length > 0 ? (
+        <section className="rounded-3xl border border-blue-100 bg-blue-50/60 p-5 shadow-sm md:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-bold text-blue-600">
+                صف حواله‌نویسی V2
+              </p>
+
+              <h2 className="mt-1 text-xl font-black text-slate-900">
+                Shipmentهای آماده صدور حواله
+              </h2>
+
+              <p className="mt-1 text-sm leading-6 text-slate-500">
+                این Shipmentها خودرو و راننده دارند و هنوز حواله فعال برایشان صادر نشده است.
+              </p>
+            </div>
+
+            <span className="inline-flex w-fit items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-blue-700 ring-1 ring-blue-100">
+              {formatNumber(readyShipments.length)} مورد آماده
+            </span>
+          </div>
+
+          <div className="mt-5 grid gap-3 lg:grid-cols-2">
+            {readyShipments.map((shipment) => (
+              <article
+                key={shipment.id}
+                className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm"
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-black text-white">
+                        Shipment {formatNumber(Number(shipment.shipment_number))}
+                      </span>
+
+                      {shipment.vehicle_type_snapshot ? (
+                        <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700">
+                          {shipment.vehicle_type_snapshot}
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <p className="mt-3 text-sm font-black text-slate-900">
+                      خودرو: {shipment.plate_number_snapshot || "ثبت نشده"}
+                    </p>
+
+                    <p className="mt-1 text-xs text-slate-500">
+                      راننده: {shipment.driver_name_snapshot || "ثبت نشده"}
+                    </p>
+
+                    <p className="mt-1 break-all text-xs text-slate-400">
+                      سفارش: {shipment.order_id}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void createWaybillFromShipment(shipment)
+                    }
+                    disabled={
+                      permissionsLoading ||
+                      creatingFromShipment === shipment.id
+                    }
+                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {creatingFromShipment === shipment.id ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <FileText size={16} />
+                    )}
+                    ایجاد پیش‌نویس حواله
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {/* Stats */}
       <section className="grid grid-cols-2 gap-4 xl:grid-cols-6">
