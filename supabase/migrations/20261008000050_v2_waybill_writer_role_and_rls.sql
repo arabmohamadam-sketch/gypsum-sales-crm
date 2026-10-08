@@ -164,6 +164,20 @@ WHERE r.slug = 'waybill_writer'
   );
 
 
+
+-- =============================================================================
+-- 4A. ONE ACTIVE V2 WAYBILL PER SHIPMENT
+-- =============================================================================
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_v2_waybills_active_shipment
+ON public.waybills (
+  company_id,
+  shipment_id
+)
+WHERE deleted_at IS NULL
+  AND shipment_id IS NOT NULL
+  AND status <> 'cancelled';
+
 -- =============================================================================
 -- 4. V2 WAYBILL RLS
 --
