@@ -2,13 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+
+import { ordersService } from "@/src/lib/services/orders";
 import { settingsService } from "@/src/lib/services/settings";
 import { useAuth } from "@/src/lib/auth/AuthProvider";
+
 import {
   useEffect,
   useState,
   useSyncExternalStore,
 } from "react";
+
 import {
   Activity,
   BarChart3,
@@ -198,6 +202,11 @@ type SidebarContentProps = {
   brandName?: string;
   brandLogo?: string;
   showRegionalPlan?: boolean;
+
+  showOrderActions?: boolean;
+  orderActionCount?: number;
+  orderActionTitle?: string;
+  orderActionSubtitle?: string;
 };
 
 function SidebarContent({
@@ -211,6 +220,11 @@ function SidebarContent({
   brandName = "CRM مدیریت فروش",
   brandLogo = "/logo.png",
   showRegionalPlan = false,
+
+  showOrderActions = false,
+  orderActionCount = 0,
+  orderActionTitle = "اقدام روی سفارش‌ها",
+  orderActionSubtitle = "موردی در انتظار اقدام نیست",
 }: SidebarContentProps) {
   const showCompact = !mobile && collapsed;
 
@@ -371,6 +385,86 @@ function SidebarContent({
       </div>
 
       {/* =========================
+          ORDER ACTION QUEUE
+      ========================== */}
+      {showOrderActions && (
+        <div
+          className={`pb-1 transition-all duration-300 ${
+            showCompact ? "px-2" : "px-4"
+          }`}
+        >
+          <Link
+            href="/orders/approvals"
+            onClick={onNavigate}
+            aria-label={orderActionTitle}
+            title={orderActionTitle}
+            className={`group relative block overflow-hidden rounded-2xl border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70 ${
+              showCompact ? "p-2" : "p-3"
+            } ${
+              orderActionCount > 0
+                ? "border-amber-400/20 bg-amber-400/[0.08] hover:bg-amber-400/[0.12]"
+                : "border-white/5 bg-white/[0.03] hover:bg-white/[0.06]"
+            }`}
+          >
+            <div
+              className={`flex items-center ${
+                showCompact
+                  ? "justify-center"
+                  : "gap-3"
+              }`}
+            >
+              <span
+                className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                  orderActionCount > 0
+                    ? "bg-amber-400/15 text-amber-300"
+                    : "bg-white/[0.06] text-slate-400"
+                }`}
+              >
+                <ClipboardList size={18} />
+
+                {orderActionCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex min-w-5 h-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white shadow-lg shadow-rose-950/30">
+                    {orderActionCount > 99
+                      ? "99+"
+                      : orderActionCount}
+                  </span>
+                )}
+              </span>
+
+              <div
+                className={`min-w-0 flex-1 transition-all duration-300 ${
+                  showCompact
+                    ? "pointer-events-none max-w-0 opacity-0"
+                    : "max-w-full opacity-100"
+                }`}
+              >
+                <p
+                  className={`truncate text-xs font-black ${
+                    orderActionCount > 0
+                      ? "text-amber-100"
+                      : "text-slate-200"
+                  }`}
+                >
+                  {orderActionTitle}
+                </p>
+
+                <p className="mt-1 truncate text-[10px] text-slate-500">
+                  {orderActionSubtitle}
+                </p>
+              </div>
+
+              {!showCompact && (
+                <ChevronLeft
+                  size={16}
+                  className="shrink-0 text-slate-500 transition-transform duration-200 group-hover:-translate-x-1 group-hover:text-white"
+                />
+              )}
+            </div>
+          </Link>
+        </div>
+      )}
+
+      {/* =========================
           NAVIGATION
       ========================== */}
       <div
@@ -403,17 +497,20 @@ function SidebarContent({
 
         <nav className="space-y-1.5">
           {(showRegionalPlan
-          ? menus
-          : menus.filter(
-              (item) =>
-                item.href !== "/regional-plan",
-            )
-        ).map((item) => {
+            ? menus
+            : menus.filter(
+                (item) =>
+                  item.href !==
+                  "/regional-plan",
+              )
+          ).map((item) => {
             const Icon = item.icon;
+
             const active = isMenuActive(
               pathname,
               item.href,
             );
+
             const isAI =
               item.title === "هوش مصنوعی";
 
@@ -428,7 +525,9 @@ function SidebarContent({
                     href={item.href}
                     onClick={onNavigate}
                     aria-current={
-                      active ? "page" : undefined
+                      active
+                        ? "page"
+                        : undefined
                     }
                     aria-label={item.title}
                     title={item.title}
@@ -469,7 +568,9 @@ function SidebarContent({
                 href={item.href}
                 onClick={onNavigate}
                 aria-current={
-                  active ? "page" : undefined
+                  active
+                    ? "page"
+                    : undefined
                 }
                 className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-3 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/80 ${
                   active
@@ -726,6 +827,15 @@ export default function Sidebar() {
   const [isRegionalManager, setIsRegionalManager] =
     useState(false);
 
+  const [isSalesManager, setIsSalesManager] =
+    useState(false);
+
+  const [salesApprovalCount, setSalesApprovalCount] =
+    useState(0);
+
+  const [regionalActionCount, setRegionalActionCount] =
+    useState(0);
+
   const userName =
     profile?.full_name?.trim() ||
     "کاربر";
@@ -759,12 +869,84 @@ export default function Sidebar() {
           ),
         );
 
-        setIsRegionalManager(
+        const regionalManager =
           overview.roles.some(
             (role) =>
-              role.slug === "regional_manager",
-          ),
+              role.slug ===
+              "regional_manager",
+          );
+
+        const salesManager =
+          overview.roles.some(
+            (role) =>
+              role.slug ===
+              "sales_manager",
+          );
+
+        setIsRegionalManager(
+          regionalManager,
         );
+
+        setIsSalesManager(
+          salesManager,
+        );
+
+        setSalesApprovalCount(0);
+        setRegionalActionCount(0);
+
+        if (salesManager) {
+          void ordersService
+            .getApprovalQueue("sales")
+            .then((queue) => {
+              if (!active) {
+                return;
+              }
+
+              setSalesApprovalCount(
+                queue.length,
+              );
+            })
+            .catch((queueError) => {
+              if (!active) {
+                return;
+              }
+
+              console.error(
+                "Failed to load sales approval count:",
+                queueError,
+              );
+
+              setSalesApprovalCount(0);
+            });
+
+          return;
+        }
+
+        if (regionalManager) {
+          void ordersService
+            .getRegionalActionQueue()
+            .then((queue) => {
+              if (!active) {
+                return;
+              }
+
+              setRegionalActionCount(
+                queue.length,
+              );
+            })
+            .catch((queueError) => {
+              if (!active) {
+                return;
+              }
+
+              console.error(
+                "Failed to load regional action count:",
+                queueError,
+              );
+
+              setRegionalActionCount(0);
+            });
+        }
       })
       .catch((error) => {
         console.error(
@@ -772,13 +954,43 @@ export default function Sidebar() {
           error,
         );
 
+        if (!active) {
+          return;
+        }
+
         setIsRegionalManager(false);
+        setIsSalesManager(false);
+        setSalesApprovalCount(0);
+        setRegionalActionCount(0);
       });
 
     return () => {
       active = false;
     };
   }, [profile?.id]);
+
+  const showOrderActions =
+    isSalesManager ||
+    isRegionalManager;
+
+  const orderActionCount =
+    isSalesManager
+      ? salesApprovalCount
+      : regionalActionCount;
+
+  const orderActionTitle =
+    isSalesManager
+      ? "تأیید سفارش‌ها"
+      : "اقدام روی سفارش‌ها";
+
+  const orderActionSubtitle =
+    isSalesManager
+      ? salesApprovalCount > 0
+        ? `${salesApprovalCount} سفارش منتظر بررسی شماست`
+        : "سفارشی در انتظار تأیید نیست"
+      : regionalActionCount > 0
+        ? `${regionalActionCount} مورد منتظر اقدام شماست`
+        : "موردی در انتظار اقدام نیست";
 
   const handleDesktopToggle = () => {
     const nextValue = !collapsed;
@@ -859,7 +1071,21 @@ export default function Sidebar() {
           roleName={roleName}
           brandName={brandName}
           brandLogo={brandLogo}
-          showRegionalPlan={isRegionalManager}
+          showRegionalPlan={
+            isRegionalManager
+          }
+          showOrderActions={
+            showOrderActions
+          }
+          orderActionCount={
+            orderActionCount
+          }
+          orderActionTitle={
+            orderActionTitle
+          }
+          orderActionSubtitle={
+            orderActionSubtitle
+          }
         />
       </aside>
 
@@ -868,7 +1094,9 @@ export default function Sidebar() {
       ========================== */}
       <button
         type="button"
-        onClick={() => setMobileOpen(true)}
+        onClick={() =>
+          setMobileOpen(true)
+        }
         aria-label="باز کردن منوی اصلی"
         title="منوی اصلی"
         className="fixed bottom-24 right-4 z-[60] flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-slate-950 text-white shadow-2xl shadow-slate-400/40 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 active:scale-95 lg:hidden"
@@ -928,7 +1156,21 @@ export default function Sidebar() {
               roleName={roleName}
               brandName={brandName}
               brandLogo={brandLogo}
-              showRegionalPlan={isRegionalManager}
+              showRegionalPlan={
+                isRegionalManager
+              }
+              showOrderActions={
+                showOrderActions
+              }
+              orderActionCount={
+                orderActionCount
+              }
+              orderActionTitle={
+                orderActionTitle
+              }
+              orderActionSubtitle={
+                orderActionSubtitle
+              }
             />
           </div>
         </aside>
@@ -952,14 +1194,17 @@ export default function Sidebar() {
               );
 
               const isCreateOrder =
-                item.href === "/orders/new";
+                item.href ===
+                "/orders/new";
 
               return (
                 <Link
                   key={`${item.href}-${item.title}`}
                   href={item.href}
                   aria-current={
-                    active ? "page" : undefined
+                    active
+                      ? "page"
+                      : undefined
                   }
                   className={`group flex min-h-[64px] items-center justify-center rounded-2xl px-1.5 py-2 transition-all duration-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 ${
                     isCreateOrder

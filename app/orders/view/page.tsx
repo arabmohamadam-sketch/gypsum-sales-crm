@@ -16,6 +16,8 @@ import {
   FileText,
   History,
   Package,
+  Pencil,
+  Plus,
   RefreshCw,
   RotateCcw,
   Send,
@@ -429,6 +431,184 @@ function SectionTitle({
   );
 }
 
+type OrderEditorProduct = {
+  id: string;
+  name: string;
+  sku: string;
+  product_line: string;
+  weight_kg: number;
+};
+
+type OrderItemEditorDraft = {
+  key: string;
+  itemId: string | null;
+  productId: string;
+  quantity: string;
+};
+
+function ProductItemEditorCard({
+  draft,
+  index,
+  products,
+  onChange,
+  onRemove,
+}: {
+  draft: OrderItemEditorDraft;
+  index: number;
+  products: OrderEditorProduct[];
+  onChange: (key: string, patch: Partial<OrderItemEditorDraft>) => void;
+  onRemove: (key: string) => void;
+}) {
+  const selectedProduct =
+    products.find(
+      (product) =>
+        product.id === draft.productId
+    ) ?? null;
+
+  const quantity = Number(draft.quantity);
+  const safeQuantity =
+    Number.isFinite(quantity) &&
+    quantity > 0
+      ? quantity
+      : 0;
+  const weight = Number(
+    selectedProduct?.weight_kg ?? 0
+  );
+  const tonnage =
+    safeQuantity * weight / 1000;
+
+  return (
+    <div className="rounded-2xl border border-blue-200 bg-blue-50/40 p-5">
+      <div className="flex flex-col gap-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-sm font-black text-white shadow-sm">
+              {formatNumber(index + 1)}
+            </div>
+
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-blue-600">
+                {draft.itemId
+                  ? "ویرایش قلم"
+                  : "قلم جدید"}
+              </p>
+
+              <h3 className="mt-1 text-base font-black text-slate-900">
+                تنظیم مشخصات کالا
+              </h3>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              onRemove(draft.key)
+            }
+            className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-black text-red-600 transition hover:bg-red-50"
+          >
+            <Trash2 size={15} />
+            حذف قلم
+          </button>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_180px_180px]">
+          <div>
+            <label
+              htmlFor={`order-item-product-${draft.key}`}
+              className="mb-2 block text-xs font-bold text-slate-500"
+            >
+              محصول
+            </label>
+
+            <select
+              id={`order-item-product-${draft.key}`}
+              value={draft.productId}
+              onChange={(event) =>
+                onChange(draft.key, {
+                  productId:
+                    event.target.value,
+                })
+              }
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+            >
+              <option value="">
+                انتخاب محصول...
+              </option>
+
+              {products.map(
+                (product) => (
+                  <option
+                    key={product.id}
+                    value={product.id}
+                  >
+                    {product.name} — {formatNumber(Number(product.weight_kg))} کیلو
+                  </option>
+                )
+              )}
+            </select>
+
+            {selectedProduct && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                <span>
+                  {selectedProduct.product_line ||
+                    "محصول"}
+                </span>
+                {selectedProduct.sku && (
+                  <span>
+                    کد: {selectedProduct.sku}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label
+              htmlFor={`order-item-quantity-${draft.key}`}
+              className="mb-2 block text-xs font-bold text-slate-500"
+            >
+              تعداد کیسه
+            </label>
+
+            <input
+              id={`order-item-quantity-${draft.key}`}
+              type="number"
+              min="1"
+              step="1"
+              inputMode="numeric"
+              value={draft.quantity}
+              onChange={(event) =>
+                onChange(draft.key, {
+                  quantity:
+                    event.target.value.replace(
+                      /[^0-9]/g,
+                      ""
+                    ),
+                })
+              }
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50"
+            />
+          </div>
+
+          <div className="rounded-xl border border-emerald-100 bg-white p-4">
+            <p className="text-xs font-bold text-emerald-600">
+              تناژ محاسباتی
+            </p>
+
+            <p className="mt-1 text-lg font-black text-emerald-800">
+              {formatNumber(tonnage)} تن
+            </p>
+
+            <p className="mt-1 text-[11px] text-slate-400">
+              وزن هر کیسه: {formatNumber(weight)} کیلو
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProductItemCard({
   item,
   index,
@@ -643,6 +823,24 @@ export default function OrderDetailsPage() {
   const [approvalNotes, setApprovalNotes] =
     useState("");
 
+  const [itemEditing, setItemEditing] =
+    useState(false);
+
+  const [itemSaving, setItemSaving] =
+    useState(false);
+
+  const [itemError, setItemError] =
+    useState("");
+
+  const [itemDrafts, setItemDrafts] =
+    useState<OrderItemEditorDraft[]>([]);
+
+  const [itemProducts, setItemProducts] =
+    useState<OrderEditorProduct[]>([]);
+
+  const [itemProductsLoading, setItemProductsLoading] =
+    useState(false);
+
   const [
     jalaliYear,
     setJalaliYear,
@@ -716,6 +914,21 @@ export default function OrderDetailsPage() {
         Number(item.tonnage ?? 0),
       0
     );
+
+  const canEditV2Order =
+    Boolean(
+      order &&
+        isV2Order &&
+        order.status === "draft" &&
+        !workflowSummary?.pending_stage &&
+        (order.approval_status === null ||
+          order.approval_status === "returned" ||
+          order.approval_status === "rejected") &&
+        hasPermission("orders.edit")
+    );
+
+  const canEditOrderDetails =
+    !isV2Order || canEditV2Order;
 
   const canIssueWaybill =
     Boolean(
@@ -997,7 +1210,8 @@ export default function OrderDetailsPage() {
       },
       sales: {
         approve: "orders.sales_approve",
-        reject: "orders.sales_reject",        return: "orders.sales_return",
+        reject: "orders.sales_reject",
+        return: "orders.sales_return",
       },
     };
 
@@ -1045,6 +1259,286 @@ export default function OrderDetailsPage() {
       );
     } finally {
       setApprovalBusy(false);
+    }
+  }
+
+  function createItemDraft(
+    product: OrderEditorProduct,
+    itemId: string | null = null,
+    quantity = "1",
+    key = itemId ?? "new-item"
+  ): OrderItemEditorDraft {
+    return {
+      key,
+      itemId,
+      productId: product.id,
+      quantity,
+    };
+  }
+
+  async function startItemEditing() {
+    if (!order || !canEditV2Order) {
+      return;
+    }
+
+    setItemError("");
+    setItemProductsLoading(true);
+
+    try {
+      const products =
+        await ordersService.getProducts();
+
+      const normalizedProducts =
+        products.map((product) => ({
+          id: product.id,
+          name: product.name,
+          sku: product.sku,
+          product_line: product.product_line,
+          weight_kg: Number(product.weight_kg),
+        }));
+
+      if (normalizedProducts.length === 0) {
+        throw new Error(
+          "هیچ محصول فعال و قابل انتخابی برای ویرایش سفارش وجود ندارد."
+        );
+      }
+
+      setItemProducts(
+        normalizedProducts
+      );
+
+      const missingProductItem =
+        orderItems.find(
+          (item) =>
+            !item.product_id ||
+            !normalizedProducts.some(
+              (product) =>
+                product.id === item.product_id
+            )
+        );
+
+      if (missingProductItem) {
+        throw new Error(
+          `محصول «${missingProductItem.product_name_snapshot ?? "بدون نام"}» فعال نیست یا از کاتالوگ حذف شده است. ابتدا وضعیت محصول را اصلاح کنید.`
+        );
+      }
+
+      const drafts =
+        orderItems.map((item) => {
+          const existingProduct =
+            normalizedProducts.find(
+              (product) =>
+                product.id === item.product_id
+            );
+
+          if (!existingProduct) {
+            throw new Error(
+              "یکی از محصولات سفارش در کاتالوگ فعال پیدا نشد."
+            );
+          }
+
+          return createItemDraft(
+            existingProduct,
+            item.id,
+            String(
+              Math.max(
+                1,
+                Math.trunc(
+                  Number(item.quantity ?? 1)
+                )
+              )
+            )
+          );
+        });
+
+      setItemDrafts(drafts);
+      setItemEditing(true);
+    } catch (err) {
+      console.error(
+        "START ORDER ITEM EDITING:",
+        err
+      );
+      setItemError(
+        err instanceof Error
+          ? err.message
+          : "خطا در آماده‌سازی ویرایش اقلام سفارش."
+      );
+    } finally {
+      setItemProductsLoading(false);
+    }
+  }
+
+  function cancelItemEditing() {
+    if (itemSaving) return;
+    setItemEditing(false);
+    setItemDrafts([]);
+    setItemError("");
+  }
+
+  function addItemDraft() {
+    const product = itemProducts[0];
+    if (!product) {
+      setItemError("محصول فعالی برای افزودن قلم وجود ندارد.");
+      return;
+    }
+
+    setItemDrafts((current) => [
+      ...current,
+      createItemDraft(
+        product,
+        null,
+        "1",
+        `new-${crypto.randomUUID()}`
+      ),
+    ]);
+    setItemError("");
+  }
+
+  function updateItemDraft(
+    key: string,
+    patch: Partial<OrderItemEditorDraft>
+  ) {
+    setItemDrafts((current) =>
+      current.map((draft) =>
+        draft.key === key
+          ? { ...draft, ...patch }
+          : draft
+      )
+    );
+  }
+
+  function removeItemDraft(key: string) {
+    if (itemDrafts.length <= 1) {
+      setItemError(
+        "سفارش باید حداقل یک قلم فعال داشته باشد."
+      );
+      return;
+    }
+
+    setItemDrafts((current) =>
+      current.filter(
+        (draft) => draft.key !== key
+      )
+    );
+    setItemError("");
+  }
+
+  async function handleSaveItems() {
+    if (!order || !canEditV2Order) {
+      setItemError(
+        "این سفارش در وضعیت فعلی قابل ویرایش نیست."
+      );
+      return;
+    }
+
+    if (itemDrafts.length === 0) {
+      setItemError(
+        "سفارش باید حداقل یک قلم فعال داشته باشد."
+      );
+      return;
+    }
+
+    const draftItemIds = new Set(
+      itemDrafts
+        .map((draft) => draft.itemId)
+        .filter((id): id is string => Boolean(id))
+    );
+
+    for (const draft of itemDrafts) {
+      const product =
+        itemProducts.find(
+          (item) =>
+            item.id === draft.productId
+        );
+
+      const quantity = Number(
+        draft.quantity
+      );
+
+      if (!product) {
+        setItemError(
+          "برای همه اقلام، یک محصول معتبر انتخاب کنید."
+        );
+        return;
+      }
+
+      if (
+        !Number.isInteger(quantity) ||
+        quantity <= 0
+      ) {
+        setItemError(
+          "تعداد کیسه برای همه اقلام باید یک عدد صحیح و بیشتر از صفر باشد."
+        );
+        return;
+      }
+    }
+
+    setItemSaving(true);
+    setItemError("");
+    setMessage("");
+
+    try {
+      for (const draft of itemDrafts) {
+        const product =
+          itemProducts.find(
+            (item) =>
+              item.id === draft.productId
+          );
+
+        if (!product) {
+          throw new Error("محصول انتخاب‌شده پیدا نشد.");
+        }
+
+        const quantity = Math.trunc(
+          Number(draft.quantity)
+        );
+
+        const input = {
+          product_id: product.id,
+          product_name_snapshot: product.name,
+          quantity,
+          bag_weight_kg: product.weight_kg,
+          weight_kg_snapshot: product.weight_kg,
+        };
+
+        if (draft.itemId) {
+          await ordersService.updateItem(
+            draft.itemId,
+            input
+          );
+        } else {
+          await ordersService.addItem(
+            order.id,
+            input
+          );
+        }
+      }
+
+      for (const item of orderItems) {
+        if (!draftItemIds.has(item.id)) {
+          await ordersService.deleteItem(
+            item.id
+          );
+        }
+      }
+
+      await refresh();
+      setItemEditing(false);
+      setItemDrafts([]);
+      setMessage("اقلام سفارش با موفقیت به‌روزرسانی شد.");
+
+      window.setTimeout(() => {
+        setMessage("");
+      }, 4000);
+    } catch (err) {
+      console.error("SAVE ORDER ITEMS:", err);
+      setItemError(
+        err instanceof Error
+          ? err.message
+          : "خطا در ذخیره اقلام سفارش."
+      );
+    } finally {
+      setItemSaving(false);
     }
   }
 
@@ -1798,25 +2292,114 @@ export default function OrderDetailsPage() {
           <SectionTitle
             eyebrow="اقلام سفارش"
             title="کالاهای این سفارش"
-            description="جزئیات هر محصول، وزن کیسه، تعداد کیسه و تناژ محاسبه‌شده"
+            description={
+              itemEditing
+                ? "محصول و تعداد هر قلم را اصلاح کنید. وزن و تناژ از اطلاعات محصول محاسبه می‌شود."
+                : "جزئیات هر محصول، وزن کیسه، تعداد کیسه و تناژ محاسبه‌شده"
+            }
           />
 
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-3">
-            <p className="text-xs font-bold text-emerald-600">
-              مجموع تناژ اقلام
-            </p>
+          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-3">
+              <p className="text-xs font-bold text-emerald-600">
+                مجموع تناژ اقلام
+              </p>
 
-            <p className="mt-1 text-xl font-black text-emerald-800">
-              {formatNumber(
-                calculatedItemsTonnage
-              )}{" "}
-              تن
-            </p>
+              <p className="mt-1 text-xl font-black text-emerald-800">
+                {formatNumber(
+                  calculatedItemsTonnage
+                )}{" "}
+                تن
+              </p>
+            </div>
+
+            {canEditV2Order && !itemEditing && (
+              <button
+                type="button"
+                onClick={() => void startItemEditing()}
+                disabled={itemProductsLoading || itemSaving}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {itemProductsLoading ? (
+                  <RefreshCw
+                    size={16}
+                    className="animate-spin"
+                  />
+                ) : (
+                  <Pencil size={16} />
+                )}
+
+                {itemProductsLoading
+                  ? "در حال آماده‌سازی..."
+                  : "ویرایش اقلام"}
+              </button>
+            )}
           </div>
         </div>
 
-        {orderItems.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
+        {itemError && (
+          <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold leading-6 text-red-700">
+            {itemError}
+          </div>
+        )}
+
+        {itemEditing ? (
+          <div className="mt-6 space-y-4">
+            {itemDrafts.map((draft, index) => (
+              <ProductItemEditorCard
+                key={draft.key}
+                draft={draft}
+                index={index}
+                products={itemProducts}
+                onChange={updateItemDraft}
+                onRemove={removeItemDraft}
+              />
+            ))}
+
+            <button
+              type="button"
+              onClick={addItemDraft}
+              disabled={itemSaving || itemProductsLoading}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-blue-300 bg-blue-50 px-5 py-4 text-sm font-black text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Plus size={17} />
+              افزودن قلم جدید
+            </button>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                type="button"
+                onClick={cancelItemEditing}
+                disabled={itemSaving}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RotateCcw size={16} />
+                انصراف از ویرایش
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void handleSaveItems()}
+                disabled={itemSaving}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-black text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {itemSaving ? (
+                  <RefreshCw
+                    size={16}
+                    className="animate-spin"
+                  />
+                ) : (
+                  <CheckCircle2 size={17} />
+                )}
+
+                {itemSaving
+                  ? "در حال ذخیره اقلام..."
+                  : "ذخیره اقلام"}
+              </button>
+            </div>
+          </div>
+        ) : orderItems.length === 0 ? (
+          <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
               <Package size={24} />
             </div>
@@ -1828,18 +2411,28 @@ export default function OrderDetailsPage() {
             <p className="mt-2 text-sm text-slate-500">
               اطلاعات اقلام این سفارش در دیتابیس ثبت نشده است.
             </p>
+
+            {canEditV2Order && (
+              <button
+                type="button"
+                onClick={() => void startItemEditing()}
+                disabled={itemProductsLoading}
+                className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Plus size={17} />
+                افزودن اولین قلم
+              </button>
+            )}
           </div>
         ) : (
-          <div className="space-y-4">
-            {orderItems.map(
-              (item, index) => (
-                <ProductItemCard
-                  key={item.id}
-                  item={item}
-                  index={index}
-                />
-              )
-            )}
+          <div className="mt-6 space-y-4">
+            {orderItems.map((item, index) => (
+              <ProductItemCard
+                key={item.id}
+                item={item}
+                index={index}
+              />
+            ))}
 
             <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5 text-white">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1854,8 +2447,7 @@ export default function OrderDetailsPage() {
                         (sum, item) =>
                           sum +
                           Number(
-                            item.quantity ??
-                              0
+                            item.quantity ?? 0
                           ),
                         0
                       )
@@ -1887,179 +2479,6 @@ export default function OrderDetailsPage() {
                 </div>
               </div>
             </div>
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-7">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <SectionTitle
-            eyebrow="ارسال و بارگیری"
-            title="وضعیت حواله"
-            description="حواله‌های مرتبط با این سفارش و وضعیت بارگیری آنها"
-          />
-
-          {waybills.length > 0 && (
-            <span className="inline-flex w-fit items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700">
-              <Truck size={14} />
-
-              {formatNumber(
-                waybills.length
-              )}{" "}
-              حواله
-            </span>
-          )}
-        </div>
-
-        {waybillLoading ? (
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center">
-            <RefreshCw
-              size={22}
-              className="mx-auto animate-spin text-blue-600"
-            />
-
-            <p className="mt-3 text-sm font-bold text-slate-600">
-              در حال دریافت وضعیت حواله...
-            </p>
-          </div>
-        ) : waybills.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
-              <Truck size={24} />
-            </div>
-
-            <h3 className="mt-4 font-black text-slate-800">
-              هنوز حواله‌ای برای این سفارش وجود ندارد
-            </h3>
-
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              پس از صدور حواله، وضعیت ارسال و بارگیری آن در این بخش نمایش داده می‌شود.
-            </p>
-
-            {order.status ===
-              "confirmed" &&
-              orderItems.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    void handleIssueWaybill()
-                  }
-                  disabled={
-                    waybillCreating
-                  }
-                  className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {waybillCreating ? (
-                    <RefreshCw
-                      size={17}
-                      className="animate-spin"
-                    />
-                  ) : (
-                    <Truck size={17} />
-                  )}
-
-                  {waybillCreating
-                    ? "در حال صدور حواله..."
-                    : "صدور حواله"}
-                </button>
-              )}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {waybills.map(
-              (waybill) => {
-                const loadingStatus =
-                  waybill.loading
-                    ?.status ?? null;
-
-                return (
-                  <div
-                    key={waybill.id}
-                    className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5"
-                  >
-                    <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                      <div className="flex items-start gap-4">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm">
-                          <Truck size={21} />
-                        </div>
-
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-lg font-black text-slate-900">
-                              حواله شماره{" "}
-                              {formatNumber(
-                                Number(
-                                  waybill.waybill_number
-                                )
-                              )}
-                            </h3>
-
-                            <span
-                              className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-bold ${getWaybillStatusClass(
-                                waybill.status                              )}`}
-                            >
-                              {getWaybillStatusLabel(
-                                waybill.status
-                              )}
-                            </span>
-                          </div>
-
-                          <p className="mt-2 text-sm text-slate-500">
-                            تاریخ حواله:{" "}
-                            <span className="font-black text-slate-700">
-                              {formatJalaliDate(
-                                waybill.waybill_date
-                              )}
-                            </span>
-                          </p>
-
-                          <p className="mt-1 text-sm text-slate-500">
-                            وضعیت بارگیری:{" "}
-                            <span className="font-black text-slate-700">
-                              {getLoadingStatusLabel(
-                                loadingStatus
-                              )}
-                            </span>
-                          </p>
-
-                          {waybill.loading
-                            ?.loading_date && (
-                            <p className="mt-1 text-sm text-slate-500">
-                              تاریخ بارگیری:{" "}
-                              <span className="font-black text-slate-700">
-                                {formatJalaliDate(
-                                  waybill
-                                    .loading
-                                    .loading_date
-                                )}
-                              </span>
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <Link
-                          href={`/waybills/view?id=${encodeURIComponent(waybill.id)}`}
-                          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-600"
-                        >
-                          جزئیات حواله
-                          <ArrowLeft size={16} />
-                        </Link>
-
-                        <Link
-                          href={`/orders/view?id=${encodeURIComponent(order.id)}`}
-                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
-                        >
-                          سفارش
-                          <Package size={15} />
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-            )}
           </div>
         )}
       </section>
@@ -2103,6 +2522,7 @@ export default function OrderDetailsPage() {
                   type="text"
                   inputMode="numeric"
                   value={displayJalaliYear}
+                  disabled={!canEditOrderDetails}
                   onChange={(event) => {
                     const value =
                       event.target.value
@@ -2137,6 +2557,7 @@ export default function OrderDetailsPage() {
                 <select
                   id="jalali-month"
                   value={displayJalaliMonth}
+                  disabled={!canEditOrderDetails}
                   onChange={(event) =>
                     setJalaliMonth(
                       event.target.value
@@ -2176,6 +2597,7 @@ export default function OrderDetailsPage() {
                 <select
                   id="jalali-day"
                   value={displayJalaliDay}
+                  disabled={!canEditOrderDetails}
                   onChange={(event) =>
                     setJalaliDay(
                       event.target.value
@@ -2219,6 +2641,7 @@ export default function OrderDetailsPage() {
             <select
               id="order-status"
               value={displayStatus}
+              disabled={!canEditOrderDetails}
               onChange={(event) =>
                 setStatus(
                   event.target
@@ -2325,6 +2748,7 @@ export default function OrderDetailsPage() {
           <textarea
             id="order-notes"
             value={displayNotes}
+            disabled={!canEditOrderDetails}
             onChange={(event) =>
               setNotes(
                 event.target.value
@@ -2377,7 +2801,8 @@ export default function OrderDetailsPage() {
               onClick={handleSave}
               disabled={
                 saving ||
-                deleting
+                deleting ||
+                !canEditOrderDetails
               }
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-7 py-3 text-sm font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-600 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
             >
