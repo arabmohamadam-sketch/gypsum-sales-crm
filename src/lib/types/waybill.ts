@@ -13,6 +13,7 @@ export interface Waybill {
   id: string;
   company_id: string;
   order_id: string;
+  shipment_id: string | null;
   waybill_number: number;
   waybill_date: string;
   status: WaybillStatus;
@@ -60,6 +61,30 @@ export interface CreateWaybillInput {
   order_id: string;
   waybill_date: string;
   notes?: string | null;
+}
+
+export interface CreateV2WaybillFromShipmentInput {
+  shipment_id: string;
+  waybill_date: string;
+  notes?: string | null;
+}
+
+export interface UpdateWaybillItemInput {
+  quantity: number;
+}
+
+export interface V2ShipmentForWaybill {
+  id: string;
+  company_id: string;
+  order_id: string;
+  shipment_number: number;
+  status: string;
+  vehicle_type_snapshot: string | null;
+  plate_number_snapshot: string | null;
+  driver_name_snapshot: string | null;
+  driver_phone_snapshot: string | null;
+  shipment_date: string | null;
+  notes: string | null;
 }
 
 export interface CreateWaybillItemInput {
