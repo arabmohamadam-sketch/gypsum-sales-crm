@@ -15,6 +15,7 @@ const WAYBILL_BASE_SELECT = `
   id,
   company_id,
   order_id,
+  shipment_id,
   waybill_number,
   waybill_date,
   status,
@@ -148,6 +149,9 @@ function normalizeWaybill(
     order_id: String(
       data.order_id
     ),
+
+    shipment_id:
+      (data.shipment_id as string | null) ?? null,
 
     waybill_number: Number(
       data.waybill_number
@@ -533,7 +537,8 @@ export const waybillsService = {
         company_id,
         status,
         sales_user_id,
-        customer_id
+        customer_id,
+        workflow_version
       `)
       .eq(
         "id",
@@ -565,6 +570,15 @@ export const waybillsService = {
     if (!order) {
       throw new Error(
         "سفارش موردنظر پیدا نشد."
+      );
+    }
+
+    if (
+      order.workflow_version ===
+      "v2"
+    ) {
+      throw new Error(
+        "برای سفارش V2، حواله باید از یک Shipment آماده ایجاد شود."
       );
     }
 
@@ -891,6 +905,360 @@ export const waybillsService = {
       throw new Error(
         "حواله ایجاد شد اما اطلاعات آن قابل دریافت نیست."
       );
+    }
+
+    return result;
+  },
+
+  async getAssignedShipments(): Promise<V2ShipmentForWaybill[]> {
+    const companyId = await getRequiredCurrentCompanyId();
+    const supabase = createSupabaseClient();
+
+    const { data, error } = await supabase
+      .from("shipments")
+      .select(
+        `
+          id,
+          company_id,
+          order_id,
+          shipment_number,
+          status,
+          vehicle_type_snapshot,
+          plate_number_snapshot,
+          driver_name_snapshot,
+          driver_phone_snapshot,
+          shipment_date,
+          notes
+        `
+      )
+      .eq("company_id", companyId)
+      .eq("status", "assigned")
+      .is("deleted_at", null)
+      .order("shipment_date", { ascending: true })
+      .order("shipment_number", { ascending: true });
+
+    if (error) {
+      logWaybillError("GET ASSIGNED SHIPMENTS", error);
+      throw new Error(getErrorMessage(error));
+    }
+
+    const shipments = (data ?? []) as V2ShipmentForWaybill[];
+
+    if (shipments.length === 0) {
+      return [];
+    }
+
+    const shipmentIds = shipments.map((shipment) => shipment.id);
+
+    const { data: waybills, error: waybillError } = await supabase
+      .from("waybills")
+      .select("shipment_id")
+      .eq("company_id", companyId)
+      .in("shipment_id", shipmentIds)
+      .neq("status", "cancelled")
+      .is("deleted_at", null);
+
+    if (waybillError) {
+      logWaybillError("GET ASSIGNED SHIPMENT WAYBILLS", waybillError);
+      throw new Error(getErrorMessage(waybillError));
+    }
+
+    const usedShipmentIds = new Set(
+      (waybills ?? [])
+        .map((row) => row.shipment_id)
+        .filter((value): value is string => typeof value === "string")
+    );
+
+    return shipments.filter(
+      (shipment) => !usedShipmentIds.has(shipment.id)
+    );
+  },
+
+  async createV2FromShipment(
+    input: CreateV2WaybillFromShipmentInput
+  ): Promise<Waybill> {
+    const companyId = await getRequiredCurrentCompanyId();
+    const supabase = createSupabaseClient();
+
+    if (!input.shipment_id) {
+      throw new Error("شناسه Shipment الزامی است.");
+    }
+
+    if (!input.waybill_date) {
+      throw new Error("تاریخ حواله الزامی است.");
+    }
+
+    const { data: shipment, error: shipmentError } = await supabase
+      .from("shipments")
+      .select(
+        `
+          id,
+          company_id,
+          order_id,
+          shipment_number,
+          status,
+          deleted_at
+        `
+      )
+      .eq("id", input.shipment_id)
+      .eq("company_id", companyId)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (shipmentError) {
+      logWaybillError("V2 CREATE GET SHIPMENT", shipmentError);
+      throw new Error(getErrorMessage(shipmentError));
+    }
+
+    if (!shipment) {
+      throw new Error("Shipment موردنظر پیدا نشد.");
+    }
+
+    if (shipment.status !== "assigned") {
+      throw new Error(
+        "فقط Shipment تخصیص‌یافته به خودرو و راننده امکان صدور حواله دارد."
+      );
+    }
+
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .select("id, company_id, status, workflow_version")
+      .eq("id", shipment.order_id)
+      .eq("company_id", companyId)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (orderError) {
+      logWaybillError("V2 CREATE GET ORDER", orderError);
+      throw new Error(getErrorMessage(orderError));
+    }
+
+    if (!order) {
+      throw new Error("سفارش Shipment پیدا نشد.");
+    }
+
+    if (order.workflow_version !== "v2") {
+      throw new Error("فقط سفارش‌های V2 از مسیر Shipment حواله می‌شوند.");
+    }
+
+    if (order.status !== "confirmed") {
+      throw new Error("فقط سفارش تأییدشده امکان صدور حواله دارد.");
+    }
+
+    const { data: existingWaybill, error: existingError } = await supabase
+      .from("waybills")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("shipment_id", input.shipment_id)
+      .neq("status", "cancelled")
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (existingError) {
+      logWaybillError("V2 CHECK EXISTING WAYBILL", existingError);
+      throw new Error(getErrorMessage(existingError));
+    }
+
+    if (existingWaybill) {
+      throw new Error("برای این Shipment قبلاً حواله فعال ایجاد شده است.");
+    }
+
+    const { data: shipmentItems, error: shipmentItemsError } = await supabase
+      .from("shipment_items")
+      .select(
+        `
+          id,
+          company_id,
+          order_item_id,
+          product_id,
+          product_name_snapshot,
+          quantity,
+          weight_kg_snapshot,
+          deleted_at
+        `
+      )
+      .eq("shipment_id", input.shipment_id)
+      .eq("company_id", companyId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true });
+
+    if (shipmentItemsError) {
+      logWaybillError("V2 GET SHIPMENT ITEMS", shipmentItemsError);
+      throw new Error(getErrorMessage(shipmentItemsError));
+    }
+
+    if (!shipmentItems || shipmentItems.length === 0) {
+      throw new Error("Shipment هیچ قلم فعالی برای ایجاد حواله ندارد.");
+    }
+
+    const { data: waybill, error: waybillError } = await supabase
+      .from("waybills")
+      .insert({
+        company_id: companyId,
+        order_id: shipment.order_id,
+        shipment_id: shipment.id,
+        waybill_date: input.waybill_date,
+        status: "draft",
+        notes: input.notes ?? null,
+      })
+      .select(WAYBILL_BASE_SELECT)
+      .single();
+
+    if (waybillError) {
+      logWaybillError("V2 CREATE WAYBILL", waybillError);
+      throw new Error(getErrorMessage(waybillError));
+    }
+
+    const items: CreateWaybillItemInput[] = shipmentItems.map((item) => ({
+      company_id: companyId,
+      waybill_id: waybill.id,
+      order_item_id: item.order_item_id,
+      product_id: item.product_id,
+      product_name_snapshot: item.product_name_snapshot ?? "",
+      quantity: item.quantity,
+      weight_kg_snapshot: item.weight_kg_snapshot,
+      shipment_item_id: item.id,
+    }));
+
+    const { error: itemsError } = await supabase
+      .from("waybill_items")
+      .insert(items);
+
+    if (itemsError) {
+      logWaybillError("V2 CREATE WAYBILL ITEMS", itemsError);
+      await supabase
+        .from("waybills")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", waybill.id)
+        .eq("company_id", companyId);
+      throw new Error(getErrorMessage(itemsError));
+    }
+
+    const result = await this.getById(waybill.id);
+    if (!result) {
+      throw new Error("پیش‌نویس حواله ایجاد شد اما قابل دریافت نیست.");
+    }
+
+    return result;
+  },
+
+  async updateV2Item(
+    itemId: string,
+    input: UpdateWaybillItemInput
+  ): Promise<WaybillItem> {
+    const companyId = await getRequiredCurrentCompanyId();
+    const supabase = createSupabaseClient();
+
+    if (!Number.isInteger(input.quantity) || input.quantity <= 0) {
+      throw new Error("تعداد کیسه باید عدد صحیح بزرگ‌تر از صفر باشد.");
+    }
+
+    const { data: current, error: currentError } = await supabase
+      .from("waybill_items")
+      .select(
+        `
+          id,
+          waybill_id,
+          shipment_item_id,
+          company_id,
+          quantity
+        `
+      )
+      .eq("id", itemId)
+      .eq("company_id", companyId)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (currentError) {
+      logWaybillError("V2 GET WAYBILL ITEM", currentError);
+      throw new Error(getErrorMessage(currentError));
+    }
+
+    if (!current || !current.shipment_item_id) {
+      throw new Error("قلم حواله V2 معتبر نیست.");
+    }
+
+    const { data: waybill, error: waybillError } = await supabase
+      .from("waybills")
+      .select("id, shipment_id, status")
+      .eq("id", current.waybill_id)
+      .eq("company_id", companyId)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (waybillError) {
+      logWaybillError("V2 GET WAYBILL FOR ITEM", waybillError);
+      throw new Error(getErrorMessage(waybillError));
+    }
+
+    if (!waybill || !waybill.shipment_id || waybill.status !== "draft") {
+      throw new Error("اقلام فقط در پیش‌نویس V2 قابل ویرایش هستند.");
+    }
+
+    const { data, error } = await supabase
+      .from("waybill_items")
+      .update({ quantity: input.quantity })
+      .eq("id", itemId)
+      .eq("company_id", companyId)
+      .is("deleted_at", null)
+      .select(WAYBILL_ITEM_SELECT)
+      .single();
+
+    if (error) {
+      logWaybillError("V2 UPDATE WAYBILL ITEM", error);
+      throw new Error(getErrorMessage(error));
+    }
+
+    return data as WaybillItem;
+  },
+
+  async issueV2(id: string): Promise<Waybill> {
+    const companyId = await getRequiredCurrentCompanyId();
+    const supabase = createSupabaseClient();
+
+    const { data: waybill, error: getError } = await supabase
+      .from("waybills")
+      .select("id, shipment_id, status")
+      .eq("id", id)
+      .eq("company_id", companyId)
+      .is("deleted_at", null)
+      .maybeSingle();
+
+    if (getError) {
+      logWaybillError("V2 GET WAYBILL FOR ISSUE", getError);
+      throw new Error(getErrorMessage(getError));
+    }
+
+    if (!waybill || !waybill.shipment_id) {
+      throw new Error("حواله V2 معتبر نیست.");
+    }
+
+    if (waybill.status !== "draft") {
+      throw new Error("فقط پیش‌نویس حواله امکان صدور دارد.");
+    }
+
+    const { data: authData } = await supabase.auth.getUser();
+
+    const { error: issueError } = await supabase
+      .from("waybills")
+      .update({
+        status: "issued",
+        issued_at: new Date().toISOString(),
+        issued_by: authData.user?.id ?? null,
+      })
+      .eq("id", id)
+      .eq("company_id", companyId)
+      .eq("status", "draft")
+      .is("deleted_at", null);
+
+    if (issueError) {
+      logWaybillError("V2 ISSUE WAYBILL", issueError);
+      throw new Error(getErrorMessage(issueError));
+    }
+
+    const result = await this.getById(id);
+    if (!result) {
+      throw new Error("حواله پس از صدور قابل دریافت نیست.");
     }
 
     return result;
