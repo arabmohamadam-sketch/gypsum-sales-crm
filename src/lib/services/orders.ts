@@ -1117,6 +1117,67 @@ export const ordersService = {
     return order;
   },
 
+  async getByIdIfVisible(
+    id: string
+  ): Promise<OrderWithRelations | null> {
+    const companyId =
+      await getRequiredCurrentCompanyId();
+
+    const supabase =
+      createSupabaseClient();
+
+    const orderId =
+      validateId(
+        id,
+        "شناسه سفارش الزامی است."
+      );
+
+    const {
+      data,
+      error,
+    } = await supabase
+      .from("orders")
+      .select("*")
+      .eq(
+        "id",
+        orderId
+      )
+      .eq(
+        "company_id",
+        companyId
+      )
+      .is(
+        "deleted_at",
+        null
+      )
+      .maybeSingle();
+
+    if (error) {
+      logSupabaseError(
+        "GET BY ID IF VISIBLE",
+        error
+      );
+
+      throw new Error(
+        getErrorMessage(
+          error,
+          "خطا در دریافت سفارش."
+        )
+      );
+    }
+
+    if (!data) {
+      return null;
+    }
+
+    const result =
+      await getOrdersWithRelations([
+        data as Order,
+      ]);
+
+    return result[0] ?? null;
+  },
+
   async getByCustomerId(
     customerId: string
   ): Promise<OrderWithRelations[]> {
