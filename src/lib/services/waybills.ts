@@ -7,7 +7,10 @@ import type {
   Loading,
   CreateWaybillInput,
   CreateWaybillItemInput,
+  CreateV2WaybillFromShipmentInput,
+  V2ShipmentForWaybill,
   UpdateWaybillInput,
+  UpdateWaybillItemInput,
   UpdateLoadingInput,
 } from "@/src/lib/types/waybill";
 
