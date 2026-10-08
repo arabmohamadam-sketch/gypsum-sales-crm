@@ -91,6 +91,7 @@ export interface CreateWaybillItemInput {
   company_id: string;
   waybill_id: string;
   order_item_id: string;
+  shipment_item_id?: string | null;
   product_id: string;
   product_name_snapshot: string;
   quantity: number;
