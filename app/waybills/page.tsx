@@ -540,7 +540,7 @@ export default function WaybillsPage() {
         for (
           const entry of entries
         ) {
-          if (!entry) {
+          if (!entry || !entry[1]) {
             continue;
           }
 
@@ -651,7 +651,7 @@ export default function WaybillsPage() {
         for (
           const entry of entries
         ) {
-          if (!entry) {
+          if (!entry || !entry[1]) {
             continue;
           }
 
