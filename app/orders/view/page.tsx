@@ -933,6 +933,7 @@ export default function OrderDetailsPage() {
   const canIssueWaybill =
     Boolean(
       order &&
+        !isV2Order &&
         order.status ===
           "confirmed" &&
         orderItems.length > 0 &&
