@@ -1073,3 +1073,41 @@ origin/v2
 ```
 
 این وضعیت مرجع شروع توسعه V2 است.
+
+
+---
+
+# 46. Operational Quantity Contract
+
+در V2 سه مقدار مستقل داریم:
+
+```
+Order Item
+Commercial Quantity
+      ↓
+Waybill Item
+Operational Quantity
+      ↓
+Loading Item
+Actual Loaded Quantity
+      ↓
+Regional Plan
+Confirmed Actual Loading
+```
+
+نمونه:
+
+```
+Order   = 16 ton
+Waybill = 20 ton
+Loading = 20 ton
+Plan    = 20 ton
+```
+
+اصل مهم:
+
+* تغییر ظرفیت خودرو نباید Order Item تجاری را تغییر دهد.
+* حواله‌نویس می‌تواند مقدار عملیاتی Waybill را متناسب با خودرو اصلاح کند.
+* مقدار واقعی بارگیری در Loading Item ثبت می‌شود.
+* تحقق برنامه منطقه‌ای فقط از Loading تأییدشده محاسبه می‌شود.
+* V1 همچنان از قواعد قدیمی خود استفاده می‌کند.
