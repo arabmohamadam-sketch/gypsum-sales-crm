@@ -12,12 +12,15 @@ import {
   FileText,
   Loader2,
   Package,
+  Pencil,
   RefreshCw,
+  Save,
   Truck,
   XCircle,
 } from "lucide-react";
 
 import { waybillsService } from "@/src/lib/services/waybills";
+import { usePermissions } from "@/src/lib/hooks/usePermissions";
 
 import type {
   Loading,
@@ -142,6 +145,20 @@ export default function WaybillDetailsPage() {
   const [actionLoading, setActionLoading] =
     useState(false);
 
+  const [editingItems, setEditingItems] =
+    useState(false);
+
+  const [savingItems, setSavingItems] =
+    useState(false);
+
+  const [itemQuantities, setItemQuantities] =
+    useState<Record<string, string>>({});
+
+  const {
+    loading: permissionsLoading,
+    hasPermission,
+  } = usePermissions();
+
   const [error, setError] =
     useState("");
 
@@ -238,6 +255,143 @@ export default function WaybillDetailsPage() {
       cancelled = true;
     };
   }, [waybillId]);
+
+  const isV2Waybill = Boolean(
+    waybill?.shipment_id
+  );
+
+  const canEditV2Items = Boolean(
+    waybill &&
+      isV2Waybill &&
+      waybill.status === "draft" &&
+      hasPermission("waybills.edit")
+  );
+
+  const canIssueV2 = Boolean(
+    waybill &&
+      isV2Waybill &&
+      waybill.status === "draft" &&
+      hasPermission("waybills.issue")
+  );
+
+  function beginItemEditing() {
+    if (!waybill || !canEditV2Items) {
+      return;
+    }
+
+    const next: Record<string, string> = {};
+
+    for (const item of waybill.items ?? []) {
+      if (item.deleted_at) {
+        continue;
+      }
+
+      next[item.id] = String(item.quantity);
+    }
+
+    setItemQuantities(next);
+    setEditingItems(true);
+    setError("");
+    setMessage("");
+  }
+
+  function cancelItemEditing() {
+    setEditingItems(false);
+    setSavingItems(false);
+    setItemQuantities({});
+  }
+
+  async function saveItemQuantities() {
+    if (!waybill || !canEditV2Items) {
+      return;
+    }
+
+    setSavingItems(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const activeItems = (waybill.items ?? []).filter(
+        (item) => !item.deleted_at
+      );
+
+      for (const item of activeItems) {
+        const raw =
+          itemQuantities[item.id] ??
+          String(item.quantity);
+        const quantity = Number(raw);
+
+        if (!Number.isInteger(quantity) || quantity <= 0) {
+          throw new Error(
+            `تعداد قلم «${item.product_name_snapshot ?? "بدون نام"}» باید عدد صحیح بزرگ‌تر از صفر باشد.`
+          );
+        }
+
+        if (quantity === Number(item.quantity)) {
+          continue;
+        }
+
+        await waybillsService.updateV2Item(item.id, {
+          quantity,
+        });
+      }
+
+      setEditingItems(false);
+      setItemQuantities({});
+      setMessage("تعداد اقلام حواله با موفقیت به‌روزرسانی شد.");
+      await loadWaybill(true);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "خطا در ذخیره تعداد اقلام حواله."
+      );
+    } finally {
+      setSavingItems(false);
+    }
+  }
+
+  async function handleIssueV2() {
+    if (!waybill || !canIssueV2) {
+      return;
+    }
+
+    if (editingItems) {
+      setError("ابتدا تغییرات اقلام را ذخیره کنید.");
+      return;
+    }
+
+    const hasActiveItems = (waybill.items ?? []).some(
+      (item) => !item.deleted_at
+    );
+
+    if (!hasActiveItems) {
+      setError("حواله باید حداقل یک قلم فعال داشته باشد.");
+      return;
+    }
+
+    if (!window.confirm("آیا این پیش‌نویس حواله صادر شود؟")) {
+      return;
+    }
+
+    setActionLoading(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await waybillsService.issueV2(waybill.id);
+      setMessage("حواله با موفقیت صادر شد و برای بارگیری آماده است.");
+      await loadWaybill(true);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "خطا در صدور حواله."
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
   async function handleConfirmLoading() {
     if (!waybill) {
@@ -473,6 +627,61 @@ export default function WaybillDetailsPage() {
             </p>
 
             <div className="mt-6 flex flex-wrap gap-3">
+              {canIssueV2 && !editingItems ? (
+                <button
+                  type="button"
+                  onClick={() => void handleIssueV2()}
+                  disabled={actionLoading || permissionsLoading}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {actionLoading ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <CheckCircle2 size={16} />
+                  )}
+                  صدور حواله
+                </button>
+              ) : null}
+
+              {canEditV2Items && !editingItems ? (
+                <button
+                  type="button"
+                  onClick={beginItemEditing}
+                  disabled={permissionsLoading}
+                  className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Pencil size={16} />
+                  ویرایش اقلام
+                </button>
+              ) : null}
+
+              {editingItems ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void saveItemQuantities()}
+                    disabled={savingItems}
+                    className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {savingItems ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Save size={16} />
+                    )}
+                    ذخیره اقلام
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={cancelItemEditing}
+                    disabled={savingItems}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    لغو ویرایش
+                  </button>
+                </>
+              ) : null}
+
               <button
                 type="button"
                 onClick={() =>
@@ -836,7 +1045,32 @@ export default function WaybillDetailsPage() {
                             تعداد کیسه
                           </p>
 
-                          <p className="mt-1 text-lg font-black text-slate-900">
+                          {editingItems && isV2Waybill ? (
+                            <div className="mt-2">
+                              <label
+                                htmlFor={`waybill-quantity-${item.id}`}
+                                className="mb-2 block text-xs font-bold text-slate-500"
+                              >
+                                تعداد کیسه
+                              </label>
+                              <input
+                                id={`waybill-quantity-${item.id}`}
+                                type="number"
+                                min={1}
+                                step={1}
+                                inputMode="numeric"
+                                value={itemQuantities[item.id] ?? String(item.quantity)}
+                                onChange={(event) =>
+                                  setItemQuantities((current) => ({
+                                    ...current,
+                                    [item.id]: event.target.value,
+                                  }))
+                                }
+                                disabled={savingItems}
+                                className="w-full rounded-xl border border-blue-200 bg-white px-3 py-2.5 text-sm font-black text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 disabled:opacity-60"
+                              />
+                            </div>
+                          ) :                           <p className="mt-1 text-lg font-black text-slate-900">
                             {formatNumber(
                               Number(
                                 item.quantity
