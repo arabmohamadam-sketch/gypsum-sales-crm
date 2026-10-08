@@ -513,7 +513,7 @@ export default function WaybillsPage() {
               async (orderId) => {
                 try {
                   const order =
-                    await ordersService.getById(
+                    await ordersService.getByIdIfVisible(
                       orderId
                     );
 
@@ -620,7 +620,7 @@ export default function WaybillsPage() {
               async (orderId) => {
                 try {
                   const order =
-                    await ordersService.getById(
+                    await ordersService.getByIdIfVisible(
                       orderId
                     );
 
