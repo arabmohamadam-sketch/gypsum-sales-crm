@@ -28,6 +28,7 @@ const ROLE_LABELS: Record<string, string> = {
   sales_manager: "مدیر فروش",
   sales_rep: "کارشناس فروش",
   employee: "کارمند",
+  waybill_writer: "حواله نویس",
 };
 
 const ROLE_DESCRIPTION_LABELS: Record<
@@ -44,6 +45,8 @@ const ROLE_DESCRIPTION_LABELS: Record<
     "ثبت و پیگیری مشتریان و سفارش‌های اختصاص‌یافته",
   employee:
     "نقش پایه برای واگذاری دسترسی‌های عملیاتی",
+  waybill_writer:
+    "مدیریت عملیاتی حواله‌ها و تنظیم مقدار اقلام برای خودرو",
 };
 
 const RESOURCE_LABELS: Record<string, string> = {
