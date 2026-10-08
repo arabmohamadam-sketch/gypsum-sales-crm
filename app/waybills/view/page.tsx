@@ -1079,7 +1079,7 @@ export default function WaybillDetailsPage() {
                               )}{" "}
                               کیسه
                             </p>
-                          )
+                          )}
                         </div>
 
                         <div className="rounded-xl border border-slate-200 bg-white p-4">
